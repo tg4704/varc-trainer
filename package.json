@@ -1,6 +1,9 @@
 {
   "name": "varc-trainer-server",
   "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "nodemon server/index.js",
     "start": "node server/index.js"
