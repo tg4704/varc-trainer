@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: varc-trainer-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DB_PATH
+        value: /data/varc.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false   # you'll paste this manually in the Render dashboard
+
+disk:
+  - name: varc-db
+    mountPath: /data
+    sizeGB: 1
