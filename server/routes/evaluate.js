@@ -37,7 +37,7 @@ Rules for your response:
 - keyTakeaway: One sentence. A generalizable rule the student can apply to future similar questions.
 - Never be vague. Always reference specific words from the options or paragraph.`;
 
-function buildUserMessage(q, selectedIndex, reasoningText) {
+function buildUserMessage(q, selectedIndex, reasoningText, quotedLines) {
   const trapTypeMeanings = {
     too_extreme: "the option uses absolute language (always/never/only/completely) that the paragraph does not support",
     out_of_scope: "introduces a concept or claim not present in the paragraph",
@@ -58,6 +58,11 @@ TRAP TYPE MEANINGS:
 - partially_correct: ${trapTypeMeanings.partially_correct}`
       : "";
 
+  const quotedSection =
+    Array.isArray(quotedLines) && quotedLines.length > 0
+      ? `\nSTUDENT QUOTED LINES (text they explicitly cited as evidence):\n${quotedLines.map((l) => `- "${l}"`).join("\n")}`
+      : "";
+
   return `PARAGRAPH:
 ${q.paragraph}
 
@@ -75,7 +80,7 @@ ${optionLines}
 CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
 ${trapSection}
 
-STUDENT SELECTED: Option ${LETTERS[selectedIndex]}
+STUDENT SELECTED: Option ${LETTERS[selectedIndex]}${quotedSection}
 STUDENT'S REASONING:
 ${reasoningText}`;
 }
@@ -89,6 +94,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     reasoningText,
     timeTakenSeconds,
     mode = "analysis",
+    quotedLines,
   } = req.body || {};
 
   if (sessionId == null || !questionId) {
@@ -148,7 +154,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
       model: "claude-haiku-4-5",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText.trim()) }],
+      messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText.trim(), quotedLines) }],
     });
 
     // Log API call for admin cost tracking (Phase 9)

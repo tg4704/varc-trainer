@@ -45,6 +45,11 @@ export default function Practice() {
   const [interimText, setInterimText] = useState("");     // live voice preview (not committed)
   const reasoningRef = useRef("");                         // stable ref so voice callbacks don't go stale
 
+  // Phase 12: quote-to-reasoning
+  const [quotes, setQuotes] = useState([]);
+  const [selectionPopover, setSelectionPopover] = useState(null); // { text, x, y }
+  const paragraphRef = useRef(null);
+
   // Mobile paragraph toggle
   const [paragraphOpen, setParagraphOpen] = useState(true);
 
@@ -88,6 +93,39 @@ export default function Practice() {
     setInterimText("");
   }, [stopVoice]);
 
+  // ── Quote-to-reasoning (Phase 12) ────────────────────────────────────────
+  function handleParagraphMouseUp() {
+    if (feedback || practiceMode !== "analysis") return;
+    const sel = window.getSelection();
+    const text = sel?.toString().trim();
+    if (!text || text.length < 5) { setSelectionPopover(null); return; }
+    if (
+      !sel.rangeCount ||
+      !paragraphRef.current?.contains(sel.anchorNode) ||
+      !paragraphRef.current?.contains(sel.focusNode)
+    ) { setSelectionPopover(null); return; }
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    setSelectionPopover({ text, x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+  }
+
+  function addQuote(text) {
+    setQuotes((prev) => (prev.includes(text) ? prev : [...prev, text]));
+    setSelectionPopover(null);
+    window.getSelection()?.removeAllRanges();
+  }
+
+  function removeQuote(text) {
+    setQuotes((prev) => prev.filter((q) => q !== text));
+  }
+
+  // Dismiss quote popover on any click outside it
+  useEffect(() => {
+    if (!selectionPopover) return;
+    const dismiss = () => setSelectionPopover(null);
+    document.addEventListener("mousedown", dismiss);
+    return () => document.removeEventListener("mousedown", dismiss);
+  }, [selectionPopover]);
+
   const finishSession = useCallback(
     async (sess) => {
       if (endedRef.current) return;
@@ -102,6 +140,8 @@ export default function Practice() {
   const loadNext = useCallback(
     async (sess) => {
       resetVoice();
+      setQuotes([]);
+      setSelectionPopover(null);
       setLoadingQuestion(true);
       setError(null);
       setFeedback(null);
@@ -221,6 +261,7 @@ export default function Practice() {
           reasoningText: reasoningText.trim(),
           timeTakenSeconds: timeTaken,
           mode: practiceMode,
+          quotedLines: quotes,
         });
       } else {
         fb = await submitBasicAttempt({
@@ -419,6 +460,7 @@ export default function Practice() {
   const canSubmit = selected !== null && reasoningLen >= 50;
 
   return (
+    <>
     <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
       {question.repeating && (
         <div className="mb-6 rounded-md bg-primary/10 px-4 py-3 text-sm text-primary">
@@ -449,7 +491,9 @@ export default function Practice() {
           <div className={cn("transition-opacity duration-300", loadingQuestion ? "opacity-0" : "opacity-100")}>
             {paragraphOpen && (
               <p
-                className="font-reading text-foreground"
+                ref={paragraphRef}
+                onMouseUp={handleParagraphMouseUp}
+                className="font-reading text-foreground select-text cursor-text"
                 style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}
               >
                 {question.paragraph}
@@ -496,8 +540,26 @@ export default function Practice() {
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Reference the paragraph or the author's logic — 2 to 3 sentences
+                Reference the paragraph — select text in the passage to quote it as evidence.
               </p>
+              {quotes.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {quotes.map((q, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs text-primary"
+                    >
+                      <span className="italic" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}>"{q}"</span>
+                      <button
+                        type="button"
+                        onClick={() => removeQuote(q)}
+                        aria-label="Remove quote"
+                        className="ml-0.5 flex-none opacity-60 hover:opacity-100"
+                      >×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="mt-2 flex items-start gap-2">
                 <Textarea
                   value={reasoningText}
@@ -589,6 +651,28 @@ export default function Practice() {
         </div>
       </div>
     </div>
+
+    {/* Quote popover — fixed position near text selection */}
+    {selectionPopover && (
+      <div
+        style={{
+          position: "fixed",
+          left: selectionPopover.x,
+          top: selectionPopover.y,
+          transform: "translateX(-50%)",
+          zIndex: 50,
+        }}
+      >
+        <button
+          type="button"
+          onMouseDown={(e) => { e.stopPropagation(); addQuote(selectionPopover.text); }}
+          className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-lg"
+        >
+          ❝ Quote
+        </button>
+      </div>
+    )}
+    </>
   );
 }
 
