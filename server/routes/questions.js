@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
-const questions = require("../data/questions");
+const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 
 // Strip server-only fields before sending to client
@@ -43,10 +43,14 @@ router.get("/next", authenticate, (req, res) => {
   }
 
   const attemptedSet = new Set(attempted);
-  const unseen = questions.filter((q) => !attemptedSet.has(q.id));
+  const allQuestions = questionsRepo.listForUser(req.userId);
+  if (allQuestions.length === 0) {
+    return res.status(500).json({ error: "No questions available" });
+  }
+  const unseen = allQuestions.filter((q) => !attemptedSet.has(q.id));
 
   const repeating = unseen.length === 0;
-  const pool = repeating ? questions : unseen;
+  const pool = repeating ? allQuestions : unseen;
   const pick = pool[Math.floor(Math.random() * pool.length)];
 
   return res.json({

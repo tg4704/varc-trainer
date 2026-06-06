@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
-const questions = require("../data/questions");
+const questionsRepo = require("../questionsRepo");
 
 // Simple 30-second TTL cache keyed by userId
 const cache = new Map();
@@ -166,7 +166,7 @@ router.get("/", authenticate, (req, res) => {
     )
     .all(userId)
     .map((a) => {
-      const q = questions.find((q) => q.id === a.question_id);
+      const q = questionsRepo.findById(a.question_id);
       const snippet = q
         ? q.question.split(/\s+/).slice(0, 8).join(" ") + "…"
         : a.question_id;

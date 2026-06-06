@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 VARC Option Differentiation Trainer — a web app for CAT aspirants to practice distinguishing correct RC answers from trap options. Each question is anchored to a short paragraph (~90–120 words, not a full passage). The user picks an answer, explains their reasoning, and receives AI feedback evaluating the quality of their thinking.
 
-The original phased build spec is in [`varc_trainer_build_prompt.md`](varc_trainer_build_prompt.md). **Note:** the app has since diverged from that spec — user accounts and configurable sessions (below) were added between Phase 3 and Phase 4 at the user's request. The spec is still the reference for the AI evaluation (Phase 4), dashboard intelligence (Phase 5), and intuition mode (Phase 6) that remain to be built.
+The original phased build spec is in [`varc_trainer_build_prompt.md`](varc_trainer_build_prompt.md). The forward roadmap (Phases 8+) lives in [`ROADMAP.md`](ROADMAP.md); the user-facing feature list lives in [`USER_FEATURES.md`](USER_FEATURES.md). The AI Reading Coach sub-plan (becomes Phase 14) is in [`ai_reading_coach_plan.md`](ai_reading_coach_plan.md).
 
 ## Tech Stack
 
@@ -39,15 +39,20 @@ There is no test runner configured yet. `.claude/launch.json` defines the `clien
 ```
 server/
 ├── index.js                ← Express app; mounts all /api routes
-├── db.js                   ← SQLite init + schema (users, sessions, attempts)
+├── db.js                   ← SQLite init, lightweight migrations, seed bootstrap
 ├── auth.js                 ← signToken() + authenticate middleware (JWT)
-├── data/questions.js       ← 25 seed questions + startup validation
+├── questionsRepo.js        ← shared DB accessor for questions (Phase 8)
+├── data/questions.js       ← 25 seed questions (SEED SOURCE only; read at first-run seed,
+│                              never at request time — see Phase 8 below)
 └── routes/
     ├── auth.js             ← register / login / me / password
     ├── sessions.js         ← create/list/active/get/complete (all auth-gated)
     ├── questions.js        ← GET /next (auth + session-ownership + quota)
     ├── attempts.js         ← POST /basic (answer or skip)
-    └── dashboard.js        ← user-scoped aggregate stats
+    ├── evaluate.js         ← POST /evaluate (AI reasoning eval, Phase 4)
+    ├── dashboard.js        ← user-scoped aggregate stats
+    ├── account.js          ← DELETE /reset (account data wipe)
+    └── admin.js            ← legacy ADMIN_KEY data dump (retires in Phase 9)
 client/src/
 ├── App.jsx                 ← AuthProvider + nav + routes (protected & public)
 ├── api.js                  ← fetch wrapper; injects Bearer token; all endpoints
@@ -102,7 +107,9 @@ A session is an explicit, configured run created on the **Session Setup** page (
 - `POST /api/attempts/basic` — handles both Analysis (answers/skips) and Intuition mode (includes `eliminatedIndices`, returns `intuitionPoints`); no AI call.
 - `POST /api/attempts/evaluate` — Phase 4 Analysis mode (not yet built); will save the attempt to DB *before* calling Claude so it's never lost if the API fails.
 
-**Claude evaluates reasoning quality, not correctness** (Phase 4): the correct answer is known from `questions.js`; Claude scores the reasoning process (1–5) and explains the trap.
+**Claude evaluates reasoning quality, not correctness** (Phase 4): the correct answer is known from the DB row; Claude scores the reasoning process (1–5) and explains the trap.
+
+**Questions live in SQLite, not in JS** (Phase 8): all runtime question lookups go through `server/questionsRepo.js` which reads the `questions` table. `server/data/questions.js` is **seed source only** — it is loaded once on first server startup (when the `questions` table is empty) and never imported by routes. To re-seed: stop the server, `DELETE FROM questions`, restart. Edits made directly to the seed file only take effect after wiping the table.
 
 **Dashboard is user-scoped**: `GET /api/dashboard` (no `sessionId`) aggregates across **all** the logged-in user's sessions. Accuracy and trap-pick rate are computed over answered (non-skipped) attempts. Returns `byType`, `byTopic`, `byTrapType` (encountered vs fell-for), `weakestType`, `mostDangerousTrap`, and `recentAttempts` (last 10 with full question+option data). `avgReasoningScore` returns `null` until Phase 4.
 
@@ -110,11 +117,12 @@ A session is an explicit, configured run created on the **Session Setup** page (
 
 ## Database Schema (recreated by `server/db.js` on startup)
 
-- `users(id, username UNIQUE, email UNIQUE, password_hash, created_at)`
+- `users(id, username UNIQUE, email UNIQUE, password_hash, role['user'|'admin'], created_at)`
 - `sessions(id, user_id FK, num_questions, timer_mode, timer_scope, timer_seconds, status['active'|'completed'], created_at, completed_at)`
-- `attempts(id, session_id FK, question_id, question_type, topic, selected_option_index NULLABLE, correct_option_index, is_correct, trap_option_index, trap_type, selected_trap, skipped, reasoning_* + AI fields [null until Phase 4], mode, time_taken_seconds, eliminated_indices, intuition_points, created_at)`
+- `attempts(id, session_id FK, question_id, question_type, topic, selected_option_index NULLABLE, correct_option_index, is_correct, trap_option_index, trap_type, selected_trap, skipped, reasoning_* + AI fields, mode, time_taken_seconds, eliminated_indices, intuition_points, created_at)`
+- `questions(id, topic, paragraph, question, type, options_json, correct_index, trap_index, trap_type, source_lines, source['seed'|'user'], author_user_id FK NULLABLE, is_active, created_at)` — **Phase 8**; built-ins have `source='seed'`/`author_user_id=NULL`. User-created questions (Phase 10) set `author_user_id`.
 
-`db.js` uses `CREATE TABLE IF NOT EXISTS`, so **schema changes require dropping `varc.db`** (the file is only local data). After any schema edit, delete `varc.db` and restart the server.
+`db.js` uses `CREATE TABLE IF NOT EXISTS` plus a small `ensureColumn` helper for additive column migrations (used to add `users.role` to existing DBs). **For non-additive schema changes (renaming/dropping columns, changing types), delete `varc.db` and restart** — the file is local-only data.
 
 ## Question Data Format
 
@@ -137,14 +145,14 @@ A session is an explicit, configured run created on the **Session Setup** page (
 }
 ```
 
-25 questions total: 5 per topic, distributed as inference 35%, tone 20%, title 15%, detail 15%, application 15%. `questions.js` validates every question at startup (exactly one correct option, indices consistent).
+25 questions total: 5 per topic, distributed as inference 35%, tone 20%, title 15%, detail 15%, application 15%. `questions.js` validates every question at module load (exactly one correct option, indices consistent) — this still runs when the seed bootstrap requires the file on first DB run.
 
 **Planned: no-trap questions.** Real CAT RC doesn't always have an obvious trap — sometimes all wrong options are straightforwardly incorrect. Future questions with `trapIndex: null` / `trapType: null` should be supported: the attempt route already handles null trap fields, `selected_trap` stays 0, and the Practice feedback simply omits the trap panel when `trapOptionIndex` is null. When adding no-trap questions, skip the trap-index validation in `questions.js` for those entries.
 
 ## Build Status
 
-Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config).
-Remaining: Live deployment to Vercel + Render.
+Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config), **Deployment** (Vercel frontend + Render backend), **Phase 8** (questions migrated from `questions.js` into the `questions` SQLite table; all runtime routes read through `server/questionsRepo.js`; auto-seed on first run; `users.role` column added for Phase 9).
+Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 8.5 (design system), 9 (admin), 10 (user questions), 11–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch).
 
 **Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
 

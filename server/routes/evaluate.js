@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
-const questions = require("../data/questions");
+const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -107,7 +107,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     return res.status(404).json({ error: "Session not found" });
   }
 
-  const q = questions.find((q) => q.id === questionId);
+  const q = questionsRepo.findById(questionId);
   if (!q) {
     return res.status(404).json({ error: "Question not found" });
   }

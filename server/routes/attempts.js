@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
-const questions = require("../data/questions");
+const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 
 // Calculate intuition-mode points (server-side, spec §Phase 6)
@@ -50,7 +50,7 @@ router.post("/basic", authenticate, (req, res) => {
     return res.status(404).json({ error: "Session not found" });
   }
 
-  const q = questions.find((q) => q.id === questionId);
+  const q = questionsRepo.findById(questionId);
   if (!q) {
     return res.status(404).json({ error: "Question not found" });
   }
