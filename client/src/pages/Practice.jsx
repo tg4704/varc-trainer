@@ -7,6 +7,8 @@ import IntuitionTimer from "../components/IntuitionTimer.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { Textarea } from "../components/ui/input.jsx";
+import VoiceMicButton from "../components/VoiceMicButton.jsx";
+import { useVoiceInput } from "../hooks/useVoiceInput.js";
 import { cn } from "../lib/utils.js";
 import {
   getNextQuestion,
@@ -40,6 +42,8 @@ export default function Practice() {
 
   // Analysis-mode reasoning input
   const [reasoningText, setReasoningText] = useState("");
+  const [interimText, setInterimText] = useState("");     // live voice preview (not committed)
+  const reasoningRef = useRef("");                         // stable ref so voice callbacks don't go stale
 
   // Mobile paragraph toggle
   const [paragraphOpen, setParagraphOpen] = useState(true);
@@ -56,6 +60,34 @@ export default function Practice() {
 
   const practiceMode = session?.practiceMode || "analysis";
 
+  // ── Voice input (Phase 11) ────────────────────────────────────────────────
+  // Keep the ref in sync so voice callbacks always see the latest text.
+  useEffect(() => { reasoningRef.current = reasoningText; }, [reasoningText]);
+
+  const handleFinalTranscript = useCallback((text) => {
+    const current = reasoningRef.current;
+    const sep = current && !current.endsWith(" ") ? " " : "";
+    setReasoningText(current + sep + text);
+    setInterimText("");
+  }, []);
+
+  const { isRecording: isVoiceRecording, isSupported: voiceSupported, error: voiceError,
+          toggle: toggleVoice, stop: stopVoice } = useVoiceInput({
+    onFinalTranscript: handleFinalTranscript,
+    onInterimTranscript: setInterimText,
+  });
+
+  // Stop recording if the user submits mid-speech
+  useEffect(() => {
+    if (submitting && isVoiceRecording) stopVoice();
+  }, [submitting, isVoiceRecording, stopVoice]);
+
+  // Clear interim text when moving to the next question
+  const resetVoice = useCallback(() => {
+    stopVoice();
+    setInterimText("");
+  }, [stopVoice]);
+
   const finishSession = useCallback(
     async (sess) => {
       if (endedRef.current) return;
@@ -69,6 +101,7 @@ export default function Practice() {
 
   const loadNext = useCallback(
     async (sess) => {
+      resetVoice();
       setLoadingQuestion(true);
       setError(null);
       setFeedback(null);
@@ -89,7 +122,7 @@ export default function Practice() {
         setLoadingQuestion(false);
       }
     },
-    [finishSession]
+    [finishSession, resetVoice]
   );
 
   const doSkip = useCallback(
@@ -452,20 +485,49 @@ export default function Practice() {
           {/* Reasoning textarea — appears after option is selected, before feedback */}
           {selected !== null && !feedback && (
             <div className="mt-5 animate-slide-up">
-              <label className="block text-sm font-semibold text-foreground">
-                Why did you choose this option?
-              </label>
+              <div className="flex items-baseline justify-between">
+                <label className="block text-sm font-semibold text-foreground">
+                  Why did you choose this option?
+                </label>
+                {voiceSupported && (
+                  <span className="text-xs text-muted-foreground">
+                    {isVoiceRecording ? "🎙 Listening…" : "Mic available"}
+                  </span>
+                )}
+              </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Reference the paragraph or the author's logic — 2 to 3 sentences
               </p>
-              <Textarea
-                value={reasoningText}
-                onChange={(e) => setReasoningText(e.target.value)}
-                disabled={submitting}
-                rows={3}
-                className="mt-2 resize-none"
-                placeholder="e.g. The paragraph says… which supports option B because…"
-              />
+              <div className="mt-2 flex items-start gap-2">
+                <Textarea
+                  value={reasoningText}
+                  onChange={(e) => setReasoningText(e.target.value)}
+                  disabled={submitting}
+                  rows={3}
+                  className="flex-1 resize-none"
+                  placeholder="e.g. The paragraph says… which supports option B because…"
+                />
+                {voiceSupported && (
+                  <VoiceMicButton
+                    isRecording={isVoiceRecording}
+                    onClick={toggleVoice}
+                    disabled={submitting}
+                  />
+                )}
+              </div>
+
+              {/* Live interim preview while speaking */}
+              {interimText && (
+                <p className="mt-1 text-xs text-muted-foreground italic px-1 truncate">
+                  🎙 {interimText}
+                </p>
+              )}
+
+              {/* Voice error */}
+              {voiceError && (
+                <p className="mt-1 text-xs text-destructive">{voiceError}</p>
+              )}
+
               <div
                 className={cn(
                   "mt-1 text-right text-xs",

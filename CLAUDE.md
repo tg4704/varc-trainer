@@ -78,6 +78,8 @@ client/src/
 │       ├── AdminQuestionEditor    ← structured CRUD form
 │       ├── AdminCosts             ← AI spend by day/model/user
 │       └── AdminFlags             ← quality-flag review queue
+├── hooks/
+│   └── useVoiceInput.js    ← Phase 11 Web Speech API wrapper (continuous, en-IN, interim results)
 └── components/
     ├── ui/                 ← Phase 8.5 primitives (button, card, badge, input)
     ├── ThemeToggle         ← nav toggle (light/dark/system cycle)
@@ -85,6 +87,7 @@ client/src/
     ├── FeedbackSections    ← 5-section attempt review (uses tokens)
     ├── TopicBadge/TypeBadge← wrap ui/badge
     ├── IntuitionTimer      ← circular countdown
+    ├── VoiceMicButton      ← Phase 11 mic toggle (pulses while recording)
     ├── ProtectedRoute      ← auth gate
     └── AdminRoute          ← admin role gate (Phase 9)
 .env                        ← ANTHROPIC_API_KEY, PORT, JWT_SECRET, ADMIN_USERNAMES
@@ -192,7 +195,8 @@ A session is an explicit, configured run created on the **Session Setup** page (
 
 Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config), **Deployment** (Vercel frontend + Render backend), **Phase 8** (questions migrated from `questions.js` into the `questions` SQLite table; all runtime routes read through `server/questionsRepo.js`; auto-seed on first run; `users.role` column added for Phase 9), **Phase 8.5** (design system foundation: shadcn-style primitives, indigo-based brand, Inter + Lora fonts, dark mode with system-pref + manual override, theme toggle in nav, ported screens: Home, Login, Register, SessionSetup, Practice, FeedbackSections, OptionCard, TypeBadge, TopicBadge), **Phase 9** (admin page: `requireAdmin` middleware, `ADMIN_USERNAMES` env-var bootstrap, full admin shell at `/admin` with overview/users/questions/costs/flags pages, question CRUD form with validation, read-only impersonation, AI cost tracking via `api_calls` + pricing table, quality-flag review queue; legacy `ADMIN_KEY` hack retired).
 **Phase 10** (user-submitted questions: `POST /api/my-questions` CRUD, AI-draft via Claude Haiku at `POST /api/my-questions/generate-draft`, feature-flagged with `ENABLE_AI_AUTHORING`, ID format `user_{userId}_{timestamp}`, active questions auto-included in practice sessions, `/my-questions` page with list + method-picker editor + AI draft flow).
-Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 11–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
+**Phase 11**: voice reasoning input — `useVoiceInput` hook wraps Web Speech API (Chrome/Edge, en-IN locale, continuous + interim results); `VoiceMicButton` mic toggle sits beside the reasoning textarea in `Practice.jsx`; final transcript appended to `reasoningText`, interim shown as a live preview overlay; voice stops on submit and on "Next Question" (`loadNext` calls `resetVoice()`); hidden when `voiceSupported` is false; permission/no-speech errors shown inline.
+Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 12–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
 
 **Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
 
