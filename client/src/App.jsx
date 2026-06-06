@@ -11,6 +11,8 @@ import SessionSetup from "./pages/SessionSetup.jsx";
 import Practice from "./pages/Practice.jsx";
 import Results from "./pages/Results.jsx";
 import Profile from "./pages/Profile.jsx";
+import MyQuestions from "./pages/MyQuestions.jsx";
+import MyQuestionEditor from "./pages/MyQuestionEditor.jsx";
 
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 
@@ -53,6 +55,7 @@ function NavBar() {
             <>
               {link("/setup", "Practice")}
               {link("/dashboard", "Dashboard")}
+              {link("/my-questions", "My Questions")}
               {user.role === "admin" && link("/admin", "Admin")}
               {link("/profile", user.username)}
             </>
@@ -104,7 +107,10 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/profile"   element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/profile"         element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/my-questions"     element={<ProtectedRoute><MyQuestions /></ProtectedRoute>} />
+          <Route path="/my-questions/new" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
+          <Route path="/my-questions/:id" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
 
           {/* ── Admin ───────────────────────────────────────────────── */}
           <Route

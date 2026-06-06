@@ -79,6 +79,22 @@ export function resetAccount() {
   return request("/api/account/reset", { method: "DELETE" });
 }
 
+// ── My Questions (Phase 10) ───────────────────────────
+export const myQuestions = {
+  list: () => request("/api/my-questions"),
+  get: (id) => request(`/api/my-questions/${id}`),
+  create: (body) =>
+    request("/api/my-questions", { method: "POST", body: JSON.stringify(body) }),
+  update: (id, body) =>
+    request(`/api/my-questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id) => request(`/api/my-questions/${id}`, { method: "DELETE" }),
+  generateDraft: (body) =>
+    request("/api/my-questions/generate-draft", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
 // ── Admin (Phase 9) ───────────────────────────────────
 // All admin endpoints require role='admin' on the user.
 export const admin = {

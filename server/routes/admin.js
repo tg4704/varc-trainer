@@ -5,6 +5,7 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate, requireAdmin } = require("../auth");
+const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
 
 router.use(authenticate, requireAdmin);
 
@@ -213,38 +214,7 @@ router.get("/questions/:id", (req, res) => {
   res.json({ question: q, flags });
 });
 
-// Validate a question payload before insert/update.
-function validateQuestionPayload(body) {
-  const required = ["topic", "paragraph", "question", "type", "options", "correctIndex", "sourceLines"];
-  for (const k of required) {
-    if (body[k] === undefined || body[k] === null || body[k] === "") {
-      return `missing field: ${k}`;
-    }
-  }
-  if (!Array.isArray(body.options) || body.options.length !== 4) {
-    return "options must be an array of 4";
-  }
-  for (const o of body.options) {
-    if (!o || typeof o.text !== "string" || !o.text.trim()) return "every option needs text";
-  }
-  const ci = body.correctIndex;
-  if (![0, 1, 2, 3].includes(ci)) return "correctIndex must be 0..3";
-  if (body.trapIndex != null && ![0, 1, 2, 3].includes(body.trapIndex)) {
-    return "trapIndex must be 0..3 or null";
-  }
-  if (body.trapIndex === ci) return "trapIndex cannot equal correctIndex";
-  return null;
-}
-
-// Normalize the options array to embed isCorrect/isTrap/trapType flags.
-function normalizeOptions(options, correctIndex, trapIndex, trapType) {
-  return options.map((o, i) => ({
-    text: o.text.trim(),
-    isCorrect: i === correctIndex,
-    isTrap: trapIndex != null && i === trapIndex,
-    trapType: trapIndex != null && i === trapIndex ? trapType || null : null,
-  }));
-}
+// validateQuestionPayload + normalizeOptions imported from ../lib/validateQuestion
 
 // ── POST /api/admin/questions ──────────────────────────────────────────────
 router.post("/questions", (req, res) => {
