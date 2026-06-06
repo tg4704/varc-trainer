@@ -11,10 +11,11 @@ The original phased build spec is in [`varc_trainer_build_prompt.md`](varc_train
 ## Tech Stack
 
 - **Frontend**: React (Vite) + Tailwind CSS + React Router v6 — lives in `client/`
+- **UI system** (Phase 8.5): shadcn/ui-style primitives in `client/src/components/ui/`, built on Radix Slot + `class-variance-authority` + `tailwind-merge`. Design tokens via CSS variables in `client/src/index.css` (light + dark). Icons from `lucide-react`. UI font Inter, reading font Lora.
 - **Backend**: Node.js + Express — lives in `server/`
-- **Database**: SQLite via `better-sqlite3` (file `varc.db` at repo root, gitignored-worthy)
+- **Database**: SQLite via `better-sqlite3` (file `varc.db` at repo root, gitignored)
 - **Auth**: bcryptjs (password hashing) + JSON Web Tokens (`jsonwebtoken`)
-- **AI**: Anthropic Claude API (`claude-haiku-4-5`) — reasoning evaluation only, never used to determine correct answers (Phase 4, not yet built)
+- **AI**: Anthropic Claude API (`claude-haiku-4-5`) — reasoning evaluation only, never used to determine correct answers
 - **Language**: Plain JavaScript throughout, no TypeScript
 
 ## Commands
@@ -55,13 +56,22 @@ server/
     └── admin.js            ← legacy ADMIN_KEY data dump (retires in Phase 9)
 client/src/
 ├── App.jsx                 ← AuthProvider + nav + routes (protected & public)
+├── main.jsx                ← bootstrap; wraps in ThemeProvider + BrowserRouter
 ├── api.js                  ← fetch wrapper; injects Bearer token; all endpoints
 ├── auth.jsx                ← AuthProvider / useAuth context
+├── theme.jsx               ← ThemeProvider + useTheme (Phase 8.5)
 ├── session.js              ← active-session localStorage helpers
+├── lib/utils.js            ← cn() class-name helper (Phase 8.5)
 ├── pages/                  ← Home, Login, Register, SessionSetup, Practice,
 │                              Results, Dashboard, Profile
-└── components/             ← OptionCard, FeedbackCard, TopicBadge, TypeBadge,
-                               ProtectedRoute
+└── components/
+    ├── ui/                 ← Phase 8.5 primitives (button, card, badge, input)
+    ├── ThemeToggle         ← nav toggle (light/dark/system cycle)
+    ├── OptionCard          ← practice option card (uses tokens)
+    ├── FeedbackSections    ← 5-section attempt review (uses tokens)
+    ├── TopicBadge/TypeBadge← wrap ui/badge
+    ├── IntuitionTimer      ← circular countdown
+    └── ProtectedRoute      ← auth gate
 .env                        ← ANTHROPIC_API_KEY, PORT, JWT_SECRET
 ```
 
@@ -151,8 +161,8 @@ A session is an explicit, configured run created on the **Session Setup** page (
 
 ## Build Status
 
-Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config), **Deployment** (Vercel frontend + Render backend), **Phase 8** (questions migrated from `questions.js` into the `questions` SQLite table; all runtime routes read through `server/questionsRepo.js`; auto-seed on first run; `users.role` column added for Phase 9).
-Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 8.5 (design system), 9 (admin), 10 (user questions), 11–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch).
+Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config), **Deployment** (Vercel frontend + Render backend), **Phase 8** (questions migrated from `questions.js` into the `questions` SQLite table; all runtime routes read through `server/questionsRepo.js`; auto-seed on first run; `users.role` column added for Phase 9), **Phase 8.5** (design system foundation: shadcn-style primitives, indigo-based brand, Inter + Lora fonts, dark mode with system-pref + manual override, theme toggle in nav, ported screens: Home, Login, Register, SessionSetup, Practice, FeedbackSections, OptionCard, TypeBadge, TopicBadge).
+Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 9 (admin), 10 (user questions), 11–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
 
 **Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
 

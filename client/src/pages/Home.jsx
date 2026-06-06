@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { loadActiveSession } from "../session.js";
+import { Button } from "../components/ui/button.jsx";
+import { Card, CardContent } from "../components/ui/card.jsx";
 
 const VALUE_PROPS = [
   {
@@ -24,10 +26,10 @@ export default function Home() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-16 sm:py-24">
       <div className="text-center max-w-2xl mx-auto">
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
           Stop picking the trap option.
         </h1>
-        <p className="mt-5 text-lg text-slate-600 leading-relaxed">
+        <p className="mt-5 text-lg text-muted-foreground leading-relaxed">
           Most CAT students know the passage. They still pick the wrong answer. This trains the
           skill that fixes that.
         </p>
@@ -35,16 +37,13 @@ export default function Home() {
         <div className="mt-8 flex items-center justify-center gap-4">
           {user ? (
             <>
-              <Link
-                to="/setup"
-                className="inline-flex items-center rounded-lg bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
-              >
-                Start Practice
-              </Link>
+              <Button asChild size="lg" className="text-base">
+                <Link to="/setup">Start Practice</Link>
+              </Button>
               {hasActive && (
                 <Link
                   to="/practice"
-                  className="text-base font-medium text-slate-600 hover:text-slate-900 underline underline-offset-4"
+                  className="text-base font-medium text-muted-foreground hover:text-foreground underline underline-offset-4"
                 >
                   Continue Session
                 </Link>
@@ -52,15 +51,12 @@ export default function Home() {
             </>
           ) : (
             <>
-              <Link
-                to="/register"
-                className="inline-flex items-center rounded-lg bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
-              >
-                Get started
-              </Link>
+              <Button asChild size="lg" className="text-base">
+                <Link to="/register">Get started</Link>
+              </Button>
               <Link
                 to="/login"
-                className="text-base font-medium text-slate-600 hover:text-slate-900 underline underline-offset-4"
+                className="text-base font-medium text-muted-foreground hover:text-foreground underline underline-offset-4"
               >
                 Log in
               </Link>
@@ -71,10 +67,12 @@ export default function Home() {
 
       <div className="mt-20 grid gap-6 sm:grid-cols-3">
         {VALUE_PROPS.map((vp) => (
-          <div key={vp.title} className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="font-semibold text-slate-900">{vp.title}</h3>
-            <p className="mt-2 text-sm text-slate-600 leading-relaxed">{vp.body}</p>
-          </div>
+          <Card key={vp.title}>
+            <CardContent className="p-6">
+              <h3 className="font-semibold text-foreground">{vp.title}</h3>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{vp.body}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
+import { Button } from "../components/ui/button.jsx";
+import { Input } from "../components/ui/input.jsx";
 
 export default function Login() {
   const { login } = useAuth();
@@ -29,45 +31,39 @@ export default function Login() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-16">
-      <h1 className="text-2xl font-bold text-slate-900">Log in</h1>
-      <p className="mt-1 text-sm text-slate-500">Use your username or email.</p>
+      <h1 className="text-2xl font-bold text-foreground">Log in</h1>
+      <p className="mt-1 text-sm text-muted-foreground">Use your username or email.</p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <Field label="Username or email">
-          <input
+          <Input
             type="text"
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
             autoComplete="username"
-            className="input"
             required
           />
         </Field>
         <Field label="Password">
-          <input
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
-            className="input"
             required
           />
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-300"
-        >
+        <Button type="submit" disabled={busy} className="w-full" size="lg">
           {busy ? "Logging in…" : "Log in"}
-        </button>
+        </Button>
       </form>
 
-      <p className="mt-6 text-sm text-slate-600">
+      <p className="mt-6 text-sm text-muted-foreground">
         No account?{" "}
-        <Link to="/register" className="font-medium text-slate-900 underline underline-offset-4">
+        <Link to="/register" className="font-medium text-foreground underline underline-offset-4">
           Create one
         </Link>
       </p>
@@ -78,7 +74,7 @@ export default function Login() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-slate-700 mb-1">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1">{label}</span>
       {children}
     </label>
   );

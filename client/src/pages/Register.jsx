@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
+import { Button } from "../components/ui/button.jsx";
+import { Input } from "../components/ui/input.jsx";
 
 export default function Register() {
   const { register } = useAuth();
@@ -33,69 +35,61 @@ export default function Register() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-16">
-      <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
-      <p className="mt-1 text-sm text-slate-500">
+      <h1 className="text-2xl font-bold text-foreground">Create your account</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
         You can log in later with either your username or email.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <Field label="Username">
-          <input
+          <Input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
             minLength={3}
-            className="input"
             required
           />
         </Field>
         <Field label="Email">
-          <input
+          <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-            className="input"
             required
           />
         </Field>
         <Field label="Password">
-          <input
+          <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
             minLength={6}
-            className="input"
             required
           />
         </Field>
         <Field label="Confirm password">
-          <input
+          <Input
             type="password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             autoComplete="new-password"
-            className="input"
             required
           />
         </Field>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-300"
-        >
+        <Button type="submit" disabled={busy} className="w-full" size="lg">
           {busy ? "Creating…" : "Create account"}
-        </button>
+        </Button>
       </form>
 
-      <p className="mt-6 text-sm text-slate-600">
+      <p className="mt-6 text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link to="/login" className="font-medium text-slate-900 underline underline-offset-4">
+        <Link to="/login" className="font-medium text-foreground underline underline-offset-4">
           Log in
         </Link>
       </p>
@@ -106,7 +100,7 @@ export default function Register() {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-slate-700 mb-1">{label}</span>
+      <span className="block text-sm font-medium text-foreground mb-1">{label}</span>
       {children}
     </label>
   );

@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import ThemeToggle from "./components/ThemeToggle.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
@@ -20,7 +21,9 @@ function NavBar() {
     <Link
       to={to}
       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-        pathname === to ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-200"
+        pathname === to
+          ? "bg-foreground text-background"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       {label}
@@ -28,9 +31,9 @@ function NavBar() {
   );
 
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="border-b border-border bg-card">
       <nav className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to="/" className="font-bold text-slate-900 tracking-tight">
+        <Link to="/" className="font-bold text-foreground tracking-tight">
           VARC Trainer
         </Link>
         <div className="flex items-center gap-1">
@@ -46,6 +49,7 @@ function NavBar() {
               {link("/register", "Sign up")}
             </>
           )}
+          <ThemeToggle />
         </div>
       </nav>
     </header>
@@ -54,7 +58,7 @@ function NavBar() {
 
 function AppShell() {
   return (
-    <div className="min-h-screen text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       <NavBar />
       <main>
         <Routes>

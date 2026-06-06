@@ -5,6 +5,9 @@ import TopicBadge from "../components/TopicBadge.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import IntuitionTimer from "../components/IntuitionTimer.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
+import { Button } from "../components/ui/button.jsx";
+import { Textarea } from "../components/ui/input.jsx";
+import { cn } from "../lib/utils.js";
 import {
   getNextQuestion,
   submitBasicAttempt,
@@ -235,17 +238,20 @@ export default function Practice() {
   if (error && !question) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <p className="text-red-600">Something went wrong: {error}</p>
-        <button onClick={() => session && loadNext(session)}
-          className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+        <p className="text-destructive">Something went wrong: {error}</p>
+        <Button className="mt-4" onClick={() => session && loadNext(session)}>
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
 
   if (loadingQuestion || !question) {
-    return <div className="max-w-2xl mx-auto px-4 py-16 text-center text-slate-400">Loading question…</div>;
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">
+        Loading question…
+      </div>
+    );
   }
 
   // ── Intuition mode layout ─────────────────────────────────────────────────
@@ -260,9 +266,14 @@ export default function Practice() {
           <div className="md:w-[55%]">
             <div className="flex items-center justify-between mb-4">
               <TopicBadge topic={question.topic} />
-              <span className="text-xs text-slate-400">Question {question.index} of {question.total}</span>
+              <span className="text-xs text-muted-foreground">
+                Question {question.index} of {question.total}
+              </span>
             </div>
-            <p className="font-reading text-slate-800" style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}>
+            <p
+              className="font-reading text-foreground"
+              style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}
+            >
               {question.paragraph}
             </p>
           </div>
@@ -272,7 +283,7 @@ export default function Practice() {
             <div className="flex items-start justify-between">
               <div>
                 <TypeBadge type={question.type} />
-                <h2 className="mt-2 font-bold text-slate-900" style={{ fontSize: "17px" }}>
+                <h2 className="mt-2 font-bold text-foreground" style={{ fontSize: "17px" }}>
                   {question.question}
                 </h2>
               </div>
@@ -280,8 +291,8 @@ export default function Practice() {
                 <IntuitionTimer seconds={secsLeft} total={totalSecs} />
               ) : (
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-slate-900">{sessionPoints}</div>
-                  <div className="text-xs text-slate-500">pts total</div>
+                  <div className="text-2xl font-bold text-foreground">{sessionPoints}</div>
+                  <div className="text-xs text-muted-foreground">pts total</div>
                 </div>
               )}
             </div>
@@ -292,7 +303,7 @@ export default function Practice() {
                 const afterStatus = optionStatus(i);
                 return (
                   <div key={i} className="flex items-center gap-2">
-                    <div className={`flex-1 ${isElim && !feedback ? "opacity-50" : ""}`}>
+                    <div className={cn("flex-1", isElim && !feedback && "opacity-50")}>
                       <OptionCard
                         letter={LETTERS[i]}
                         text={isElim && !feedback ? <s>{opt.text}</s> : opt.text}
@@ -312,11 +323,12 @@ export default function Practice() {
                           else { next.add(i); if (selected === i) setSelected(null); }
                           return next;
                         })}
-                        className={`flex-none h-8 w-8 rounded-full border text-xs font-bold transition-colors ${
+                        className={cn(
+                          "flex-none h-8 w-8 rounded-full border text-xs font-bold transition-colors",
                           isElim
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-slate-300 text-slate-400 hover:border-red-400 hover:text-red-500"
-                        }`}
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-input text-muted-foreground hover:border-destructive hover:text-destructive"
+                        )}
                       >
                         ✕
                       </button>
@@ -326,26 +338,26 @@ export default function Practice() {
               })}
             </div>
 
-            {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
             {!feedback ? (
               <div className="mt-6 flex gap-3">
-                <button
-                  type="button"
+                <Button
+                  className="flex-1"
+                  size="lg"
                   disabled={selected === null || submitting}
                   onClick={handleSubmit}
-                  className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Submitting…" : "Submit"}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
                   disabled={submitting}
                   onClick={() => doSkip(session, question)}
-                  className="rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-600 hover:border-slate-400 disabled:opacity-50"
                 >
                   Skip
-                </button>
+                </Button>
               </div>
             ) : (
               <IntuitionFeedback
@@ -364,14 +376,19 @@ export default function Practice() {
 
   // ── Analysis mode layout ──────────────────────────────────────────────────
   const timer = timerInfo();
-  const timerColor = timer?.tone === "danger" ? "text-red-600" : timer?.tone === "warn" ? "text-amber-600" : "text-slate-400";
+  const timerColor =
+    timer?.tone === "danger"
+      ? "text-destructive"
+      : timer?.tone === "warn"
+      ? "text-warning"
+      : "text-muted-foreground";
   const reasoningLen = reasoningText.trim().length;
   const canSubmit = selected !== null && reasoningLen >= 50;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
       {question.repeating && (
-        <div className="mb-6 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        <div className="mb-6 rounded-md bg-primary/10 px-4 py-3 text-sm text-primary">
           You've seen all 25 questions — repeating from the full question bank.
         </div>
       )}
@@ -382,32 +399,39 @@ export default function Practice() {
             <TopicBadge topic={question.topic} />
             <div className="flex items-center gap-3">
               {timer && (
-                <span className={`text-sm font-mono tabular-nums ${timerColor}`}>{timer.text}</span>
+                <span className={cn("text-sm font-mono tabular-nums", timerColor)}>
+                  {timer.text}
+                </span>
               )}
               {/* Mobile paragraph toggle */}
               <button
                 type="button"
                 onClick={() => setParagraphOpen((o) => !o)}
-                className="md:hidden text-xs text-slate-400 hover:text-slate-600"
+                className="md:hidden text-xs text-muted-foreground hover:text-foreground"
               >
                 {paragraphOpen ? "▲ Hide" : "▼ Passage"}
               </button>
             </div>
           </div>
-          <div className={`transition-opacity duration-300 ${loadingQuestion ? "opacity-0" : "opacity-100"}`}>
+          <div className={cn("transition-opacity duration-300", loadingQuestion ? "opacity-0" : "opacity-100")}>
             {paragraphOpen && (
-              <p className="font-reading text-slate-800" style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}>
+              <p
+                className="font-reading text-foreground"
+                style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}
+              >
                 {question.paragraph}
               </p>
             )}
           </div>
-          <p className="mt-6 text-xs text-slate-400">Question {question.index} of {question.total}</p>
+          <p className="mt-6 text-xs text-muted-foreground">
+            Question {question.index} of {question.total}
+          </p>
         </div>
 
         {/* Right — question + options + reasoning + submit */}
         <div className="md:w-[45%]">
           <TypeBadge type={question.type} />
-          <h2 className="mt-3 font-bold text-slate-900" style={{ fontSize: "17px" }}>
+          <h2 className="mt-3 font-bold text-foreground" style={{ fontSize: "17px" }}>
             {question.question}
           </h2>
 
@@ -427,58 +451,67 @@ export default function Practice() {
 
           {/* Reasoning textarea — appears after option is selected, before feedback */}
           {selected !== null && !feedback && (
-            <div className="mt-5">
-              <label className="block text-sm font-semibold text-slate-700">
+            <div className="mt-5 animate-slide-up">
+              <label className="block text-sm font-semibold text-foreground">
                 Why did you choose this option?
               </label>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 Reference the paragraph or the author's logic — 2 to 3 sentences
               </p>
-              <textarea
+              <Textarea
                 value={reasoningText}
                 onChange={(e) => setReasoningText(e.target.value)}
                 disabled={submitting}
                 rows={3}
-                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-50 disabled:text-slate-400"
+                className="mt-2 resize-none"
                 placeholder="e.g. The paragraph says… which supports option B because…"
               />
-              <div className={`mt-1 text-right text-xs ${reasoningLen >= 50 ? "text-green-600" : "text-slate-400"}`}>
+              <div
+                className={cn(
+                  "mt-1 text-right text-xs",
+                  reasoningLen >= 50 ? "text-success" : "text-muted-foreground"
+                )}
+              >
                 {reasoningLen} / 50 min
               </div>
             </div>
           )}
 
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+          {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
           {!feedback ? (
             <div className="mt-4">
               <div className="flex gap-3">
-                <button
-                  type="button"
+                <Button
+                  className="flex-1"
+                  size="lg"
                   disabled={!canSubmit || submitting}
                   onClick={handleSubmit}
-                  className="flex-1 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
                   {submitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                       Analyzing…
-                    </span>
+                    </>
+                  ) : selected === null ? (
+                    "Select an option first"
                   ) : (
-                    selected === null ? "Select an option first" : "Evaluate My Reasoning"
+                    "Evaluate My Reasoning"
                   )}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
                   disabled={submitting}
                   onClick={() => doSkip(session, question)}
-                  className="rounded-lg border border-slate-300 px-4 py-3 text-sm font-medium text-slate-600 transition-colors hover:border-slate-400 disabled:opacity-50"
                 >
                   Skip
-                </button>
+                </Button>
               </div>
               {submitting && (
-                <p className="mt-2 text-center text-xs text-slate-400">Analyzing your reasoning…</p>
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Analyzing your reasoning…
+                </p>
               )}
             </div>
           ) : (
@@ -515,20 +548,16 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, isLast, onN
   };
 
   return (
-    <div className="mt-6">
+    <div className="mt-6 animate-slide-up">
       {feedback.aiError && (
-        <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="mb-4 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
           {feedback.aiErrorMessage || "AI feedback unavailable — your attempt was saved."}
         </div>
       )}
       <FeedbackSections attempt={attempt} />
-      <button
-        type="button"
-        onClick={isLast ? onEnd : onNext}
-        className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700"
-      >
+      <Button className="mt-6 w-full" size="lg" onClick={isLast ? onEnd : onNext}>
         {isLast ? "End Session" : "Next Question"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -538,40 +567,36 @@ function IntuitionFeedback({ feedback, sessionPoints, isLast, onNext, onEnd }) {
   const trapLetter = feedback.trapOptionIndex != null ? LETTERS[feedback.trapOptionIndex] : null;
   const pts = feedback.intuitionPoints;
   const ptsText = pts > 0 ? `+${pts}` : String(pts);
-  const ptsColor = pts > 0 ? "text-green-600" : "text-red-500";
+  const ptsColor = pts > 0 ? "text-success" : "text-destructive";
 
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-6 space-y-4 animate-slide-up">
       <div className="flex items-start justify-between">
-        <div className={`text-2xl font-bold ${feedback.isCorrect ? "text-green-600" : "text-red-600"}`}>
+        <div className={cn("text-2xl font-bold", feedback.isCorrect ? "text-success" : "text-destructive")}>
           {feedback.isCorrect ? "Correct" : "Incorrect"}
         </div>
         <div className="text-right">
-          <div className={`text-2xl font-bold ${ptsColor}`}>{ptsText} pts</div>
-          <div className="text-xs text-slate-500">{sessionPoints} total</div>
+          <div className={cn("text-2xl font-bold", ptsColor)}>{ptsText} pts</div>
+          <div className="text-xs text-muted-foreground">{sessionPoints} total</div>
         </div>
       </div>
 
       {trapLetter && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
           <span className="font-semibold">The trap: {trapLetter}.</span>{" "}
           {trapLabel(feedback.trapType)} — {trapDescription(feedback.trapType)}
         </div>
       )}
 
       {feedback.isCorrect && (
-        <div className="rounded-md bg-green-50 px-3 py-2 text-xs text-green-700">
+        <div className="rounded-md bg-success/10 px-3 py-2 text-xs text-success">
           Correct answer: {LETTERS[feedback.correctOptionIndex]}
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={isLast ? onEnd : onNext}
-        className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700"
-      >
+      <Button className="w-full" size="lg" onClick={isLast ? onEnd : onNext}>
         {isLast ? "End Session" : "Next"}
-      </button>
+      </Button>
     </div>
   );
 }

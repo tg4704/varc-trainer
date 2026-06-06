@@ -1,3 +1,5 @@
+import { cn } from "../lib/utils.js";
+
 // status: null (pre-submit) | "correct" | "wrong" | "correct-unselected"
 export default function OptionCard({
   letter,
@@ -9,26 +11,26 @@ export default function OptionCard({
 }) {
   let stateClasses;
   if (status === "correct") {
-    stateClasses = "border-green-500 bg-green-50";
+    stateClasses = "border-success bg-success/10";
   } else if (status === "wrong") {
-    stateClasses = "border-red-500 bg-red-50";
+    stateClasses = "border-destructive bg-destructive/10";
   } else if (status === "correct-unselected") {
-    stateClasses = "border-green-500 bg-white";
+    stateClasses = "border-success bg-card";
   } else if (selected) {
-    stateClasses = "border-slate-900 bg-slate-900/5";
+    stateClasses = "border-primary bg-primary/5";
   } else {
-    stateClasses = "border-slate-200 bg-white hover:border-slate-400";
+    stateClasses = "border-border bg-card hover:border-foreground/40";
   }
 
   let letterClasses;
   if (status === "correct" || status === "correct-unselected") {
-    letterClasses = "bg-green-500 text-white";
+    letterClasses = "bg-success text-success-foreground";
   } else if (status === "wrong") {
-    letterClasses = "bg-red-500 text-white";
+    letterClasses = "bg-destructive text-destructive-foreground";
   } else if (selected) {
-    letterClasses = "bg-slate-900 text-white";
+    letterClasses = "bg-primary text-primary-foreground";
   } else {
-    letterClasses = "bg-slate-100 text-slate-600";
+    letterClasses = "bg-muted text-muted-foreground";
   }
 
   return (
@@ -36,16 +38,21 @@ export default function OptionCard({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`w-full flex items-start gap-3 rounded-lg border p-4 text-left transition-colors ${stateClasses} ${
+      className={cn(
+        "w-full flex items-start gap-3 rounded-lg border p-4 text-left transition-colors",
+        stateClasses,
         disabled ? "cursor-default" : "cursor-pointer"
-      }`}
+      )}
     >
       <span
-        className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm font-bold ${letterClasses}`}
+        className={cn(
+          "flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm font-bold transition-colors",
+          letterClasses
+        )}
       >
         {letter}
       </span>
-      <span className="text-sm leading-relaxed text-slate-800 pt-0.5">
+      <span className="text-sm leading-relaxed text-foreground pt-0.5">
         {text}
       </span>
     </button>

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createSession } from "../api.js";
 import { saveActiveSession } from "../session.js";
+import { Button } from "../components/ui/button.jsx";
+import { cn } from "../lib/utils.js";
 
 const QUESTION_COUNTS = [5, 10, 15, 20, 25];
 const PER_QUESTION_SECONDS = [30, 45, 60, 90, 120];
@@ -75,8 +77,8 @@ export default function SessionSetup() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-slate-900">New practice session</h1>
-      <p className="mt-1 text-slate-500">Configure your session, then start.</p>
+      <h1 className="text-2xl font-bold text-foreground">New practice session</h1>
+      <p className="mt-1 text-muted-foreground">Configure your session, then start.</p>
 
       {/* Practice mode */}
       <Section title="Practice mode">
@@ -137,12 +139,12 @@ export default function SessionSetup() {
             </Pill>
           </div>
           {timerMode === "countdown" && timerScope === "per_question" && (
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               When a question's time runs out, it's recorded as skipped and the next one loads.
             </p>
           )}
           {timerMode === "countdown" && timerScope === "per_session" && (
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               When the overall time runs out, the session ends wherever you are.
             </p>
           )}
@@ -178,15 +180,11 @@ export default function SessionSetup() {
         </Section>
       )}
 
-      {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
+      {error && <p className="mt-6 text-sm text-destructive">{error}</p>}
 
-      <button
-        onClick={handleStart}
-        disabled={busy}
-        className="mt-8 w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-300"
-      >
+      <Button onClick={handleStart} disabled={busy} className="mt-8 w-full" size="lg">
         {busy ? "Starting…" : `Start ${numQuestions}-question session`}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -194,7 +192,9 @@ export default function SessionSetup() {
 function Section({ title, children }) {
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h2>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -205,11 +205,12 @@ function Pill({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+      className={cn(
+        "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
         active
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-      }`}
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-input bg-background text-foreground hover:border-foreground/40"
+      )}
     >
       {children}
     </button>
@@ -221,21 +222,25 @@ function RadioCard({ active, title, desc, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-lg border p-4 text-left transition-colors ${
-        active ? "border-slate-900 bg-slate-900/5" : "border-slate-200 bg-white hover:border-slate-400"
-      }`}
+      className={cn(
+        "w-full rounded-lg border p-4 text-left transition-colors",
+        active
+          ? "border-primary bg-primary/5"
+          : "border-border bg-card hover:border-foreground/40"
+      )}
     >
       <div className="flex items-center gap-2">
         <span
-          className={`flex h-4 w-4 items-center justify-center rounded-full border ${
-            active ? "border-slate-900" : "border-slate-300"
-          }`}
+          className={cn(
+            "flex h-4 w-4 items-center justify-center rounded-full border",
+            active ? "border-primary" : "border-input"
+          )}
         >
-          {active && <span className="h-2 w-2 rounded-full bg-slate-900" />}
+          {active && <span className="h-2 w-2 rounded-full bg-primary" />}
         </span>
-        <span className="font-semibold text-slate-900">{title}</span>
+        <span className="font-semibold text-foreground">{title}</span>
       </div>
-      <p className="mt-1 ml-6 text-sm text-slate-600">{desc}</p>
+      <p className="mt-1 ml-6 text-sm text-muted-foreground">{desc}</p>
     </button>
   );
 }
