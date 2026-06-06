@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const db = require("./db");
 
 const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -22,4 +23,18 @@ function authenticate(req, res, next) {
   }
 }
 
-module.exports = { signToken, authenticate, SECRET };
+// Express middleware: must come AFTER authenticate(). Requires role='admin'.
+// Sets req.user with the full user row.
+function requireAdmin(req, res, next) {
+  const user = db
+    .prepare("SELECT id, username, email, role FROM users WHERE id = ?")
+    .get(req.userId);
+  if (!user) return res.status(401).json({ error: "Invalid session" });
+  if (user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  req.user = user;
+  next();
+}
+
+module.exports = { signToken, authenticate, requireAdmin, SECRET };

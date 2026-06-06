@@ -4,6 +4,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
+const { logApiCall } = require("../ai/apiLog");
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -150,6 +151,17 @@ router.post("/evaluate", authenticate, async (req, res) => {
       messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText.trim()) }],
     });
 
+    // Log API call for admin cost tracking (Phase 9)
+    logApiCall({
+      userId: req.userId,
+      route: "/api/attempts/evaluate",
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      inputTokens: response.usage?.input_tokens || 0,
+      outputTokens: response.usage?.output_tokens || 0,
+      status: "ok",
+    });
+
     const evaluation = JSON.parse(response.content[0].text);
 
     db.prepare(
@@ -180,6 +192,14 @@ router.post("/evaluate", authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error("Claude API error:", err.message);
+    // Still log the failed attempt for admin visibility
+    logApiCall({
+      userId: req.userId,
+      route: "/api/attempts/evaluate",
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      status: "error",
+    });
     return res.json({
       ...base,
       aiError: true,

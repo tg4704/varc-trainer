@@ -11,11 +11,14 @@ const CACHE_TTL = 30_000;
 // GET /api/dashboard — aggregate stats across all of the user's sessions.
 // Accuracy, trap-pick rate, and per-type/topic/trap breakdowns are computed over
 // ANSWERED (non-skipped) attempts.
-router.get("/", authenticate, (req, res) => {
+// Exported as `handle` so the admin impersonation route can reuse the same
+// computation by spoofing req.userId.
+function handle(req, res) {
   const userId = req.userId;
+  const skipCache = req.adminImpersonating === true;
 
   const cached = cache.get(userId);
-  if (cached && Date.now() - cached.at < CACHE_TTL) {
+  if (!skipCache && cached && Date.now() - cached.at < CACHE_TTL) {
     return res.json(cached.data);
   }
 
@@ -211,8 +214,11 @@ router.get("/", authenticate, (req, res) => {
     intuitionStats,
   };
 
-  cache.set(userId, { data: responseData, at: Date.now() });
+  if (!skipCache) cache.set(userId, { data: responseData, at: Date.now() });
   res.json(responseData);
-});
+}
+
+router.get("/", authenticate, handle);
 
 module.exports = router;
+module.exports.handle = handle;

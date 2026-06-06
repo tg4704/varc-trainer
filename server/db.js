@@ -33,6 +33,36 @@ db.exec(`
     FOREIGN KEY (author_user_id) REFERENCES users(id)
   );
 
+  -- Phase 9: every AI call is logged for admin cost tracking
+  CREATE TABLE IF NOT EXISTS api_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,                              -- null if pre-auth
+    route TEXT NOT NULL,                          -- '/api/attempts/evaluate' etc
+    provider TEXT NOT NULL,                       -- 'anthropic' | 'openai' | 'google'
+    model TEXT NOT NULL,                          -- 'claude-haiku-4-5' etc
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    est_cost_usd REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'ok',            -- 'ok' | 'error'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  -- Phase 9: quality-flag review queue for bad questions
+  CREATE TABLE IF NOT EXISTS question_flags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_id TEXT NOT NULL,
+    flagged_by_user_id INTEGER,                   -- null for AI/admin-system flags
+    source TEXT NOT NULL DEFAULT 'admin',         -- 'user' | 'ai' | 'admin'
+    reason TEXT,                                  -- free text
+    status TEXT NOT NULL DEFAULT 'open',          -- 'open' | 'resolved'
+    resolution TEXT,                              -- 'fixed' | 'deleted' | 'invalid'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME,
+    FOREIGN KEY (question_id) REFERENCES questions(id),
+    FOREIGN KEY (flagged_by_user_id) REFERENCES users(id)
+  );
+
   CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -116,5 +146,27 @@ function seedQuestions() {
   console.log(`[db] Seeded ${seedData.length} questions into the database.`);
 }
 seedQuestions();
+
+// ── Bootstrap admins from env var (Phase 9) ──
+// ADMIN_USERNAMES is a comma-separated list of usernames to auto-promote on
+// startup. Promotion is one-way: removing the env var does NOT demote anyone
+// (use a manual UPDATE or the admin UI for that).
+function bootstrapAdmins() {
+  const names = (process.env.ADMIN_USERNAMES || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (names.length === 0) return;
+  const stmt = db.prepare(
+    "UPDATE users SET role = 'admin' WHERE username = ? AND role != 'admin'"
+  );
+  for (const username of names) {
+    const info = stmt.run(username);
+    if (info.changes > 0) {
+      console.log(`[db] Promoted ${username} to admin.`);
+    }
+  }
+}
+bootstrapAdmins();
 
 module.exports = db;

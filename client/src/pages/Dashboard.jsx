@@ -25,7 +25,11 @@ function accuracyColor(acc) {
   return "#22c55e";
 }
 
-export default function Dashboard() {
+// `fetcher` defaults to the regular user dashboard fetch. Admin pages can pass
+// `() => admin.getUserDashboard(userId)` to render someone else's dashboard
+// read-only ("impersonation" without taking their session). `headerSlot` lets
+// callers prepend a banner (e.g., "Viewing as <username>").
+export default function Dashboard({ fetcher = getDashboard, headerSlot = null }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,14 +37,14 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        setData(await getDashboard());
+        setData(await fetcher());
       } catch (e) {
         setError(e.message);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [fetcher]);
 
   if (loading) {
     return (
@@ -85,6 +89,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {headerSlot}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
         <Link

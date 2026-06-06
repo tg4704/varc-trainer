@@ -40,30 +40,44 @@ There is no test runner configured yet. `.claude/launch.json` defines the `clien
 ```
 server/
 ├── index.js                ← Express app; mounts all /api routes
-├── db.js                   ← SQLite init, lightweight migrations, seed bootstrap
-├── auth.js                 ← signToken() + authenticate middleware (JWT)
+├── db.js                   ← SQLite init, migrations, seed + admin bootstrap
+├── auth.js                 ← signToken() + authenticate + requireAdmin middleware
 ├── questionsRepo.js        ← shared DB accessor for questions (Phase 8)
 ├── data/questions.js       ← 25 seed questions (SEED SOURCE only; read at first-run seed,
 │                              never at request time — see Phase 8 below)
+├── ai/
+│   ├── pricing.js          ← per-model USD price table (Phase 9)
+│   └── apiLog.js           ← logApiCall() — writes to api_calls (Phase 9)
 └── routes/
-    ├── auth.js             ← register / login / me / password
+    ├── auth.js             ← register / login / me / password (returns role)
     ├── sessions.js         ← create/list/active/get/complete (all auth-gated)
     ├── questions.js        ← GET /next (auth + session-ownership + quota)
     ├── attempts.js         ← POST /basic (answer or skip)
-    ├── evaluate.js         ← POST /evaluate (AI reasoning eval, Phase 4)
-    ├── dashboard.js        ← user-scoped aggregate stats
+    ├── evaluate.js         ← POST /evaluate (AI reasoning eval; logs to api_calls)
+    ├── dashboard.js        ← exports `handle()` so admin can reuse it for impersonation
     ├── account.js          ← DELETE /reset (account data wipe)
-    └── admin.js            ← legacy ADMIN_KEY data dump (retires in Phase 9)
+    └── admin.js            ← Phase 9 admin API — overview, users, questions,
+                              flags, costs (all role='admin' gated)
 client/src/
-├── App.jsx                 ← AuthProvider + nav + routes (protected & public)
+├── App.jsx                 ← AuthProvider + nav (incl. Admin link) + routes
 ├── main.jsx                ← bootstrap; wraps in ThemeProvider + BrowserRouter
-├── api.js                  ← fetch wrapper; injects Bearer token; all endpoints
-├── auth.jsx                ← AuthProvider / useAuth context
+├── api.js                  ← fetch wrapper + `admin` namespace for Phase 9 endpoints
+├── auth.jsx                ← AuthProvider / useAuth (user.role exposed)
 ├── theme.jsx               ← ThemeProvider + useTheme (Phase 8.5)
 ├── session.js              ← active-session localStorage helpers
 ├── lib/utils.js            ← cn() class-name helper (Phase 8.5)
-├── pages/                  ← Home, Login, Register, SessionSetup, Practice,
-│                              Results, Dashboard, Profile
+├── pages/
+│   ├── Home, Login, Register, SessionSetup, Practice, Results, Dashboard, Profile
+│   └── admin/              ← Phase 9 admin shell (lazy-loaded)
+│       ├── AdminLayout            ← sidebar + Outlet
+│       ├── AdminOverview          ← top-level stat cards
+│       ├── AdminUsers             ← paginated user list + search
+│       ├── AdminUserDetail        ← per-user stats, promote/demote, reset data
+│       ├── AdminUserDashboard     ← read-only impersonation (uses Dashboard fetcher prop)
+│       ├── AdminQuestions         ← filterable question list
+│       ├── AdminQuestionEditor    ← structured CRUD form
+│       ├── AdminCosts             ← AI spend by day/model/user
+│       └── AdminFlags             ← quality-flag review queue
 └── components/
     ├── ui/                 ← Phase 8.5 primitives (button, card, badge, input)
     ├── ThemeToggle         ← nav toggle (light/dark/system cycle)
@@ -71,9 +85,22 @@ client/src/
     ├── FeedbackSections    ← 5-section attempt review (uses tokens)
     ├── TopicBadge/TypeBadge← wrap ui/badge
     ├── IntuitionTimer      ← circular countdown
-    └── ProtectedRoute      ← auth gate
-.env                        ← ANTHROPIC_API_KEY, PORT, JWT_SECRET
+    ├── ProtectedRoute      ← auth gate
+    └── AdminRoute          ← admin role gate (Phase 9)
+.env                        ← ANTHROPIC_API_KEY, PORT, JWT_SECRET, ADMIN_USERNAMES
 ```
+
+## Admin (Phase 9)
+
+The first admin(s) are bootstrapped from the `ADMIN_USERNAMES` env var (comma-separated usernames). On every server start, those users are promoted to `role='admin'` if they aren't already. Promotion is one-way — removing the env var does not demote.
+
+After that, an admin can promote/demote others through the UI (`/admin/users/:id`, except they can't demote themselves).
+
+Admin URL is `/admin`, with sub-routes: `/admin/users`, `/admin/questions`, `/admin/costs`, `/admin/flags`, plus drill-ins for individual users (`/admin/users/:id` and the read-only "view as user" page at `/admin/users/:id/dashboard`) and questions (`/admin/questions/new`, `/admin/questions/:id`).
+
+The Admin link in the top NavBar is only rendered when `user.role === 'admin'`.
+
+The legacy `ADMIN_KEY` query-param hack from before Phase 9 is removed — all admin routes are now gated by JWT + `requireAdmin` middleware that checks `users.role`.
 
 ## Authentication
 
@@ -131,6 +158,8 @@ A session is an explicit, configured run created on the **Session Setup** page (
 - `sessions(id, user_id FK, num_questions, timer_mode, timer_scope, timer_seconds, status['active'|'completed'], created_at, completed_at)`
 - `attempts(id, session_id FK, question_id, question_type, topic, selected_option_index NULLABLE, correct_option_index, is_correct, trap_option_index, trap_type, selected_trap, skipped, reasoning_* + AI fields, mode, time_taken_seconds, eliminated_indices, intuition_points, created_at)`
 - `questions(id, topic, paragraph, question, type, options_json, correct_index, trap_index, trap_type, source_lines, source['seed'|'user'], author_user_id FK NULLABLE, is_active, created_at)` — **Phase 8**; built-ins have `source='seed'`/`author_user_id=NULL`. User-created questions (Phase 10) set `author_user_id`.
+- `api_calls(id, user_id FK NULLABLE, route, provider, model, input_tokens, output_tokens, est_cost_usd, status['ok'|'error'], created_at)` — **Phase 9**; every AI call is logged here. Cost computed against `server/ai/pricing.js`.
+- `question_flags(id, question_id FK, flagged_by_user_id FK NULLABLE, source['user'|'ai'|'admin'], reason, status['open'|'resolved'], resolution['fixed'|'deleted'|'invalid'], created_at, resolved_at)` — **Phase 9**; review queue. Admin can flag from the question editor today; user thumbs-down + AI self-audit will populate this in later phases.
 
 `db.js` uses `CREATE TABLE IF NOT EXISTS` plus a small `ensureColumn` helper for additive column migrations (used to add `users.role` to existing DBs). **For non-additive schema changes (renaming/dropping columns, changing types), delete `varc.db` and restart** — the file is local-only data.
 
@@ -161,17 +190,18 @@ A session is an explicit, configured run created on the **Session Setup** page (
 
 ## Build Status
 
-Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config), **Deployment** (Vercel frontend + Render backend), **Phase 8** (questions migrated from `questions.js` into the `questions` SQLite table; all runtime routes read through `server/questionsRepo.js`; auto-seed on first run; `users.role` column added for Phase 9), **Phase 8.5** (design system foundation: shadcn-style primitives, indigo-based brand, Inter + Lora fonts, dark mode with system-pref + manual override, theme toggle in nav, ported screens: Home, Login, Register, SessionSetup, Practice, FeedbackSections, OptionCard, TypeBadge, TopicBadge).
-Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 9 (admin), 10 (user questions), 11–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
+Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core loop), **Auth & Configurable Sessions** (added on top of Phase 3), **Phase 4** (AI reasoning evaluation: `POST /api/attempts/evaluate`, Claude Haiku integration, reasoning textarea + 5-section feedback card in `Practice.jsx`), **Phase 5** (dashboard intelligence: SVG chart, trap weakness, weakest-area callout, expandable recent attempts), **Phase 6** (intuition mode), **Phase 7** (polish: dashboard 30s server cache, skeleton loading, lazy `Dashboard` with `React.lazy`, mobile paragraph toggle, question-repeat banner, `client/vercel.json` SPA routing config), **Deployment** (Vercel frontend + Render backend), **Phase 8** (questions migrated from `questions.js` into the `questions` SQLite table; all runtime routes read through `server/questionsRepo.js`; auto-seed on first run; `users.role` column added for Phase 9), **Phase 8.5** (design system foundation: shadcn-style primitives, indigo-based brand, Inter + Lora fonts, dark mode with system-pref + manual override, theme toggle in nav, ported screens: Home, Login, Register, SessionSetup, Practice, FeedbackSections, OptionCard, TypeBadge, TopicBadge), **Phase 9** (admin page: `requireAdmin` middleware, `ADMIN_USERNAMES` env-var bootstrap, full admin shell at `/admin` with overview/users/questions/costs/flags pages, question CRUD form with validation, read-only impersonation, AI cost tracking via `api_calls` + pricing table, quality-flag review queue; legacy `ADMIN_KEY` hack retired).
+Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 10 (user questions), 11–13 (loop enhancements), 14 (Coach), 15–16 (retention), 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
 
 **Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
 
 ## Environment Variables
 
 ```
-ANTHROPIC_API_KEY=...    # Phase 4
+ANTHROPIC_API_KEY=...                    # Phase 4
 PORT=3001
-JWT_SECRET=...           # change in production
+JWT_SECRET=...                            # change in production
+ADMIN_USERNAMES=tarun,priya                # Phase 9 — comma-separated; auto-promote on startup
 ```
 
 In production, the frontend uses `VITE_API_URL` to point at the deployed backend instead of the dev proxy.

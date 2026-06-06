@@ -78,3 +78,46 @@ export function getDashboard() {
 export function resetAccount() {
   return request("/api/account/reset", { method: "DELETE" });
 }
+
+// ── Admin (Phase 9) ───────────────────────────────────
+// All admin endpoints require role='admin' on the user.
+export const admin = {
+  overview: () => request("/api/admin/overview"),
+
+  listUsers: ({ q = "", page = 1, pageSize = 50 } = {}) => {
+    const qs = new URLSearchParams({ q, page, pageSize }).toString();
+    return request(`/api/admin/users?${qs}`);
+  },
+  getUser: (id) => request(`/api/admin/users/${id}`),
+  getUserDashboard: (id) => request(`/api/admin/users/${id}/dashboard`),
+  patchUser: (id, body) =>
+    request(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  resetUserData: (id) => request(`/api/admin/users/${id}/data`, { method: "DELETE" }),
+
+  listQuestions: (filters = {}) => {
+    const qs = new URLSearchParams(filters).toString();
+    return request(`/api/admin/questions?${qs}`);
+  },
+  getQuestion: (id) => request(`/api/admin/questions/${id}`),
+  createQuestion: (body) =>
+    request("/api/admin/questions", { method: "POST", body: JSON.stringify(body) }),
+  updateQuestion: (id, body) =>
+    request(`/api/admin/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteQuestion: (id) =>
+    request(`/api/admin/questions/${id}`, { method: "DELETE" }),
+  flagQuestion: (id, reason) =>
+    request(`/api/admin/questions/${id}/flag`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  listFlags: (status = "open") =>
+    request(`/api/admin/flags?status=${encodeURIComponent(status)}`),
+  resolveFlag: (id, resolution) =>
+    request(`/api/admin/flags/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ resolution }),
+    }),
+
+  costs: () => request("/api/admin/costs"),
+};

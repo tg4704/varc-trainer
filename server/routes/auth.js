@@ -5,7 +5,13 @@ const db = require("../db");
 const { signToken, authenticate } = require("../auth");
 
 function publicUser(u) {
-  return { id: u.id, username: u.username, email: u.email, createdAt: u.created_at };
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    role: u.role || "user",
+    createdAt: u.created_at,
+  };
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
