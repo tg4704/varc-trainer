@@ -52,8 +52,9 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
     };
 
     recognition.onerror = (event) => {
-      // "no-speech" is normal after silence — don't show it as an error
-      if (event.error === "no-speech") return;
+      // "no-speech" and "network" are transient — Chrome fires "network" on
+      // localhost because it can't reach Google's speech servers. Silent stop.
+      if (event.error === "no-speech" || event.error === "network") return;
       setError(
         event.error === "not-allowed"
           ? "Microphone access denied. Allow mic access and try again."
