@@ -10,6 +10,7 @@ import Register from "./pages/Register.jsx";
 import SessionSetup from "./pages/SessionSetup.jsx";
 import Practice from "./pages/Practice.jsx";
 import Results from "./pages/Results.jsx";
+import SessionReview from "./pages/SessionReview.jsx";
 import Profile from "./pages/Profile.jsx";
 import MyQuestions from "./pages/MyQuestions.jsx";
 import MyQuestionEditor from "./pages/MyQuestionEditor.jsx";
@@ -98,7 +99,8 @@ function AppShell() {
           <Route path="/register" element={<Register />} />
           <Route path="/setup"     element={<ProtectedRoute><SessionSetup /></ProtectedRoute>} />
           <Route path="/practice"  element={<ProtectedRoute><Practice /></ProtectedRoute>} />
-          <Route path="/results"   element={<ProtectedRoute><Results /></ProtectedRoute>} />
+          <Route path="/results"        element={<ProtectedRoute><Results /></ProtectedRoute>} />
+          <Route path="/session-review" element={<ProtectedRoute><SessionReview /></ProtectedRoute>} />
           <Route
             path="/dashboard"
             element={

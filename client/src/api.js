@@ -57,6 +57,12 @@ export function getActiveSession() {
 export function completeSession(sessionId) {
   return request(`/api/sessions/${sessionId}/complete`, { method: "POST" });
 }
+export function getSessionReview(sessionId) {
+  return request(`/api/sessions/${sessionId}/review`);
+}
+export function batchEvaluateSession(sessionId) {
+  return request(`/api/sessions/${sessionId}/batch-evaluate`, { method: "POST" });
+}
 
 // ── Questions & attempts ─────────────────────────────
 export function getNextQuestion(sessionId) {

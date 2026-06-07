@@ -85,7 +85,8 @@ STUDENT'S REASONING:
 ${reasoningText}`;
 }
 
-// POST /api/attempts/evaluate — analysis mode with AI reasoning evaluation
+// POST /api/attempts/evaluate — analysis mode with AI reasoning evaluation.
+// Pass deferred:true to save the attempt without calling Claude (for timed sessions).
 router.post("/evaluate", authenticate, async (req, res) => {
   const {
     sessionId,
@@ -95,6 +96,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     timeTakenSeconds,
     mode = "analysis",
     quotedLines,
+    deferred = false,
   } = req.body || {};
 
   if (sessionId == null || !questionId) {
@@ -103,8 +105,11 @@ router.post("/evaluate", authenticate, async (req, res) => {
   if (selectedOptionIndex == null) {
     return res.status(400).json({ error: "selectedOptionIndex is required" });
   }
-  if (!reasoningText || reasoningText.trim().length < 50) {
-    return res.status(400).json({ error: "reasoningText must be at least 50 characters" });
+  if (!reasoningText || !reasoningText.trim()) {
+    return res.status(400).json({ error: "reasoningText is required" });
+  }
+  if (reasoningText.trim().length > 500) {
+    return res.status(400).json({ error: "reasoningText must be 500 characters or fewer" });
   }
 
   const session = db
@@ -139,8 +144,6 @@ router.post("/evaluate", authenticate, async (req, res) => {
       reasoningText.trim(), mode, timeTakenSeconds ?? null
     );
 
-  const attemptId = result.lastInsertRowid;
-
   const base = {
     isCorrect: isCorrect === 1,
     correctOptionIndex: q.correctIndex,
@@ -148,6 +151,14 @@ router.post("/evaluate", authenticate, async (req, res) => {
     trapType: q.trapType,
     selectedTrap: selectedTrap === 1,
   };
+
+  // Deferred mode: save attempt only, skip Claude call, return basic result.
+  // The batch-evaluate endpoint will run Claude after the session ends.
+  if (deferred) {
+    return res.json({ ...base, deferred: true });
+  }
+
+  const attemptId = result.lastInsertRowid;
 
   try {
     const response = await client.messages.create({

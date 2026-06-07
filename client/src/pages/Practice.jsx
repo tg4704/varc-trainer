@@ -126,13 +126,25 @@ export default function Practice() {
     return () => document.removeEventListener("mousedown", dismiss);
   }, [selectionPopover]);
 
+  // A session is "deferred" if it has a timer OR the user picked "after session" feedback.
+  // In deferred mode, reasoning is saved but AI evaluation runs at the end.
+  function isDeferred(sess) {
+    if (!sess) return false;
+    if (sess.practiceMode !== "analysis") return false;
+    return sess.timerMode !== "untimed" || sess.feedbackMode === "deferred";
+  }
+
   const finishSession = useCallback(
     async (sess) => {
       if (endedRef.current) return;
       endedRef.current = true;
       try { await completeSession(sess.id); } catch {}
       clearActiveSession();
-      navigate(`/results?sessionId=${sess.id}`, { replace: true });
+      if (isDeferred(sess)) {
+        navigate(`/session-review?sessionId=${sess.id}`, { replace: true });
+      } else {
+        navigate(`/results?sessionId=${sess.id}`, { replace: true });
+      }
     },
     [navigate]
   );
@@ -262,6 +274,7 @@ export default function Practice() {
           timeTakenSeconds: timeTaken,
           mode: practiceMode,
           quotedLines: quotes,
+          deferred: isDeferred(session),
         });
       } else {
         fb = await submitBasicAttempt({
@@ -457,7 +470,8 @@ export default function Practice() {
       ? "text-warning"
       : "text-muted-foreground";
   const reasoningLen = reasoningText.trim().length;
-  const canSubmit = selected !== null && reasoningLen >= 50;
+  const REASONING_MAX = 500;
+  const canSubmit = selected !== null && reasoningLen <= REASONING_MAX;
 
   return (
     <>
@@ -593,10 +607,10 @@ export default function Practice() {
               <div
                 className={cn(
                   "mt-1 text-right text-xs",
-                  reasoningLen >= 50 ? "text-success" : "text-muted-foreground"
+                  reasoningLen > REASONING_MAX ? "text-destructive" : "text-muted-foreground"
                 )}
               >
-                {reasoningLen} / 50 min
+                {reasoningLen} / {REASONING_MAX}
               </div>
             </div>
           )}
@@ -615,10 +629,14 @@ export default function Practice() {
                   {submitting ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                      Analyzing…
+                      {isDeferred(session) ? "Saving…" : "Analyzing…"}
                     </>
                   ) : selected === null ? (
                     "Select an option first"
+                  ) : reasoningLen > REASONING_MAX ? (
+                    `Reasoning too long (${reasoningLen}/${REASONING_MAX})`
+                  ) : isDeferred(session) ? (
+                    "Submit Answer"
                   ) : (
                     "Evaluate My Reasoning"
                   )}
@@ -632,12 +650,24 @@ export default function Practice() {
                   Skip
                 </Button>
               </div>
-              {submitting && (
+              {submitting && isDeferred(session) && (
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Saving your answer…
+                </p>
+              )}
+              {submitting && !isDeferred(session) && (
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   Analyzing your reasoning…
                 </p>
               )}
             </div>
+          ) : isDeferred(session) && feedback?.deferred ? (
+            <DeferredSavedCard
+              feedback={feedback}
+              isLast={question.index === question.total}
+              onNext={() => loadNext(session)}
+              onEnd={() => finishSession(session)}
+            />
           ) : (
             <AnalysisFeedback
               feedback={feedback}
@@ -673,6 +703,28 @@ export default function Practice() {
       </div>
     )}
     </>
+  );
+}
+
+// ── Deferred mode — minimal "saved" confirmation, no AI feedback ─────────────
+function DeferredSavedCard({ feedback, isLast, onNext, onEnd }) {
+  return (
+    <div className="mt-6 space-y-3 animate-slide-up">
+      <div className={cn(
+        "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold",
+        feedback.isCorrect
+          ? "bg-success/10 text-success"
+          : "bg-destructive/10 text-destructive"
+      )}>
+        {feedback.isCorrect ? "✓ Correct" : "✗ Incorrect"}
+        <span className="ml-auto text-xs font-normal text-muted-foreground">
+          Reasoning saved — full feedback after the session
+        </span>
+      </div>
+      <Button className="w-full" size="lg" onClick={isLast ? onEnd : onNext}>
+        {isLast ? "End Session & Get Feedback" : "Next Question →"}
+      </Button>
+    </div>
   );
 }
 

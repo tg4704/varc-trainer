@@ -114,6 +114,7 @@ function ensureColumn(table, column, definition) {
   }
 }
 ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
+ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
 
 // ── Seed questions on first run (Phase 8) ──
 // Idempotent: only seeds when the questions table is empty. The canonical

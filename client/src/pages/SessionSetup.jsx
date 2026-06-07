@@ -49,6 +49,8 @@ export default function SessionSetup() {
   const [timerScope, setTimerScope] = useState("per_question");
   const [perQuestionSeconds, setPerQuestionSeconds] = useState(60);
   const [perSessionMinutes, setPerSessionMinutes] = useState(10);
+  // feedbackMode only matters for untimed analysis — timed always defers
+  const [feedbackMode, setFeedbackMode] = useState("instant");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -63,6 +65,10 @@ export default function SessionSetup() {
         config.timerSeconds =
           timerScope === "per_question" ? perQuestionSeconds : perSessionMinutes * 60;
       }
+      // Server always forces deferred for timed sessions; send it anyway for clarity
+      config.feedbackMode = "deferred";
+    } else if (practiceMode === "analysis") {
+      config.feedbackMode = feedbackMode;
     }
 
     try {
@@ -177,6 +183,26 @@ export default function SessionSetup() {
                   </Pill>
                 ))}
           </div>
+        </Section>
+      )}
+
+      {/* Feedback timing — only relevant for untimed analysis mode.
+          Timed sessions always defer automatically. */}
+      {practiceMode === "analysis" && timerMode === "untimed" && (
+        <Section title="Feedback timing">
+          <div className="flex flex-wrap gap-2">
+            <Pill active={feedbackMode === "instant"} onClick={() => setFeedbackMode("instant")}>
+              Instant
+            </Pill>
+            <Pill active={feedbackMode === "deferred"} onClick={() => setFeedbackMode("deferred")}>
+              After session
+            </Pill>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {feedbackMode === "instant"
+              ? "AI feedback appears immediately after each answer — good for deep learning."
+              : "Your reasoning is saved; AI feedback for all questions is shown together at the end — better for uninterrupted practice."}
+          </p>
         </Section>
       )}
 

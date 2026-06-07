@@ -1,6 +1,6 @@
 // Phase 11: Web Speech API wrapper for voice reasoning input.
-// Works in Chrome, Edge, and (partially) mobile Safari.
-// Indian English hint (en-IN) to improve accent recognition.
+// Works in Chrome/Edge. Uses en-US with continuous:false (short per-phrase
+// requests) — far more reliable than a long-lived stream, avoids "network" errors.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SpeechRecognition =
@@ -14,16 +14,92 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState(null);
   const recognitionRef = useRef(null);
+  const stoppedIntentionally = useRef(false);
+  const retryCount = useRef(0);
+  // Stable refs so event handlers always see the latest callbacks
+  const onFinalRef = useRef(onFinalTranscript);
+  const onInterimRef = useRef(onInterimTranscript);
+  useEffect(() => { onFinalRef.current = onFinalTranscript; }, [onFinalTranscript]);
+  useEffect(() => { onInterimRef.current = onInterimTranscript; }, [onInterimTranscript]);
+
   const isSupported = Boolean(SpeechRecognition);
 
+  // Spawn one recognition instance and wire up its handlers.
+  // Uses continuous:false so each phrase is a short, independent request to
+  // Google — much less prone to "network" errors than a persistent stream.
+  const spawnInstance = useCallback(() => {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          onFinalRef.current(t.trim());
+          onInterimRef.current("");
+        } else {
+          interim += t;
+        }
+      }
+      if (interim) onInterimRef.current(interim);
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "no-speech") return;
+      if (event.error === "network") {
+        // Allow up to 3 silent retries for transient blips before giving up.
+        if (retryCount.current < 3) {
+          retryCount.current += 1;
+          return;
+        }
+        setError(
+          "Voice input couldn't reach Google's speech servers. " +
+          "Check your internet connection and try again."
+        );
+        stoppedIntentionally.current = true;
+        return;
+      }
+      setError(
+        event.error === "not-allowed"
+          ? "Microphone access denied. Allow mic access in your browser and try again."
+          : `Voice error: ${event.error}`
+      );
+      stoppedIntentionally.current = true;
+    };
+
+    recognition.onend = () => {
+      if (stoppedIntentionally.current) {
+        setIsRecording(false);
+        onInterimRef.current("");
+        return;
+      }
+      // Phrase finished — restart immediately to keep listening.
+      try {
+        const next = spawnInstance();
+        next.start();
+        recognitionRef.current = next;
+      } catch {
+        setIsRecording(false);
+      }
+    };
+
+    return recognition;
+  }, []); // no deps — uses stable refs for callbacks
+
   const stop = useCallback(() => {
+    stoppedIntentionally.current = true;
+    retryCount.current = 0;
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
       recognitionRef.current = null;
     }
     setIsRecording(false);
-    onInterimTranscript("");
-  }, [onInterimTranscript]);
+    onInterimRef.current("");
+  }, []);
 
   const start = useCallback(() => {
     if (!SpeechRecognition) {
@@ -31,55 +107,21 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-IN";
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          onFinalTranscript(transcript.trim());
-          onInterimTranscript("");
-        } else {
-          interim += transcript;
-        }
-      }
-      if (interim) onInterimTranscript(interim);
-    };
-
-    recognition.onerror = (event) => {
-      // "no-speech" and "network" are transient — Chrome fires "network" on
-      // localhost because it can't reach Google's speech servers. Silent stop.
-      if (event.error === "no-speech" || event.error === "network") return;
-      setError(
-        event.error === "not-allowed"
-          ? "Microphone access denied. Allow mic access and try again."
-          : `Voice error: ${event.error}`
-      );
-    };
-
-    recognition.onend = () => {
-      // Fires when recognition stops — either because we called stop(), or
-      // because the browser timed out (e.g. no-speech on some mobile browsers).
-      setIsRecording(false);
-      onInterimTranscript("");
-    };
+    stoppedIntentionally.current = false;
+    retryCount.current = 0;
+    setError(null);
 
     try {
+      const recognition = spawnInstance();
       recognition.start();
-    } catch (e) {
+      recognitionRef.current = recognition;
+    } catch {
       setError("Could not start microphone. Check your browser permissions.");
       return;
     }
 
-    recognitionRef.current = recognition;
     setIsRecording(true);
-    setError(null);
-  }, [onFinalTranscript, onInterimTranscript]);
+  }, [spawnInstance]);
 
   const toggle = useCallback(() => {
     if (isRecording) stop();
