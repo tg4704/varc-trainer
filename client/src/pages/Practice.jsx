@@ -476,7 +476,13 @@ export default function Practice() {
   return (
     <>
     <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
-      {question.repeating && (
+      {session?.sessionType === "review" && (
+        <div className="mb-6 rounded-md bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+          <span className="text-base">🔁</span>
+          <span><strong>Spaced repetition review</strong> — these are questions you previously got wrong, due for reinforcement.</span>
+        </div>
+      )}
+      {question.repeating && session?.sessionType !== "review" && (
         <div className="mb-6 rounded-md bg-primary/10 px-4 py-3 text-sm text-primary">
           You've seen all 25 questions — repeating from the full question bank.
         </div>

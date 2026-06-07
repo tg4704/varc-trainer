@@ -11,6 +11,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
 const VALID_FEEDBACK_MODES = ["instant", "deferred"];
+const VALID_SESSION_TYPES = ["practice", "review"];
 const MAX_QUESTIONS = 25;
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -23,6 +24,7 @@ function serializeSession(s) {
     timerScope: s.timer_scope,
     timerSeconds: s.timer_seconds,
     feedbackMode: s.feedback_mode || "instant",
+    sessionType: s.session_type || "practice",
     status: s.status,
     createdAt: s.created_at,
     completedAt: s.completed_at,
@@ -35,7 +37,7 @@ function getOwnedSession(id, userId) {
 
 // POST /api/sessions — create a configured session
 router.post("/", authenticate, (req, res) => {
-  let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant" } = req.body || {};
+  let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice" } = req.body || {};
 
   numQuestions = parseInt(numQuestions, 10);
   if (!numQuestions || numQuestions < 1 || numQuestions > MAX_QUESTIONS) {
@@ -46,6 +48,9 @@ router.post("/", authenticate, (req, res) => {
   }
   if (!VALID_FEEDBACK_MODES.includes(feedbackMode)) {
     return res.status(400).json({ error: "Invalid feedbackMode" });
+  }
+  if (!VALID_SESSION_TYPES.includes(sessionType)) {
+    return res.status(400).json({ error: "Invalid sessionType" });
   }
 
   if (timerMode === "untimed") {
@@ -69,10 +74,10 @@ router.post("/", authenticate, (req, res) => {
 
   const result = db
     .prepare(
-      `INSERT INTO sessions (user_id, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sessions (user_id, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode, session_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(req.userId, numQuestions, timerMode, timerScope, timerSeconds, feedbackMode);
+    .run(req.userId, numQuestions, timerMode, timerScope, timerSeconds, feedbackMode, sessionType);
 
   const session = getOwnedSession(result.lastInsertRowid, req.userId);
   res.json({ session: serializeSession(session) });

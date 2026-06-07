@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
+const { updateCard } = require("../sr");
 
 // Calculate intuition-mode points (server-side, spec §Phase 6)
 function calcIntuitionPoints({ isCorrect, timeTakenSeconds, eliminatedIndices, correctIndex, skipped }) {
@@ -87,6 +88,11 @@ router.post("/basic", authenticate, (req, res) => {
     q.trapIndex, q.trapType, selectedTrap, isSkipped,
     mode, timeTakenSeconds ?? null, elimJson, intuitionPoints
   );
+
+  // Update SR card for non-skipped attempts (Phase 15)
+  if (!isSkipped) {
+    try { updateCard(req.userId, questionId, isCorrect === 1); } catch {}
+  }
 
   res.json({
     isCorrect: isCorrect === 1,

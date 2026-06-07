@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
+const { getDueCards } = require("../sr");
 
 // Strip server-only fields before sending to client
 function sanitise(q) {
@@ -43,6 +44,29 @@ router.get("/next", authenticate, (req, res) => {
   }
 
   const attemptedSet = new Set(attempted);
+
+  // Review sessions (Phase 15): serve due SR cards in order, most-overdue first.
+  if (session.session_type === "review") {
+    const dueCards = getDueCards(req.userId);
+    const unseenDue = dueCards.filter((c) => !attemptedSet.has(c.question_id));
+    if (unseenDue.length === 0) {
+      // No more due cards — end the session early
+      return res.json({ done: true, answered: count, total: session.num_questions });
+    }
+    const pick = questionsRepo.findById(unseenDue[0].question_id);
+    if (!pick) {
+      return res.status(500).json({ error: "SR card question not found" });
+    }
+    return res.json({
+      ...sanitise(pick),
+      index: count + 1,
+      total: session.num_questions,
+      repeating: false,
+      reviewMode: true,
+    });
+  }
+
+  // Normal practice session: random unseen, then repeating if exhausted
   const allQuestions = questionsRepo.listForUser(req.userId);
   if (allQuestions.length === 0) {
     return res.status(500).json({ error: "No questions available" });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDashboard, coach as coachApi } from "../api.js";
+import { getDashboard, coach as coachApi, sr as srApi } from "../api.js";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import FeedbackSections, { ScoreDots } from "../components/FeedbackSections.jsx";
@@ -36,6 +36,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   const [error, setError] = useState(null);
   const [coachStats, setCoachStats] = useState(null);
   const [coachLoading, setCoachLoading] = useState(false);
+  const [srStats, setSrStats] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -54,6 +55,11 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
     setCoachLoading(true);
     coachApi.stats().then(setCoachStats).catch(() => {}).finally(() => setCoachLoading(false));
   }, [tab, coachStats]);
+
+  // Fetch SR stats once on mount (shown in practice tab)
+  useEffect(() => {
+    srApi.getStats().then(setSrStats).catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -143,6 +149,9 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
           <WeakestArea data={data} />
           {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
             <IntuitionStats stats={data.intuitionStats} />
+          )}
+          {srStats && srStats.totalCards > 0 && (
+            <SrWidget stats={srStats} />
           )}
           <RecentAttempts attempts={data.recentAttempts} />
         </>
@@ -510,5 +519,67 @@ function RecentAttemptCard({ attempt }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Spaced Repetition widget (Phase 15) ───────────────────────────────────────
+function SrWidget({ stats }) {
+  const { totalCards, dueNow, graduated, avgBucket } = stats;
+  const progress = totalCards > 0 ? Math.round((graduated / totalCards) * 100) : 0;
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Spaced Repetition
+      </h2>
+      <div className="mt-3 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="grid grid-cols-3 gap-4 flex-1">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-slate-900">{totalCards}</p>
+              <p className="mt-0.5 text-xs text-slate-500">Total cards</p>
+            </div>
+            <div className="text-center">
+              <p className={`text-2xl font-bold ${dueNow > 0 ? "text-amber-600" : "text-green-600"}`}>
+                {dueNow}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">Due now</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-green-600">{graduated}</p>
+              <p className="mt-0.5 text-xs text-slate-500">Graduated</p>
+            </div>
+          </div>
+          {dueNow > 0 && (
+            <Link
+              to="/setup"
+              className="inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors flex-none"
+            >
+              Review {dueNow} card{dueNow === 1 ? "" : "s"} →
+            </Link>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+            <span>Progress to graduation</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-green-500 transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        {avgBucket != null && (
+          <p className="mt-3 text-xs text-slate-400">
+            Avg. interval bucket: {avgBucket} / 4 &nbsp;·&nbsp; Bucket 4 = 30-day interval (graduated)
+          </p>
+        )}
+      </div>
+    </section>
   );
 }

@@ -7,6 +7,7 @@ const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { updateCard } = require("../sr");
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -151,6 +152,9 @@ router.post("/evaluate", authenticate, async (req, res) => {
     trapType: q.trapType,
     selectedTrap: selectedTrap === 1,
   };
+
+  // Update SR card now that we know the result (Phase 15)
+  try { updateCard(req.userId, questionId, isCorrect === 1); } catch {}
 
   // Deferred mode: save attempt only, skip Claude call, return basic result.
   // The batch-evaluate endpoint will run Claude after the session ends.

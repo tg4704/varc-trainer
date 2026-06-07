@@ -115,6 +115,25 @@ function ensureColumn(table, column, definition) {
 }
 ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
 ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
+ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
+
+// ── Phase 15: Spaced repetition cards ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sr_cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    question_id TEXT NOT NULL,
+    bucket INTEGER NOT NULL DEFAULT 0,   -- 0–4; intervals: 1,3,7,14,30 days
+    due_at TEXT NOT NULL,                -- ISO datetime string
+    last_seen_at TEXT,
+    last_correct INTEGER,                -- 0 or 1
+    total_attempts INTEGER NOT NULL DEFAULT 0,
+    total_correct INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE(user_id, question_id)
+  );
+`);
 
 // ── Phase 14: AI Reading Coach tables ──
 db.exec(`

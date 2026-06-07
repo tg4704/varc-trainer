@@ -154,3 +154,9 @@ export const admin = {
 
   costs: () => request("/api/admin/costs"),
 };
+
+// ── Spaced Repetition (Phase 15) ─────────────────────────────────────────────
+export const sr = {
+  getQueue: () => request("/api/sr/queue"),
+  getStats: () => request("/api/sr/stats"),
+};
