@@ -101,6 +101,17 @@ export const myQuestions = {
     }),
 };
 
+// ── Reading Coach (Phase 14) ──────────────────────────
+export const coach = {
+  createSession: (body) =>
+    request("/api/coach/sessions", { method: "POST", body: JSON.stringify(body) }),
+  exchange: (body) =>
+    request("/api/coach/exchange", { method: "POST", body: JSON.stringify(body) }),
+  getSession: (id) => request(`/api/coach/sessions/${id}`),
+  history: () => request("/api/coach/history"),
+  stats: () => request("/api/coach/stats"),
+};
+
 // ── Admin (Phase 9) ───────────────────────────────────
 // All admin endpoints require role='admin' on the user.
 export const admin = {

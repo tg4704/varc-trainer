@@ -116,6 +116,42 @@ function ensureColumn(table, column, definition) {
 ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
 ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
 
+// ── Phase 14: AI Reading Coach tables ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS coach_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    article_text TEXT NOT NULL,
+    article_source TEXT,
+    article_title TEXT,
+    word_count INTEGER NOT NULL,
+    questions_json TEXT NOT NULL,   -- full generated questions (with correctIndex etc.) — never sent raw to client
+    status TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'completed'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS coach_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    coach_session_id INTEGER NOT NULL,
+    question_index INTEGER NOT NULL,        -- 0–3
+    question_type TEXT NOT NULL,
+    selected_option_index INTEGER NOT NULL,
+    correct_option_index INTEGER NOT NULL,
+    is_correct INTEGER NOT NULL,            -- 0 or 1
+    selected_trap INTEGER NOT NULL,         -- 0 or 1
+    trap_type TEXT,
+    exchange_count INTEGER NOT NULL DEFAULT 0,
+    conversation_json TEXT NOT NULL DEFAULT '[]',
+    final_verdict TEXT,
+    key_takeaway TEXT,
+    is_complete INTEGER NOT NULL DEFAULT 0, -- 0 or 1
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (coach_session_id) REFERENCES coach_sessions(id)
+  );
+`);
+
 // ── Seed questions on first run (Phase 8) ──
 // Idempotent: only seeds when the questions table is empty. The canonical
 // definition still lives in server/data/questions.js (checked into git) — it

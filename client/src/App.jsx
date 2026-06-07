@@ -14,6 +14,9 @@ import SessionReview from "./pages/SessionReview.jsx";
 import Profile from "./pages/Profile.jsx";
 import MyQuestions from "./pages/MyQuestions.jsx";
 import MyQuestionEditor from "./pages/MyQuestionEditor.jsx";
+import CoachLanding from "./pages/CoachLanding.jsx";
+import CoachPractice from "./pages/CoachPractice.jsx";
+import CoachSummary from "./pages/CoachSummary.jsx";
 
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 
@@ -55,6 +58,7 @@ function NavBar() {
           {user ? (
             <>
               {link("/setup", "Practice")}
+              {link("/coach", "Coach")}
               {link("/dashboard", "Dashboard")}
               {link("/my-questions", "My Questions")}
               {user.role === "admin" && link("/admin", "Admin")}
@@ -113,6 +117,11 @@ function AppShell() {
           <Route path="/my-questions"     element={<ProtectedRoute><MyQuestions /></ProtectedRoute>} />
           <Route path="/my-questions/new" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
           <Route path="/my-questions/:id" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
+
+          {/* ── Reading Coach ────────────────────────────────────────── */}
+          <Route path="/coach"          element={<ProtectedRoute><CoachLanding /></ProtectedRoute>} />
+          <Route path="/coach/practice" element={<ProtectedRoute><CoachPractice /></ProtectedRoute>} />
+          <Route path="/coach/summary"  element={<ProtectedRoute><CoachSummary /></ProtectedRoute>} />
 
           {/* ── Admin ───────────────────────────────────────────────── */}
           <Route

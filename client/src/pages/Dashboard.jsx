@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDashboard } from "../api.js";
+import { getDashboard, coach as coachApi } from "../api.js";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import FeedbackSections, { ScoreDots } from "../components/FeedbackSections.jsx";
@@ -30,9 +30,12 @@ function accuracyColor(acc) {
 // read-only ("impersonation" without taking their session). `headerSlot` lets
 // callers prepend a banner (e.g., "Viewing as <username>").
 export default function Dashboard({ fetcher = getDashboard, headerSlot = null }) {
+  const [tab, setTab] = useState("practice"); // "practice" | "coach"
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [coachStats, setCoachStats] = useState(null);
+  const [coachLoading, setCoachLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -45,6 +48,12 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
       }
     })();
   }, [fetcher]);
+
+  useEffect(() => {
+    if (tab !== "coach" || coachStats) return;
+    setCoachLoading(true);
+    coachApi.stats().then(setCoachStats).catch(() => {}).finally(() => setCoachLoading(false));
+  }, [tab, coachStats]);
 
   if (loading) {
     return (
@@ -99,21 +108,140 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
           New session
         </Link>
       </div>
-      <p className="mt-1 text-sm text-slate-500">Lifetime stats across all your sessions.</p>
 
-      <HeaderStats data={data} />
-      <AccuracyByTypeChart byType={data.byType} />
+      {/* Tab switcher */}
+      <div className="mt-4 flex gap-1 border-b border-slate-200">
+        {[["practice", "VARC Practice"], ["coach", "Reading Coach"]].map(([t, label]) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t
+                ? "border-slate-900 text-slate-900"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "coach" ? (
+        <CoachTab stats={coachStats} loading={coachLoading} />
+      ) : (
+        <>
+          <p className="mt-4 text-sm text-slate-500">Lifetime stats across all your sessions.</p>
+          <HeaderStats data={data} />
+          <AccuracyByTypeChart byType={data.byType} />
 
       <div className="mt-8 grid gap-6 md:grid-cols-2">
         <TrapWeakness byTrapType={data.byTrapType} mostDangerousTrap={data.mostDangerousTrap} />
         <TopicAccuracy byTopic={data.byTopic} />
       </div>
 
-      <WeakestArea data={data} />
-      {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
-        <IntuitionStats stats={data.intuitionStats} />
+          <WeakestArea data={data} />
+          {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
+            <IntuitionStats stats={data.intuitionStats} />
+          )}
+          <RecentAttempts attempts={data.recentAttempts} />
+        </>
       )}
-      <RecentAttempts attempts={data.recentAttempts} />
+    </div>
+  );
+}
+
+// ── Coach tab ──────────────────────────────────────────────────────────────────
+const TYPE_LABELS_COACH = { inference: "Inference", tone: "Tone", title: "Title", detail: "Detail" };
+
+function CoachTab({ stats, loading }) {
+  if (loading) return (
+    <div className="mt-8 space-y-4 animate-pulse">
+      {[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-slate-100" />)}
+    </div>
+  );
+  if (!stats || stats.totalSessions === 0) return (
+    <div className="mt-12 text-center">
+      <p className="text-slate-500 text-sm">No Coach sessions yet.</p>
+      <Link
+        to="/coach"
+        className="mt-4 inline-flex rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
+      >
+        Start a session
+      </Link>
+    </div>
+  );
+
+  const accuracyPct = stats.accuracy != null ? `${Math.round(stats.accuracy * 100)}%` : "—";
+  return (
+    <div className="mt-6 space-y-8">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          ["Articles practiced", stats.totalSessions],
+          ["Questions answered", stats.totalQuestions],
+          ["Accuracy", accuracyPct],
+          ["Avg exchanges", stats.avgExchanges ?? "—"],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* By question type */}
+      {Object.keys(stats.byType).length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-slate-700 mb-4">Accuracy by question type</h2>
+          <div className="space-y-3">
+            {Object.entries(stats.byType).map(([type, { attempts, correct }]) => {
+              const acc = attempts ? correct / attempts : 0;
+              const color = acc < 0.5 ? "#ef4444" : acc <= 0.7 ? "#f59e0b" : "#22c55e";
+              return (
+                <div key={type} className="flex items-center gap-3">
+                  <span className="w-20 text-xs text-slate-600">{TYPE_LABELS_COACH[type] || type}</span>
+                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: pct(acc), backgroundColor: color }} />
+                  </div>
+                  <span className="text-xs tabular-nums text-slate-500 w-10 text-right">{pct(acc)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Avg exchanges needed: {stats.avgExchanges ?? "—"} (lower = stronger first-pass reasoning)
+          </p>
+        </div>
+      )}
+
+      {/* Recent sessions */}
+      {stats.recentSessions?.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">Recent articles</h2>
+          <div className="space-y-2">
+            {stats.recentSessions.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800 truncate">
+                    {s.article_title || "Untitled article"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {new Date(s.created_at).toLocaleDateString()} ·{" "}
+                    {s.attempted ? `${s.correct}/${s.attempted} correct` : "in progress"}
+                  </p>
+                </div>
+                <Link
+                  to={`/coach/summary?sessionId=${s.id}`}
+                  className="ml-4 flex-none text-xs text-slate-500 hover:text-slate-900 underline"
+                >
+                  Review
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
