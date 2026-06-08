@@ -5,11 +5,10 @@ const path = require("path");
 const fs = require("fs");
 
 // ── Sentry (error monitoring) — init before anything else ────────────────────
-let Sentry = null;
+// @sentry/node v8: just call init() — no manual middleware needed.
 if (process.env.SENTRY_DSN) {
   try {
-    Sentry = require("@sentry/node");
-    Sentry.init({
+    require("@sentry/node").init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || "production",
       tracesSampleRate: 0.1,
@@ -20,7 +19,6 @@ if (process.env.SENTRY_DSN) {
 }
 
 const app = express();
-if (Sentry) app.use(Sentry.Handlers.requestHandler());
 
 app.use(cors());
 app.use(express.json());
@@ -38,9 +36,6 @@ app.use("/api/admin", require("./routes/admin"));
 app.use("/api/coach", require("./routes/coach"));
 app.use("/api/sr", require("./routes/sr"));
 app.use("/api/streak", require("./routes/streak"));
-
-// ── Sentry error handler (must come after routes) ────────────────────────────
-if (Sentry) app.use(Sentry.Handlers.errorHandler());
 
 // ── Serve React build in production ──────────────────────────────────────────
 // When Railway runs `npm run build` for the client, the output lands at client/dist/.
