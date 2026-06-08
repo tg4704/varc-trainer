@@ -17,9 +17,10 @@ const MAX_MSG_LENGTH = 300;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function ArticleWithHighlight({ text, sourceLines }) {
-  if (!sourceLines) return (
+  // Guard: render plain text if no highlight needed, or if text is missing.
+  if (!sourceLines || !text) return (
     <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: "15px", lineHeight: 1.9 }}>
-      {text}
+      {text || ""}
     </p>
   );
   const idx = text.indexOf(sourceLines.slice(0, 40));
@@ -260,19 +261,24 @@ export default function CoachPractice() {
             </div>
 
             {selected !== null && debriefPhase === "idle" && (
-              <Button
-                className="mt-4 w-full"
-                size="lg"
-                disabled={sending}
-                onClick={startDebrief}
-              >
-                {sending ? (
-                  <span className="flex items-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                    Starting debrief…
-                  </span>
-                ) : "Start Debrief →"}
-              </Button>
+              <>
+                {error && (
+                  <p className="mt-3 text-sm text-destructive">{error}</p>
+                )}
+                <Button
+                  className="mt-3 w-full"
+                  size="lg"
+                  disabled={sending}
+                  onClick={startDebrief}
+                >
+                  {sending ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Starting debrief…
+                    </span>
+                  ) : "Start Debrief →"}
+                </Button>
+              </>
             )}
           </div>
 

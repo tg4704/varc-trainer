@@ -228,6 +228,7 @@ router.post("/sessions", authenticate, async (req, res) => {
       id: coachSessionId,
       articleTitle: articleTitle.trim() || null,
       articleSource: articleSource.trim() || null,
+      articleText: articleText.trim(),   // needed by the practice page to display the article
       wordCount,
       // Questions with sensitive fields stripped — correctIndex etc. revealed after debrief
       questions: questions.map(stripQuestion),
