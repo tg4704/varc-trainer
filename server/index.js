@@ -17,6 +17,7 @@ app.use("/api/my-questions", require("./routes/myQuestions"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/coach", require("./routes/coach"));
 app.use("/api/sr", require("./routes/sr"));
+app.use("/api/streak", require("./routes/streak"));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

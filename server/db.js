@@ -114,6 +114,7 @@ function ensureColumn(table, column, definition) {
   }
 }
 ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
+ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");  // Phase 16
 ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
 ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
 

@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { loadActiveSession } from "../session.js";
+import { streak as streakApi } from "../api.js";
 import { Button } from "../components/ui/button.jsx";
 import { Card, CardContent } from "../components/ui/card.jsx";
+import StreakWidget from "../components/StreakWidget.jsx";
 
 const VALUE_PROPS = [
   {
@@ -22,6 +25,12 @@ const VALUE_PROPS = [
 export default function Home() {
   const { user } = useAuth();
   const hasActive = Boolean(loadActiveSession());
+  const [streakData, setStreakData] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    streakApi.get().then(setStreakData).catch(() => {});
+  }, [user]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-16 sm:py-24">
@@ -64,6 +73,13 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* Streak widget — only for logged-in users with data */}
+      {user && streakData && (
+        <div className="mt-12 max-w-2xl mx-auto">
+          <StreakWidget data={streakData} onUpdate={setStreakData} />
+        </div>
+      )}
 
       <div className="mt-20 grid gap-6 sm:grid-cols-3">
         {VALUE_PROPS.map((vp) => (

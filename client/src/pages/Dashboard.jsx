@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDashboard, coach as coachApi, sr as srApi } from "../api.js";
+import { getDashboard, coach as coachApi, sr as srApi, streak as streakApi } from "../api.js";
+import StreakWidget from "../components/StreakWidget.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import FeedbackSections, { ScoreDots } from "../components/FeedbackSections.jsx";
@@ -37,6 +38,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   const [coachStats, setCoachStats] = useState(null);
   const [coachLoading, setCoachLoading] = useState(false);
   const [srStats, setSrStats] = useState(null);
+  const [streakData, setStreakData] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -59,6 +61,11 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   // Fetch SR stats once on mount (shown in practice tab)
   useEffect(() => {
     srApi.getStats().then(setSrStats).catch(() => {});
+  }, []);
+
+  // Fetch streak once on mount (shown in practice tab)
+  useEffect(() => {
+    streakApi.get().then(setStreakData).catch(() => {});
   }, []);
 
   if (loading) {
@@ -138,6 +145,11 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
       ) : (
         <>
           <p className="mt-4 text-sm text-slate-500">Lifetime stats across all your sessions.</p>
+          {streakData && (
+            <div className="mt-4">
+              <StreakWidget data={streakData} onUpdate={setStreakData} compact />
+            </div>
+          )}
           <HeaderStats data={data} />
           <AccuracyByTypeChart byType={data.byType} />
 
