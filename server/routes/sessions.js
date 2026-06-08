@@ -3,10 +3,8 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
-const Anthropic = require("@anthropic-ai/sdk");
 const { logApiCall } = require("../ai/apiLog");
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
@@ -230,9 +228,7 @@ async function evaluateOneAttempt(attempt, userId) {
   if (!q) return { attemptId: attempt.id, aiError: true, aiErrorMessage: "Question not found" };
 
   try {
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
+    const response = await callModel({
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(q, attempt.selected_option_index, attempt.reasoning_text) }],
     });
@@ -240,14 +236,14 @@ async function evaluateOneAttempt(attempt, userId) {
     logApiCall({
       userId,
       route: "/api/sessions/batch-evaluate",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
-      inputTokens: response.usage?.input_tokens || 0,
-      outputTokens: response.usage?.output_tokens || 0,
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
       status: "ok",
     });
 
-    const ev = JSON.parse(response.content[0].text);
+    const ev = JSON.parse(response.text);
 
     db.prepare(
       `UPDATE attempts SET
@@ -273,8 +269,8 @@ async function evaluateOneAttempt(attempt, userId) {
     logApiCall({
       userId,
       route: "/api/sessions/batch-evaluate",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
       status: "error",
     });
     return { attemptId: attempt.id, aiError: true, aiErrorMessage: "AI feedback unavailable." };

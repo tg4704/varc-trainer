@@ -1,12 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 const { updateCard } = require("../sr");
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -165,9 +163,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
   const attemptId = result.lastInsertRowid;
 
   try {
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
+    const response = await callModel({
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText.trim(), quotedLines) }],
     });
@@ -176,14 +172,14 @@ router.post("/evaluate", authenticate, async (req, res) => {
     logApiCall({
       userId: req.userId,
       route: "/api/attempts/evaluate",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
-      inputTokens: response.usage?.input_tokens || 0,
-      outputTokens: response.usage?.output_tokens || 0,
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
       status: "ok",
     });
 
-    const evaluation = JSON.parse(response.content[0].text);
+    const evaluation = JSON.parse(response.text);
 
     db.prepare(
       `UPDATE attempts SET
@@ -212,13 +208,12 @@ router.post("/evaluate", authenticate, async (req, res) => {
       aiError: false,
     });
   } catch (err) {
-    console.error("Claude API error:", err.message);
-    // Still log the failed attempt for admin visibility
+    console.error("AI provider error:", err.message);
     logApiCall({
       userId: req.userId,
       route: "/api/attempts/evaluate",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
       status: "error",
     });
     return res.json({

@@ -5,11 +5,11 @@
 // (questionsRepo.listForUser already handles this).
 const express = require("express");
 const router = express.Router();
-const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
 const { authenticate } = require("../auth");
 const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
 const { logApiCall } = require("../ai/apiLog");
+const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 
 router.use(authenticate);
 
@@ -201,33 +201,30 @@ Schema:
 
   const userMsg = `PASSAGE:\n${paragraph.trim()}\n\nQUESTION TYPE: ${questionType}\n\nGenerate one CAT-style ${questionType} question on this passage.`;
 
-  async function callClaude() {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 1024,
+  async function callAI() {
+    const response = await callModel({
       system: SYSTEM,
       messages: [{ role: "user", content: userMsg }],
     });
     logApiCall({
       userId: req.userId,
       route: "/api/my-questions/generate-draft",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
-      inputTokens: response.usage?.input_tokens || 0,
-      outputTokens: response.usage?.output_tokens || 0,
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
       status: "ok",
     });
-    return JSON.parse(response.content[0].text);
+    return JSON.parse(response.text);
   }
 
   try {
     let draft;
     try {
-      draft = await callClaude();
+      draft = await callAI();
     } catch {
       // Retry once on parse error or network hiccup
-      draft = await callClaude();
+      draft = await callAI();
     }
 
     // Validate the AI output before returning to the client
@@ -254,8 +251,8 @@ Schema:
     logApiCall({
       userId: req.userId,
       route: "/api/my-questions/generate-draft",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
       status: "error",
     });
     console.error("AI draft error:", e.message);

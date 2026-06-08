@@ -6,12 +6,10 @@
 //   GET  /api/coach/history       — user's past sessions with stats
 const express = require("express");
 const router = express.Router();
-const Anthropic = require("@anthropic-ai/sdk");
 const db = require("../db");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 
 const LETTERS = ["A", "B", "C", "D"];
 const MIN_WORDS = 300;
@@ -170,9 +168,8 @@ router.post("/sessions", authenticate, async (req, res) => {
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await client.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 2000,
+      const response = await callModel({
+        maxTokens: 2000,
         system: GENERATION_SYSTEM,
         messages: [{
           role: "user",
@@ -183,14 +180,14 @@ router.post("/sessions", authenticate, async (req, res) => {
       logApiCall({
         userId: req.userId,
         route: "/api/coach/sessions",
-        provider: "anthropic",
-        model: "claude-haiku-4-5",
-        inputTokens: response.usage?.input_tokens || 0,
-        outputTokens: response.usage?.output_tokens || 0,
+        provider: "openrouter",
+        model: DEFAULT_MODEL,
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
         status: "ok",
       });
 
-      const parsed = JSON.parse(response.content[0].text);
+      const parsed = JSON.parse(response.text);
       const validationError = validateQuestions(parsed);
       if (validationError) {
         lastError = `Validation failed: ${validationError}`;
@@ -203,8 +200,8 @@ router.post("/sessions", authenticate, async (req, res) => {
       logApiCall({
         userId: req.userId,
         route: "/api/coach/sessions",
-        provider: "anthropic",
-        model: "claude-haiku-4-5",
+        provider: "openrouter",
+        model: DEFAULT_MODEL,
         status: "error",
       });
     }
@@ -295,9 +292,8 @@ router.post("/exchange", authenticate, async (req, res) => {
   const isReveal = giveUp || exchangeNumber >= 4;
 
   try {
-    const aiResponse = await client.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: isReveal ? 512 : 256,
+    const aiResponse = await callModel({
+      maxTokens: isReveal ? 512 : 256,
       system: SOCRATIC_SYSTEM,
       messages: [{
         role: "user",
@@ -311,14 +307,14 @@ router.post("/exchange", authenticate, async (req, res) => {
     logApiCall({
       userId: req.userId,
       route: "/api/coach/exchange",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
-      inputTokens: aiResponse.usage?.input_tokens || 0,
-      outputTokens: aiResponse.usage?.output_tokens || 0,
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
+      inputTokens: aiResponse.usage.input_tokens,
+      outputTokens: aiResponse.usage.output_tokens,
       status: "ok",
     });
 
-    const tutorMessage = aiResponse.content[0].text.trim();
+    const tutorMessage = aiResponse.text.trim();
     conversation.push({ role: "tutor", text: tutorMessage });
 
     const newExchangeCount = attempt.exchange_count + 1;
@@ -368,8 +364,8 @@ router.post("/exchange", authenticate, async (req, res) => {
     logApiCall({
       userId: req.userId,
       route: "/api/coach/exchange",
-      provider: "anthropic",
-      model: "claude-haiku-4-5",
+      provider: "openrouter",
+      model: DEFAULT_MODEL,
       status: "error",
     });
     return res.status(502).json({ error: "AI tutor unavailable. Please try again." });
