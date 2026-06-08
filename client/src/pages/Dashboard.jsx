@@ -291,7 +291,7 @@ function HeaderStats({ data }) {
 
 // ── Row 2: plain-SVG horizontal bar chart ──────────────
 function AccuracyByTypeChart({ byType }) {
-  const entries = Object.entries(byType);
+  const entries = Object.entries(byType || {});
   if (entries.length === 0) return null;
 
   const rowH = 34;
@@ -342,7 +342,7 @@ function AccuracyByTypeChart({ byType }) {
 
 // ── Row 3 left: trap weakness ──────────────────────────
 function TrapWeakness({ byTrapType, mostDangerousTrap }) {
-  const entries = Object.entries(byTrapType).sort((a, b) => {
+  const entries = Object.entries(byTrapType || {}).sort((a, b) => {
     const ra = a[1].encountered ? a[1].fell_for / a[1].encountered : 0;
     const rb = b[1].encountered ? b[1].fell_for / b[1].encountered : 0;
     return rb - ra;
@@ -386,7 +386,7 @@ function TrapWeakness({ byTrapType, mostDangerousTrap }) {
 
 // ── Row 3 right: topic accuracy ────────────────────────
 function TopicAccuracy({ byTopic }) {
-  const entries = Object.entries(byTopic);
+  const entries = Object.entries(byTopic || {});
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
@@ -413,7 +413,7 @@ function TopicAccuracy({ byTopic }) {
 // ── Row 4: weakest-area callout ────────────────────────
 function WeakestArea({ data }) {
   if (!data.weakestType) return null;
-  const t = data.byType[data.weakestType];
+  const t = (data.byType || {})[data.weakestType];
   const avg = t?.avgReasoningScore != null ? `${t.avgReasoningScore.toFixed(1)}/5` : "not yet scored";
   return (
     <section className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5">

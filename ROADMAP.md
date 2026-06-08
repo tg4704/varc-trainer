@@ -267,3 +267,41 @@ This document plans the next wave of features on top of the shipped app (Phases 
 
 ## Suggested Sequencing (default)
 `8 → 8.5 → 9 → 10` (foundation) → `11 / 12 / 13` (quick wins, any order) → `14` (Coach) → `15 → 16` (retention) → `18 → 17` (durable DB then monetize) → `19` (polish).
+
+---
+
+# Deferred / Backlog Items
+
+These were identified during Phase 16 polish and deferred for later implementation.
+
+## Practice UX — per-question submit flow
+**Status: partially done.** Timer display now freezes on option selection (`selectionTimeRef`), and per-question auto-skip is disabled once an option is picked. Reasoning textarea was already appearing after selection.
+
+**Remaining (complex):** full "lock-in" UX where the options grid becomes un-clickable the moment one is selected (no changing your mind). Currently users can still change selection before submitting.
+
+## Practice UX — next/previous navigation + status sidebar
+**Planned behavior:**
+- Side panel showing question status: ✓ correct / ✗ incorrect / skipped / not-attempted / flagged for review.
+- User can jump to any question by clicking the sidebar.
+- "Flag for review" button per question (stored locally, possibly synced).
+- This mirrors the CAT exam navigator.
+**Complexity:** requires rewriting the practice loop to load all questions upfront (or cache visited ones), and a new `questionStatus` state map.
+
+## Practice UX — question index slider
+Replace the preset button group (5 / 10 / 15 / 20 / 25) in Session Setup with a slider for selecting question count.
+
+## AI evaluation — batch session prompt (Phase 13 follow-up)
+Currently `POST /api/sessions/:id/batch-evaluate` sends one Claude call **per question**. For a 10-question deferred session, that's 10 API calls. A better approach: send all reasonings in a single prompt and parse the JSON array response. Reduces cost and latency on the session-review page.
+**Blocked on:** prompt engineering for multi-question JSON output.
+
+## ~~Question bank — hide type/topic in sessions~~ ✅ Done
+`TypeBadge` and `TopicBadge` now hidden during active sessions in both Practice and Coach modes. Revealed only after submit/verdict.
+
+## Question bank — user question bank for Coach articles
+Coach-generated questions could be saved to the user's personal question bank (same table as `my-questions` with `source='coach'`). This lets users revisit Coach article questions in practice mode. Admin can "promote" a user's Coach question to the global seed bank.
+
+## ~~AI question authoring — "view answer" toggle~~ ✅ Done
+"Show answer / Hide answer" toggle added to `MyQuestionEditor.jsx`. Correct/trap indicators and source lines hidden by default; clicking "Show answer" reveals them.
+
+## Voice input in Socratic debrief
+The mic button (`VoiceMicButton` + `useVoiceInput`) should work in the Coach Socratic chat input, not just in the Practice reasoning textarea.

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
@@ -97,6 +98,7 @@ function AppShell() {
     <div className="min-h-screen bg-background text-foreground">
       <NavBar />
       <main>
+        <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -143,6 +145,7 @@ function AppShell() {
             <Route path="flags"                element={<Suspense fallback={AdminLoading}><AdminFlags /></Suspense>} />
           </Route>
         </Routes>
+        </ErrorBoundary>
       </main>
     </div>
   );

@@ -31,5 +31,7 @@ export default function AdminUserDashboard() {
     </div>
   );
 
-  return <Dashboard fetcher={fetcher} headerSlot={banner} />;
+  // key={id} forces a fresh mount when switching between users so we never see
+  // stale data from the previous user flash while the new fetch is in flight.
+  return <Dashboard key={id} fetcher={fetcher} headerSlot={banner} />;
 }

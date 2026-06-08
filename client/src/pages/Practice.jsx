@@ -36,6 +36,7 @@ export default function Practice() {
   const [selected, setSelected] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const [loadingQuestion, setLoadingQuestion] = useState(true);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(Date.now());
@@ -60,6 +61,7 @@ export default function Practice() {
   const questionStartRef = useRef(Date.now());
   const sessionStartRef = useRef(Date.now());
   const frozenElapsedRef = useRef(null);
+  const selectionTimeRef = useRef(null); // set when first option is picked in analysis mode
   const autoActedRef = useRef(false);
   const endedRef = useRef(false);
 
@@ -162,6 +164,7 @@ export default function Practice() {
       setReasoningText("");
       setParagraphOpen(true);
       frozenElapsedRef.current = null;
+      selectionTimeRef.current = null;
       try {
         const q = await getNextQuestion(sess.id);
         if (q.done) { await finishSession(sess); return; }
@@ -182,7 +185,7 @@ export default function Practice() {
       if (autoActedRef.current && isAutoSkip) return;
       if (isAutoSkip) autoActedRef.current = true;
       const timeTaken = Math.floor((Date.now() - questionStartRef.current) / 1000);
-      setSubmitting(true);
+      setIsSkipping(true);
       try {
         await submitBasicAttempt({
           sessionId: sess.id,
@@ -193,7 +196,7 @@ export default function Practice() {
         });
         await loadNext(sess);
       } catch (e) { setError(e.message); }
-      finally { setSubmitting(false); }
+      finally { setIsSkipping(false); }
     },
     [loadNext]
   );
@@ -234,7 +237,7 @@ export default function Practice() {
     if (!session || !question || endedRef.current) return;
 
     if (session.practiceMode === "intuition" && session.timerMode === "countdown") {
-      if (feedback || submitting) return;
+      if (feedback || submitting || isSkipping) return;
       const remaining = session.timerSeconds - (Date.now() - questionStartRef.current) / 1000;
       if (remaining <= 0 && !autoActedRef.current) {
         autoActedRef.current = true;
@@ -248,17 +251,18 @@ export default function Practice() {
       const remaining = session.timerSeconds - (Date.now() - sessionStartRef.current) / 1000;
       if (remaining <= 0) finishSession(session);
     } else {
-      if (feedback || submitting) return;
+      // Don't auto-skip once an option has been selected — user is writing reasoning
+      if (feedback || submitting || isSkipping || selected !== null) return;
       const remaining = session.timerSeconds - (Date.now() - questionStartRef.current) / 1000;
       if (remaining <= 0 && !autoActedRef.current) {
         autoActedRef.current = true;
         doSkip(session, question, true);
       }
     }
-  }, [tick, feedback, submitting, question, session, finishSession, doSkip]);
+  }, [tick, feedback, submitting, isSkipping, selected, question, session, finishSession, doSkip]);
 
   async function handleSubmit() {
-    if (selected === null || !question || !session || submitting) return;
+    if (selected === null || !question || !session || submitting || isSkipping) return;
     const timeTaken = Math.floor((Date.now() - questionStartRef.current) / 1000);
     frozenElapsedRef.current = timeTaken;
     setSubmitting(true);
@@ -266,16 +270,41 @@ export default function Practice() {
     try {
       let fb;
       if (practiceMode === "analysis") {
-        fb = await submitEvaluateAttempt({
-          sessionId: session.id,
-          questionId: question.id,
-          selectedOptionIndex: selected,
-          reasoningText: reasoningText.trim(),
-          timeTakenSeconds: timeTaken,
-          mode: practiceMode,
-          quotedLines: quotes,
-          deferred: isDeferred(session),
-        });
+        const hasReasoning = reasoningText.trim().length > 0;
+        if (hasReasoning && !isDeferred(session)) {
+          // Has reasoning + not deferred → full AI evaluation
+          fb = await submitEvaluateAttempt({
+            sessionId: session.id,
+            questionId: question.id,
+            selectedOptionIndex: selected,
+            reasoningText: reasoningText.trim(),
+            timeTakenSeconds: timeTaken,
+            mode: practiceMode,
+            quotedLines: quotes,
+            deferred: false,
+          });
+        } else if (hasReasoning && isDeferred(session)) {
+          // Has reasoning + deferred → save reasoning, evaluate later
+          fb = await submitEvaluateAttempt({
+            sessionId: session.id,
+            questionId: question.id,
+            selectedOptionIndex: selected,
+            reasoningText: reasoningText.trim(),
+            timeTakenSeconds: timeTaken,
+            mode: practiceMode,
+            quotedLines: quotes,
+            deferred: true,
+          });
+        } else {
+          // No reasoning → basic attempt, no AI (instant ✓/✗ only)
+          fb = await submitBasicAttempt({
+            sessionId: session.id,
+            questionId: question.id,
+            selectedOptionIndex: selected,
+            timeTakenSeconds: timeTaken,
+            mode: practiceMode,
+          });
+        }
       } else {
         fb = await submitBasicAttempt({
           sessionId: session.id,
@@ -308,6 +337,10 @@ export default function Practice() {
     const perSession = session.timerScope === "per_session";
     const base = perSession ? sessionStartRef.current : questionStartRef.current;
     let elapsed = (tick - base) / 1000;
+    // Freeze per-question timer display when an option is selected (before submit)
+    if (!perSession && selected !== null && !feedback && selectionTimeRef.current != null) {
+      elapsed = (selectionTimeRef.current - base) / 1000;
+    }
     if (!perSession && feedback && frozenElapsedRef.current != null) elapsed = frozenElapsedRef.current;
     if (session.timerMode === "count_up") return { text: formatTime(elapsed), tone: "neutral" };
     const remaining = session.timerSeconds - elapsed;
@@ -352,7 +385,10 @@ export default function Practice() {
           {/* Left — paragraph */}
           <div className="md:w-[55%]">
             <div className="flex items-center justify-between mb-4">
-              <TopicBadge topic={question.topic} />
+              {feedback
+                ? <TopicBadge topic={question.topic} />
+                : <span className="text-xs text-muted-foreground opacity-0 select-none">·</span>
+              }
               <span className="text-xs text-muted-foreground">
                 Question {question.index} of {question.total}
               </span>
@@ -369,8 +405,8 @@ export default function Practice() {
           <div className="md:w-[45%]">
             <div className="flex items-start justify-between">
               <div>
-                <TypeBadge type={question.type} />
-                <h2 className="mt-2 font-bold text-foreground" style={{ fontSize: "17px" }}>
+                {feedback && <TypeBadge type={question.type} />}
+                <h2 className={cn("font-bold text-foreground", feedback ? "mt-2" : "")} style={{ fontSize: "17px" }}>
                   {question.question}
                 </h2>
               </div>
@@ -432,7 +468,7 @@ export default function Practice() {
                 <Button
                   className="flex-1"
                   size="lg"
-                  disabled={selected === null || submitting}
+                  disabled={selected === null || submitting || isSkipping}
                   onClick={handleSubmit}
                 >
                   {submitting ? "Submitting…" : "Submit"}
@@ -440,10 +476,10 @@ export default function Practice() {
                 <Button
                   variant="outline"
                   size="lg"
-                  disabled={submitting}
+                  disabled={submitting || isSkipping}
                   onClick={() => doSkip(session, question)}
                 >
-                  Skip
+                  {isSkipping ? "Skipping…" : "Skip"}
                 </Button>
               </div>
             ) : (
@@ -491,7 +527,10 @@ export default function Practice() {
         {/* Left — paragraph */}
         <div className="md:w-[55%]">
           <div className="flex items-center justify-between mb-4">
-            <TopicBadge topic={question.topic} />
+            {feedback
+              ? <TopicBadge topic={question.topic} />
+              : <span className="invisible h-5" aria-hidden="true" />
+            }
             <div className="flex items-center gap-3">
               {timer && (
                 <span className={cn("text-sm font-mono tabular-nums", timerColor)}>
@@ -527,8 +566,8 @@ export default function Practice() {
 
         {/* Right — question + options + reasoning + submit */}
         <div className="md:w-[45%]">
-          <TypeBadge type={question.type} />
-          <h2 className="mt-3 font-bold text-foreground" style={{ fontSize: "17px" }}>
+          {feedback && <TypeBadge type={question.type} />}
+          <h2 className={cn("font-bold text-foreground", feedback ? "mt-3" : "")} style={{ fontSize: "17px" }}>
             {question.question}
           </h2>
 
@@ -540,8 +579,12 @@ export default function Practice() {
                 text={opt.text}
                 selected={selected === i}
                 status={optionStatus(i)}
-                disabled={feedback !== null || submitting}
-                onClick={() => setSelected(i)}
+                disabled={feedback !== null || submitting || isSkipping}
+                onClick={() => {
+                  // Record when the first selection is made so the timer can freeze
+                  if (selectionTimeRef.current === null) selectionTimeRef.current = Date.now();
+                  setSelected(i);
+                }}
               />
             ))}
           </div>
@@ -551,7 +594,8 @@ export default function Practice() {
             <div className="mt-5 animate-slide-up">
               <div className="flex items-baseline justify-between">
                 <label className="block text-sm font-semibold text-foreground">
-                  Why did you choose this option?
+                  Why did you choose this option?{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
                 </label>
                 {voiceSupported && (
                   <span className="text-xs text-muted-foreground">
@@ -560,7 +604,7 @@ export default function Practice() {
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Reference the paragraph — select text in the passage to quote it as evidence.
+                Add reasoning to get AI feedback. Leave blank to just see if you were correct.
               </p>
               {quotes.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -629,13 +673,13 @@ export default function Practice() {
                 <Button
                   className="flex-1"
                   size="lg"
-                  disabled={!canSubmit || submitting}
+                  disabled={!canSubmit || submitting || isSkipping}
                   onClick={handleSubmit}
                 >
                   {submitting ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                      {isDeferred(session) ? "Saving…" : "Analyzing…"}
+                      {isDeferred(session) ? "Saving…" : reasoningLen > 0 ? "Analyzing…" : "Submitting…"}
                     </>
                   ) : selected === null ? (
                     "Select an option first"
@@ -643,17 +687,19 @@ export default function Practice() {
                     `Reasoning too long (${reasoningLen}/${REASONING_MAX})`
                   ) : isDeferred(session) ? (
                     "Submit Answer"
-                  ) : (
+                  ) : reasoningLen > 0 ? (
                     "Evaluate My Reasoning"
+                  ) : (
+                    "Submit (No AI Feedback)"
                   )}
                 </Button>
                 <Button
                   variant="outline"
                   size="lg"
-                  disabled={submitting}
+                  disabled={submitting || isSkipping}
                   onClick={() => doSkip(session, question)}
                 >
-                  Skip
+                  {isSkipping ? "Skipping…" : "Skip"}
                 </Button>
               </div>
               {submitting && isDeferred(session) && (
@@ -661,7 +707,7 @@ export default function Practice() {
                   Saving your answer…
                 </p>
               )}
-              {submitting && !isDeferred(session) && (
+              {submitting && !isDeferred(session) && reasoningLen > 0 && (
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   Analyzing your reasoning…
                 </p>

@@ -5,7 +5,6 @@ import { saveActiveSession } from "../session.js";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 
-const QUESTION_COUNTS = [5, 10, 15, 20, 25];
 const PER_QUESTION_SECONDS = [30, 45, 60, 90, 120];
 const PER_SESSION_MINUTES = [5, 10, 15, 20, 30];
 
@@ -76,11 +75,13 @@ export default function SessionSetup() {
       .catch(() => setDueCount(0));
   }, []);
 
-  // When switching to review mode, auto-set numQuestions to the due count (capped at 25)
+  // When switching session types, auto-set question count to a sensible default
   function handleSessionTypeChange(type) {
     setSessionType(type);
     if (type === "review" && dueCount != null && dueCount > 0) {
       setNumQuestions(Math.min(dueCount, 25));
+    } else if (type === "practice") {
+      setNumQuestions(10);
     }
   }
 
@@ -135,15 +136,19 @@ export default function SessionSetup() {
                 ? dueCount === 0
                   ? " · No cards due"
                   : ` · ${dueCount} card${dueCount === 1 ? "" : "s"} due`
-                : isReview && dueCount === null
-                ? " · loading…"
+                : isReview
+                ? " · checking…"
                 : "";
             return (
               <RadioCard
                 key={t.value}
                 active={sessionType === t.value}
                 title={t.title + reviewLabel}
-                desc={t.desc}
+                desc={
+                  isReview && dueCount === 0
+                    ? "Get questions wrong in practice to build your SR queue. Cards become due over time."
+                    : t.desc
+                }
                 onClick={() => handleSessionTypeChange(t.value)}
                 disabled={isReview && dueCount === 0}
               />
@@ -171,25 +176,26 @@ export default function SessionSetup() {
 
       {/* Number of questions */}
       <Section title="How many questions?">
-        <div className="flex flex-wrap gap-2">
-          {QUESTION_COUNTS.filter((n) => n <= (effectiveMax || 25)).map((n) => (
-            <Pill key={n} active={numQuestions === n} onClick={() => setNumQuestions(n)}>
-              {n}
-            </Pill>
-          ))}
-          {/* If dueCount isn't in the preset list, show it as a custom pill */}
-          {reviewReady && dueCount != null && dueCount > 0 && !QUESTION_COUNTS.includes(Math.min(dueCount, 25)) && (
-            <Pill
-              active={numQuestions === Math.min(dueCount, 25)}
-              onClick={() => setNumQuestions(Math.min(dueCount, 25))}
-            >
-              {Math.min(dueCount, 25)} (all due)
-            </Pill>
-          )}
+        <div className="flex items-center gap-4">
+          <input
+            type="range"
+            min={1}
+            max={effectiveMax || 25}
+            value={Math.min(numQuestions, effectiveMax || 25)}
+            onChange={(e) => setNumQuestions(Number(e.target.value))}
+            className="flex-1 h-2 rounded-full accent-primary cursor-pointer"
+          />
+          <span className="w-10 text-center text-lg font-bold text-foreground tabular-nums">
+            {Math.min(numQuestions, effectiveMax || 25)}
+          </span>
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground mt-1 px-0.5">
+          <span>1</span>
+          {(effectiveMax || 25) > 1 && <span>{effectiveMax || 25}</span>}
         </div>
         {reviewReady && dueCount != null && dueCount > 25 && (
           <p className="mt-2 text-xs text-muted-foreground">
-            You have {dueCount} cards due. Showing the 25 most overdue; do multiple sessions to clear the queue.
+            You have {dueCount} cards due. Capped at 25; do multiple sessions to clear the queue.
           </p>
         )}
       </Section>

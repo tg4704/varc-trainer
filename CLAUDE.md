@@ -207,6 +207,30 @@ Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core 
 **Phase 16**: streaks & daily goals. `users.daily_goal` column (default 10, range 1–50). `server/routes/streak.js`: `GET /api/streak` (streak, todayCount, dailyGoal, atRisk) + `PATCH /api/streak/goal`. Streak = consecutive calendar days (UTC) where non-skipped attempts ≥ daily_goal; first-wrong card creates no streak entry, first correct skips. `atRisk = streak > 0 && todayCount < dailyGoal`. `client/src/components/StreakWidget.jsx`: circular SVG progress ring (today vs goal) + flame streak counter + at-risk amber nudge + inline goal stepper; supports `compact` and `showEditor` props. Widget shown on: Home page (full layout, logged-in only), Dashboard practice tab (compact), Profile page (full + editor).
 Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
 
+**Post-Phase-16 UX fixes** (applied on top of Phase 16):
+- **Skip button**: added separate `isSkipping` state in `Practice.jsx` so the submit button no longer shows "Analyzing…" during a skip. Skip button now shows "Skipping…" while in progress.
+- **Reasoning optional**: `Practice.jsx` now sends `submitBasicAttempt` when reasoning textarea is empty (no AI call, instant ✓/✗ only). Submit button shows "Submit (No AI Feedback)" when empty. `evaluate.js` server validation removed for empty reasoning. Reasoning label updated to "(optional)".
+- **Coach article limits**: `CoachLanding.jsx` now accepts any non-empty article up to 500 words (was 300–1200 words). Word-count UI updated accordingly.
+- **ErrorBoundary**: `client/src/components/ErrorBoundary.jsx` added and wraps the main `<Routes>` in `App.jsx`. Catches render crashes that previously caused blank screens; shows a friendly "Reload page" fallback.
+- **Dashboard null guards**: `AccuracyByTypeChart`, `TrapWeakness`, `TopicAccuracy`, and `WeakestArea` all have `|| {}` null guards so they never crash if `byType`/`byTopic`/`byTrapType` are undefined.
+- **Admin coach visibility**: `GET /api/admin/users/:id` now includes a `coachStats` object (total + 5 most recent coach sessions). `AdminUserDetail.jsx` renders a "Reading Coach sessions" table alongside the practice sessions table.
+- **SR disabled UX**: The "Spaced Repetition Review" option in SessionSetup now shows an explanatory message ("Get questions wrong in practice to build your SR queue") when `dueCount === 0`.
+
+- **Timer freezes on option selection** (analysis mode, per-question timers): `selectionTimeRef` records the moment the first option is clicked. `timerInfo()` uses this frozen time for the per-question display. Per-question countdown auto-skip is also disabled once an option is selected, so users can't be force-skipped while writing reasoning.
+- **Badges hidden during active sessions**: `TypeBadge` (question type) and `TopicBadge` (topic) are now hidden while a question is being answered in both Practice and Coach modes. They appear in the feedback/verdict phase so the answer is revealed contextually without giving away the question type as a hint.
+- **"View answer" toggle in MyQuestionEditor**: Options section has a "Show answer / Hide answer" link. When hidden (default), correct/trap radio buttons and source lines are not shown — lets users self-test their own questions. When revealed, the full editing controls appear.
+- **Question count slider**: The preset pill buttons (5/10/15/20/25) in Session Setup replaced with a smooth range slider (1–25). Number shown live beside the slider. Switching to Review mode auto-sets the slider to `dueCount`; switching back to Practice resets to 10.
+- **CoachPractice type badge**: Also hidden until verdict is revealed (same logic as Practice).
+
+**Deferred features** (documented in `ROADMAP.md` "Deferred / Backlog Items" section):
+- Practice per-question submit flow (timer stops on option selection; reasoning box appears after)
+- Next/previous question navigation + status sidebar in practice
+- Batch AI evaluation (single prompt for whole session instead of N separate calls)
+- Hide question type/topic during active sessions (reveal in feedback only)
+- Voice input in Socratic debrief (Coach)
+- Coach questions → user question bank (with admin promotion to global)
+- "View answer" toggle in My Questions editor
+
 **Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
 
 ## Environment Variables

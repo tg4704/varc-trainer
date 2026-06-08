@@ -28,7 +28,7 @@ export default function AdminUserDetail() {
 
   if (error) return <p className="text-destructive">{error}</p>;
   if (!data) return <p className="text-muted-foreground">Loading…</p>;
-  const { user, totals, recentSessions, apiCost } = data;
+  const { user, totals, recentSessions, apiCost, coachStats } = data;
 
   async function changeRole(newRole) {
     setBusy(true);
@@ -116,7 +116,7 @@ export default function AdminUserDetail() {
 
       {/* Recent sessions */}
       <Card>
-        <div className="p-4 border-b border-border text-sm font-semibold">Recent sessions</div>
+        <div className="p-4 border-b border-border text-sm font-semibold">Recent practice sessions</div>
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
@@ -147,6 +147,39 @@ export default function AdminUserDetail() {
           </tbody>
         </table>
       </Card>
+
+      {/* Coach sessions */}
+      {coachStats && (
+        <Card>
+          <div className="p-4 border-b border-border text-sm font-semibold">
+            Reading Coach sessions
+            <span className="ml-2 text-muted-foreground font-normal">({coachStats.total} total)</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-muted-foreground">
+              <tr>
+                <th className="text-left font-medium px-3 py-2">#</th>
+                <th className="text-left font-medium px-3 py-2">Article</th>
+                <th className="text-left font-medium px-3 py-2">Questions</th>
+                <th className="text-left font-medium px-3 py-2">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {coachStats.recentSessions.length === 0 && (
+                <tr><td colSpan={4} className="text-center text-muted-foreground py-4">No Coach sessions yet</td></tr>
+              )}
+              {coachStats.recentSessions.map((s) => (
+                <tr key={s.id} className="border-t border-border">
+                  <td className="px-3 py-2 tabular-nums">{s.id}</td>
+                  <td className="px-3 py-2 text-muted-foreground truncate max-w-xs">{s.article_title || "Untitled"}</td>
+                  <td className="px-3 py-2">{s.questions}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{fmtDate(s.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
     </div>
   );
 }

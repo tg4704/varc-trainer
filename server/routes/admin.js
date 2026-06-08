@@ -113,7 +113,25 @@ router.get("/users/:id", (req, res) => {
     )
     .get(userId);
 
-  res.json({ user, totals, recentSessions, apiCost });
+  // Coach session stats — count sessions and most recent
+  let coachStats = { total: 0, recentSessions: [] };
+  try {
+    const coachTotal = db
+      .prepare("SELECT COUNT(*) AS n FROM coach_sessions WHERE user_id = ?")
+      .get(userId);
+    const coachRecent = db
+      .prepare(
+        `SELECT id, article_title, created_at,
+                (SELECT COUNT(*) FROM coach_attempts WHERE coach_session_id = cs.id) AS questions
+         FROM coach_sessions cs WHERE user_id = ? ORDER BY id DESC LIMIT 5`
+      )
+      .all(userId);
+    coachStats = { total: coachTotal.n, recentSessions: coachRecent };
+  } catch {
+    // coach_sessions table may not exist on older DBs
+  }
+
+  res.json({ user, totals, recentSessions, apiCost, coachStats });
 });
 
 // ── PATCH /api/admin/users/:id ─────────────────────────────────────────────

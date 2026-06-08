@@ -229,7 +229,11 @@ export default function CoachPractice() {
           {/* Question card */}
           <div className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-3">
-              <TypeBadge type={question.type} />
+              {/* Type badge hidden until debrief complete — reveals with answer */}
+              {verdict
+                ? <TypeBadge type={question.type} />
+                : <span className="text-xs text-transparent select-none">·</span>
+              }
               {debriefPhase === "active" && (
                 <span className="text-xs text-muted-foreground tabular-nums">
                   Exchange {exchangeCount} / {MAX_EXCHANGE}

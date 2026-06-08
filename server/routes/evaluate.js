@@ -104,10 +104,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
   if (selectedOptionIndex == null) {
     return res.status(400).json({ error: "selectedOptionIndex is required" });
   }
-  if (!reasoningText || !reasoningText.trim()) {
-    return res.status(400).json({ error: "reasoningText is required" });
-  }
-  if (reasoningText.trim().length > 500) {
+  if (reasoningText && reasoningText.trim().length > 500) {
     return res.status(400).json({ error: "reasoningText must be 500 characters or fewer" });
   }
 

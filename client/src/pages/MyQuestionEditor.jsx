@@ -125,6 +125,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
   const [form, setForm] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [showAnswer, setShowAnswer] = useState(false);
 
   function setField(key, value) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -184,34 +185,47 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
 
         {/* Options */}
         <div>
-          <div className="text-sm font-medium text-foreground mb-1">Options</div>
-          <p className="text-xs text-muted-foreground mb-2">Mark which option is correct and which is the trap.</p>
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-sm font-medium text-foreground">Options</div>
+            <button
+              type="button"
+              onClick={() => setShowAnswer((v) => !v)}
+              className="text-xs text-primary hover:underline underline-offset-2"
+            >
+              {showAnswer ? "Hide answer" : "Show answer"}
+            </button>
+          </div>
+          {showAnswer && (
+            <p className="text-xs text-muted-foreground mb-2">Mark which option is correct and which is the trap.</p>
+          )}
           <div className="space-y-3">
             {form.options.map((o, i) => (
               <div key={i} className={cn(
                 "rounded-lg border p-3 transition-colors",
-                form.correctIndex === i ? "border-success bg-success/5"
-                  : form.trapIndex === i ? "border-warning bg-warning/5"
+                showAnswer && form.correctIndex === i ? "border-success bg-success/5"
+                  : showAnswer && form.trapIndex === i ? "border-warning bg-warning/5"
                   : "border-border"
               )}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-bold text-muted-foreground w-5">{LETTERS[i]}</span>
-                  <div className="flex gap-4 text-xs">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" name="correct" checked={form.correctIndex === i}
-                        onChange={() => setField("correctIndex", i)} className="accent-green-500" />
-                      <span className="text-success font-medium">Correct</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="radio" name="trap"
-                        checked={form.trapIndex === i}
-                        onChange={() => setField("trapIndex", i)} className="accent-amber-500" />
-                      <span className="text-warning font-medium">Trap</span>
-                    </label>
-                    {(form.correctIndex !== i && form.trapIndex !== i) && (
-                      <span className="text-muted-foreground">Distractor</span>
-                    )}
-                  </div>
+                  {showAnswer && (
+                    <div className="flex gap-4 text-xs">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="correct" checked={form.correctIndex === i}
+                          onChange={() => setField("correctIndex", i)} className="accent-green-500" />
+                        <span className="text-success font-medium">Correct</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="trap"
+                          checked={form.trapIndex === i}
+                          onChange={() => setField("trapIndex", i)} className="accent-amber-500" />
+                        <span className="text-warning font-medium">Trap</span>
+                      </label>
+                      {(form.correctIndex !== i && form.trapIndex !== i) && (
+                        <span className="text-muted-foreground">Distractor</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <Textarea rows={2} value={o.text}
                   onChange={e => setOptionText(i, e.target.value)}
@@ -221,8 +235,8 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
           </div>
         </div>
 
-        {/* Trap type */}
-        {form.trapIndex != null && (
+        {/* Trap type — only visible when showing answer */}
+        {showAnswer && form.trapIndex != null && (
           <label className="block">
             <span className="block text-sm font-medium text-foreground mb-1">Trap type</span>
             <select value={form.trapType || ""} onChange={e => setField("trapType", e.target.value)}
@@ -232,19 +246,21 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
           </label>
         )}
 
-        {/* Source lines */}
-        <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">
-            Source lines
-            <span className="ml-1 text-xs font-normal text-muted-foreground">
-              — the 2–4 sentences in the passage that contain the answer (used internally)
+        {/* Source lines — only visible when showing answer */}
+        {showAnswer && (
+          <label className="block">
+            <span className="block text-sm font-medium text-foreground mb-1">
+              Source lines
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                — the 2–4 sentences in the passage that contain the answer (used internally)
+              </span>
             </span>
-          </span>
-          <Textarea rows={3} value={form.sourceLines}
-            onChange={e => setField("sourceLines", e.target.value)}
-            placeholder="The exact sentences from the passage that justify the correct answer…"
-            className="resize-none" />
-        </label>
+            <Textarea rows={3} value={form.sourceLines}
+              onChange={e => setField("sourceLines", e.target.value)}
+              placeholder="The exact sentences from the passage that justify the correct answer…"
+              className="resize-none" />
+          </label>
+        )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -5,8 +5,8 @@ import { coach } from "../api.js";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 
-const MIN_WORDS = 300;
-const MAX_WORDS = 1200;
+const MIN_WORDS = 0;
+const MAX_WORDS = 500;
 
 const LOADING_MESSAGES = [
   "Reading your article…",
@@ -38,7 +38,7 @@ export default function CoachLanding() {
   const [error, setError] = useState(null);
 
   const wordCount = countWords(articleText);
-  const wordOk = wordCount >= MIN_WORDS && wordCount <= MAX_WORDS;
+  const wordOk = wordCount > 0 && wordCount <= MAX_WORDS;
 
   async function handleGenerate() {
     if (!wordOk || busy) return;
@@ -72,8 +72,6 @@ export default function CoachLanding() {
   const wordColor =
     wordCount === 0
       ? "text-muted-foreground"
-      : wordCount < MIN_WORDS
-      ? "text-amber-500"
       : wordCount > MAX_WORDS
       ? "text-destructive"
       : "text-success";
@@ -94,7 +92,6 @@ export default function CoachLanding() {
           <label className="text-sm font-semibold text-foreground">Article text</label>
           <span className={cn("text-xs tabular-nums", wordColor)}>
             {wordCount} / {MAX_WORDS} words
-            {wordCount > 0 && wordCount < MIN_WORDS && ` (need ${MIN_WORDS - wordCount} more)`}
           </span>
         </div>
         <textarea
@@ -103,7 +100,7 @@ export default function CoachLanding() {
           disabled={busy}
           rows={14}
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-reading leading-relaxed disabled:opacity-60"
-          placeholder="Paste your article here. Aim for 300–1200 words. Good sources: The Economist, Aeon, The Atlantic, Nautilus…"
+          placeholder="Paste your article here. Up to 500 words. Good sources: The Economist, Aeon, The Atlantic, Nautilus…"
         />
       </section>
 
@@ -155,9 +152,7 @@ export default function CoachLanding() {
         ) : wordCount === 0 ? (
           "Paste an article to begin"
         ) : !wordOk ? (
-          wordCount < MIN_WORDS
-            ? `Need ${MIN_WORDS - wordCount} more words`
-            : `Too long — trim to ${MAX_WORDS} words`
+          `Too long — trim to ${MAX_WORDS} words`
         ) : (
           "Generate Questions →"
         )}
@@ -180,7 +175,8 @@ export default function CoachLanding() {
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Avoid news articles (too factual) and Wikipedia (no argument structure). Dense,
-          opinion-forward writing works best — like what appears in CAT passages.
+          opinion-forward writing works best — like what appears in CAT passages. Aim for
+          150–500 words for best results.
         </p>
       </div>
     </div>
