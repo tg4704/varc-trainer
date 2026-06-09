@@ -152,9 +152,12 @@ router.get("/:id/review", authenticate, (req, res) => {
 });
 
 // POST /api/sessions/:id/batch-evaluate — evaluate all unevaluated analysis
-// attempts in this session in parallel. Idempotent: skips already-evaluated
-// or skipped attempts. Returns per-attempt results keyed by attempt ID.
-const SYSTEM_PROMPT = `You are a CAT (Common Admission Test) Reading Comprehension coach. A student has answered an RC question. You already know the correct answer. Your job is to evaluate the QUALITY of the student's reasoning process, explain the correct answer precisely, and deconstruct the trap option.
+// attempts in this session with a SINGLE Claude call (one JSON array response).
+// Falls back to parallel per-question calls if the batch parse fails.
+// Idempotent: skips already-evaluated or skipped attempts.
+
+// ── Per-question system prompt (used by the fallback path) ───────────────────
+const SINGLE_SYSTEM_PROMPT = `You are a CAT (Common Admission Test) Reading Comprehension coach. A student has answered an RC question. You already know the correct answer. Your job is to evaluate the QUALITY of the student's reasoning process, explain the correct answer precisely, and deconstruct the trap option.
 
 Respond ONLY with a valid JSON object. No preamble, no markdown fences, no text outside the JSON.
 
@@ -179,6 +182,37 @@ Rules for your response:
 - correctExplanation: 2-3 sentences. Reference specific lines from the source excerpt. Explain WHY this option is correct, not just that it is.
 - trapExplanation: 2-3 sentences. Name the exact flaw. For too_extreme: which word makes it extreme. For out_of_scope: what concept is introduced that wasn't in the paragraph. For real_but_unstated: what the paragraph actually says instead. For partially_correct: what the option gets right and what it misses.
 - keyTakeaway: One sentence. A generalizable rule the student can apply to future similar questions.
+- Never be vague. Always reference specific words from the options or paragraph.`;
+
+// ── Batch system prompt (used by the primary path) ───────────────────────────
+const BATCH_SYSTEM_PROMPT = `You are a CAT (Common Admission Test) Reading Comprehension coach evaluating multiple student answers at once.
+
+For EACH numbered question, evaluate the quality of the student's reasoning.
+
+Respond ONLY with a valid JSON array. No preamble, no markdown fences, no text outside the JSON.
+The array must have EXACTLY as many elements as there are questions, in the same order.
+
+Each element schema:
+{
+  "reasoningScore": integer 1-5,
+  "reasoningFeedback": string,
+  "correctExplanation": string,
+  "trapExplanation": string,
+  "keyTakeaway": string
+}
+
+Reasoning score rubric:
+1 — No reasoning shown, or circular
+2 — Paraphrased paragraph but didn't connect to option logic
+3 — Found right part of paragraph but made a reasoning error
+4 — Sound reasoning but missed a nuance or used imprecise language
+5 — Identified author's intent, eliminated trap with specific reason, arrived at answer through logic
+
+Rules:
+- reasoningFeedback: 2-3 sentences on HOW the student thought, not just whether correct. Be specific.
+- correctExplanation: 2-3 sentences. Reference specific lines from source. Explain WHY this option is correct.
+- trapExplanation: 2-3 sentences. Name the exact flaw. Be specific per trap type.
+- keyTakeaway: One sentence. A generalizable rule for future similar questions.
 - Never be vague. Always reference specific words from the options or paragraph.`;
 
 function buildUserMessage(q, selectedIndex, reasoningText) {
@@ -223,13 +257,45 @@ STUDENT'S REASONING:
 ${reasoningText}`;
 }
 
+// Build a combined user message for N questions in one prompt
+function buildBatchUserMessage(pendingAttempts, questions) {
+  return pendingAttempts
+    .map((attempt, idx) => {
+      const q = questions[idx];
+      return `=== QUESTION ${idx + 1} ===\n${buildUserMessage(q, attempt.selected_option_index, attempt.reasoning_text)}`;
+    })
+    .join("\n\n");
+}
+
+// Persist one evaluation result to DB and return the result object
+function saveEvalResult(attemptId, ev) {
+  db.prepare(
+    `UPDATE attempts SET
+       reasoning_score = ?,
+       reasoning_feedback = ?,
+       correct_explanation = ?,
+       trap_explanation = ?,
+       key_takeaway = ?
+     WHERE id = ?`
+  ).run(ev.reasoningScore, ev.reasoningFeedback, ev.correctExplanation, ev.trapExplanation, ev.keyTakeaway, attemptId);
+  return {
+    attemptId,
+    reasoningScore: ev.reasoningScore,
+    reasoningFeedback: ev.reasoningFeedback,
+    correctExplanation: ev.correctExplanation,
+    trapExplanation: ev.trapExplanation,
+    keyTakeaway: ev.keyTakeaway,
+    aiError: false,
+  };
+}
+
 async function evaluateOneAttempt(attempt, userId) {
   const q = questionsRepo.findById(attempt.question_id);
   if (!q) return { attemptId: attempt.id, aiError: true, aiErrorMessage: "Question not found" };
 
   try {
     const response = await callModel({
-      system: SYSTEM_PROMPT,
+      system: SINGLE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(q, attempt.selected_option_index, attempt.reasoning_text) }],
     });
 
@@ -244,26 +310,7 @@ async function evaluateOneAttempt(attempt, userId) {
     });
 
     const ev = JSON.parse(response.text);
-
-    db.prepare(
-      `UPDATE attempts SET
-         reasoning_score = ?,
-         reasoning_feedback = ?,
-         correct_explanation = ?,
-         trap_explanation = ?,
-         key_takeaway = ?
-       WHERE id = ?`
-    ).run(ev.reasoningScore, ev.reasoningFeedback, ev.correctExplanation, ev.trapExplanation, ev.keyTakeaway, attempt.id);
-
-    return {
-      attemptId: attempt.id,
-      reasoningScore: ev.reasoningScore,
-      reasoningFeedback: ev.reasoningFeedback,
-      correctExplanation: ev.correctExplanation,
-      trapExplanation: ev.trapExplanation,
-      keyTakeaway: ev.keyTakeaway,
-      aiError: false,
-    };
+    return saveEvalResult(attempt.id, ev);
   } catch (err) {
     console.error("Claude batch error for attempt", attempt.id, err.message);
     logApiCall({
@@ -295,7 +342,51 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res) => {
     return res.json({ results: [] });
   }
 
-  // Run all evaluations in parallel
+  // ── Primary path: single batch call (one API call for all N questions) ──────
+  // Look up all questions upfront
+  const questions = pending.map((a) => questionsRepo.findById(a.question_id));
+  const missingIdx = questions.findIndex((q) => !q);
+  if (missingIdx !== -1) {
+    // A question was deleted — fall through to per-question path which handles nulls gracefully
+    console.warn("batch-evaluate: question not found for attempt", pending[missingIdx].id, "— falling back");
+  } else {
+    try {
+      const response = await callModel({
+        system: BATCH_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildBatchUserMessage(pending, questions) }],
+      });
+
+      logApiCall({
+        userId: req.userId,
+        route: "/api/sessions/batch-evaluate",
+        provider: "openrouter",
+        model: DEFAULT_MODEL,
+        inputTokens: response.usage?.input_tokens,
+        outputTokens: response.usage?.output_tokens,
+        status: "ok",
+      });
+
+      const evaluations = JSON.parse(response.text);
+      if (!Array.isArray(evaluations) || evaluations.length !== pending.length) {
+        throw new Error(`Expected array of ${pending.length}, got ${Array.isArray(evaluations) ? evaluations.length : typeof evaluations}`);
+      }
+
+      const results = pending.map((attempt, i) => saveEvalResult(attempt.id, evaluations[i]));
+      return res.json({ results });
+    } catch (batchErr) {
+      console.error("batch-evaluate: single-call failed, falling back to parallel:", batchErr.message);
+      logApiCall({
+        userId: req.userId,
+        route: "/api/sessions/batch-evaluate",
+        provider: "openrouter",
+        model: DEFAULT_MODEL,
+        status: "error",
+      });
+      // Fall through to per-question fallback below
+    }
+  }
+
+  // ── Fallback path: parallel per-question calls ───────────────────────────────
   const results = await Promise.all(pending.map((a) => evaluateOneAttempt(a, req.userId)));
   res.json({ results });
 });

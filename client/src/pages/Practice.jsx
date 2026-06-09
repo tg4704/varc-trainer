@@ -38,6 +38,11 @@ export default function Practice() {
   const [submitting, setSubmitting] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
   const [loadingQuestion, setLoadingQuestion] = useState(true);
+
+  // Question navigator + history review
+  const [questionHistory, setQuestionHistory] = useState([]); // answered/skipped questions (read-only review)
+  const [historyViewIdx, setHistoryViewIdx] = useState(null); // null = live, number = reviewing past question
+  const [flaggedSlots, setFlaggedSlots] = useState(new Set()); // 1-based question.index values flagged for review
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(Date.now());
 
@@ -194,6 +199,10 @@ export default function Practice() {
           timeTakenSeconds: timeTaken,
           mode: sess.practiceMode || "analysis",
         });
+        setQuestionHistory((prev) => [
+          ...prev,
+          { question: q, status: "skipped", selectedOption: null, feedback: null, mode: sess.practiceMode || "analysis" },
+        ]);
         await loadNext(sess);
       } catch (e) { setError(e.message); }
       finally { setIsSkipping(false); }
@@ -374,6 +383,29 @@ export default function Practice() {
     );
   }
 
+  // ── History view mode — reviewing a past question (read-only) ────────────
+  if (historyViewIdx !== null && questionHistory[historyViewIdx]) {
+    return (
+      <HistoryView
+        entry={questionHistory[historyViewIdx]}
+        historyViewIdx={historyViewIdx}
+        questionHistory={questionHistory}
+        currentLiveSlot={question.index}
+        totalSlots={question.total}
+        flaggedSlots={flaggedSlots}
+        onToggleFlag={(slot) =>
+          setFlaggedSlots((prev) => {
+            const next = new Set(prev);
+            if (next.has(slot)) next.delete(slot); else next.add(slot);
+            return next;
+          })
+        }
+        onJump={(idx) => setHistoryViewIdx(idx)}
+        onReturnToLive={() => setHistoryViewIdx(null)}
+      />
+    );
+  }
+
   // ── Intuition mode layout ─────────────────────────────────────────────────
   if (practiceMode === "intuition") {
     const secsLeft = intuitionSecondsLeft();
@@ -381,6 +413,14 @@ export default function Practice() {
 
     return (
       <div className="max-w-6xl mx-auto px-4 py-8">
+        <QuestionNavBar
+          total={question.total}
+          questionHistory={questionHistory}
+          currentSlot={question.index}
+          flaggedSlots={flaggedSlots}
+          historyViewIdx={null}
+          onJump={(idx) => setHistoryViewIdx(idx)}
+        />
         <div className="flex flex-col md:flex-row gap-8">
           {/* Left — paragraph */}
           <div className="md:w-[55%]">
@@ -389,9 +429,18 @@ export default function Practice() {
                 ? <TopicBadge topic={question.topic} />
                 : <span className="text-xs text-muted-foreground opacity-0 select-none">·</span>
               }
-              <span className="text-xs text-muted-foreground">
-                Question {question.index} of {question.total}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">
+                  Question {question.index} of {question.total}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFlaggedSlots((prev) => { const n = new Set(prev); if (n.has(question.index)) n.delete(question.index); else n.add(question.index); return n; })}
+                  className={cn("text-xs transition-colors", flaggedSlots.has(question.index) ? "text-amber-500" : "text-muted-foreground hover:text-amber-500")}
+                >
+                  🚩
+                </button>
+              </div>
             </div>
             <p
               className="font-reading text-foreground"
@@ -487,8 +536,14 @@ export default function Practice() {
                 feedback={feedback}
                 sessionPoints={sessionPoints}
                 isLast={question.index === question.total}
-                onNext={() => loadNext(session)}
-                onEnd={() => finishSession(session)}
+                onNext={() => {
+                  setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "intuition" }]);
+                  loadNext(session);
+                }}
+                onEnd={() => {
+                  setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "intuition" }]);
+                  finishSession(session);
+                }}
               />
             )}
           </div>
@@ -523,6 +578,14 @@ export default function Practice() {
           You've seen all 25 questions — repeating from the full question bank.
         </div>
       )}
+      <QuestionNavBar
+        total={question.total}
+        questionHistory={questionHistory}
+        currentSlot={question.index}
+        flaggedSlots={flaggedSlots}
+        historyViewIdx={null}
+        onJump={(idx) => setHistoryViewIdx(idx)}
+      />
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left — paragraph */}
         <div className="md:w-[55%]">
@@ -559,9 +622,19 @@ export default function Practice() {
               </p>
             )}
           </div>
-          <p className="mt-6 text-xs text-muted-foreground">
-            Question {question.index} of {question.total}
-          </p>
+          <div className="mt-6 flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              Question {question.index} of {question.total}
+            </p>
+            <button
+              type="button"
+              onClick={() => setFlaggedSlots((prev) => { const n = new Set(prev); if (n.has(question.index)) n.delete(question.index); else n.add(question.index); return n; })}
+              title={flaggedSlots.has(question.index) ? "Unflag this question" : "Flag for review"}
+              className={cn("text-xs flex items-center gap-1 transition-colors", flaggedSlots.has(question.index) ? "text-amber-500" : "text-muted-foreground hover:text-amber-500")}
+            >
+              🚩 {flaggedSlots.has(question.index) ? "Flagged" : "Flag"}
+            </button>
+          </div>
         </div>
 
         {/* Right — question + options + reasoning + submit */}
@@ -579,7 +652,7 @@ export default function Practice() {
                 text={opt.text}
                 selected={selected === i}
                 status={optionStatus(i)}
-                disabled={feedback !== null || submitting || isSkipping}
+                disabled={feedback !== null || submitting || isSkipping || selected !== null}
                 onClick={() => {
                   // Record when the first selection is made so the timer can freeze
                   if (selectionTimeRef.current === null) selectionTimeRef.current = Date.now();
@@ -717,8 +790,14 @@ export default function Practice() {
             <DeferredSavedCard
               feedback={feedback}
               isLast={question.index === question.total}
-              onNext={() => loadNext(session)}
-              onEnd={() => finishSession(session)}
+              onNext={() => {
+                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
+                loadNext(session);
+              }}
+              onEnd={() => {
+                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
+                finishSession(session);
+              }}
             />
           ) : (
             <AnalysisFeedback
@@ -726,8 +805,14 @@ export default function Practice() {
               question={question}
               selectedOptionIndex={selected}
               isLast={question.index === question.total}
-              onNext={() => loadNext(session)}
-              onEnd={() => finishSession(session)}
+              onNext={() => {
+                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
+                loadNext(session);
+              }}
+              onEnd={() => {
+                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
+                finishSession(session);
+              }}
             />
           )}
         </div>
@@ -808,6 +893,226 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, isLast, onN
       <Button className="mt-6 w-full" size="lg" onClick={isLast ? onEnd : onNext}>
         {isLast ? "End Session" : "Next Question"}
       </Button>
+    </div>
+  );
+}
+
+// ── Question navigator bar ────────────────────────────────────────────────────
+// Renders a row of numbered circles (one per slot). Clicking a completed slot
+// enters history-review mode for that question.
+function QuestionNavBar({ total, questionHistory, currentSlot, flaggedSlots, historyViewIdx, onJump }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-5">
+      {Array.from({ length: total }, (_, i) => {
+        const slot = i + 1;
+        const entry = questionHistory[i];    // history is 0-indexed, slot is 1-based
+        const isCurrent = slot === currentSlot && historyViewIdx === null;
+        const isViewing = historyViewIdx === i;
+        const isFlagged = flaggedSlots.has(slot);
+        const isAnswered = !!entry;
+
+        let colorCls =
+          "border-border text-muted-foreground opacity-30 cursor-default"; // future slot
+        if (isAnswered) {
+          if (entry.status === "correct")
+            colorCls = "border-success bg-success text-white cursor-pointer hover:opacity-80";
+          else if (entry.status === "wrong")
+            colorCls = "border-destructive bg-destructive text-white cursor-pointer hover:opacity-80";
+          else
+            colorCls = "border-border bg-muted text-muted-foreground cursor-pointer hover:opacity-80"; // skipped
+        }
+        if (isCurrent) colorCls = "border-primary bg-primary text-primary-foreground cursor-default";
+        if (isViewing) colorCls = "border-primary bg-primary/20 text-primary cursor-pointer";
+
+        return (
+          <button
+            key={slot}
+            type="button"
+            disabled={!isAnswered && !isCurrent}
+            onClick={() => { if (isAnswered) onJump(i); }}
+            title={
+              isCurrent ? `Q${slot} — Current` :
+              isAnswered ? `Q${slot} — ${entry.status}${isFlagged ? " (flagged)" : ""}` :
+              `Q${slot} — Not reached`
+            }
+            className={cn(
+              "h-7 w-7 rounded-full text-xs font-bold border flex items-center justify-center transition-all flex-none",
+              colorCls,
+              isFlagged && "ring-2 ring-amber-400 ring-offset-1 ring-offset-background",
+              isViewing && "ring-2 ring-primary ring-offset-1 ring-offset-background",
+            )}
+          >
+            {slot}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── History view — read-only review of a past question ────────────────────────
+function HistoryView({ entry, historyViewIdx, questionHistory, currentLiveSlot, totalSlots, flaggedSlots, onToggleFlag, onJump, onReturnToLive }) {
+  const slot = historyViewIdx + 1;
+  const { question, status: entryStatus, selectedOption, feedback, mode } = entry;
+  const canGoPrev = historyViewIdx > 0;
+  const canGoNext = historyViewIdx < questionHistory.length - 1;
+  const isFlagged = flaggedSlots.has(slot);
+
+  // Build a FeedbackSections-compatible attempt object
+  const feedbackAttempt = feedback && !feedback.deferred ? {
+    options: question.options,
+    correctOptionIndex: feedback.correctOptionIndex,
+    selectedOptionIndex: selectedOption,
+    trapOptionIndex: feedback.trapOptionIndex,
+    isCorrect: feedback.isCorrect,
+    skipped: false,
+    trapType: feedback.trapType,
+    reasoningScore: feedback.reasoningScore,
+    reasoningFeedback: feedback.reasoningFeedback,
+    correctExplanation: feedback.correctExplanation,
+    trapExplanation: feedback.trapExplanation,
+    keyTakeaway: feedback.keyTakeaway,
+  } : null;
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
+      {/* Navigator */}
+      <QuestionNavBar
+        total={totalSlots}
+        questionHistory={questionHistory}
+        currentSlot={currentLiveSlot}
+        flaggedSlots={flaggedSlots}
+        historyViewIdx={historyViewIdx}
+        onJump={onJump}
+      />
+
+      {/* Review banner */}
+      <div className="mb-6 rounded-md bg-muted/40 border border-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-semibold text-foreground">
+            Reviewing Q{slot} — read only
+          </span>
+          <span className={cn(
+            "rounded-full px-2 py-0.5 text-xs font-semibold",
+            entryStatus === "correct" ? "bg-success/10 text-success" :
+            entryStatus === "wrong" ? "bg-destructive/10 text-destructive" :
+            "bg-muted text-muted-foreground"
+          )}>
+            {entryStatus === "correct" ? "✓ Correct" : entryStatus === "wrong" ? "✗ Incorrect" : "Skipped"}
+          </span>
+          <button
+            type="button"
+            onClick={() => onToggleFlag(slot)}
+            className={cn(
+              "text-xs flex items-center gap-1 rounded-md px-2 py-0.5 border transition-colors",
+              isFlagged
+                ? "border-amber-400 bg-amber-400/10 text-amber-500"
+                : "border-border text-muted-foreground hover:border-amber-400 hover:text-amber-500"
+            )}
+          >
+            🚩 {isFlagged ? "Flagged" : "Flag"}
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={!canGoPrev}
+            onClick={() => onJump(historyViewIdx - 1)}
+            className="h-7 w-7 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Previous question"
+          >←</button>
+          <button
+            type="button"
+            disabled={!canGoNext}
+            onClick={() => onJump(historyViewIdx + 1)}
+            className="h-7 w-7 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Next reviewed question"
+          >→</button>
+          <Button size="sm" onClick={onReturnToLive}>
+            Return to Q{currentLiveSlot} →
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Paragraph */}
+        <div className="md:w-[55%]">
+          <div className="flex items-center justify-between mb-4">
+            <TopicBadge topic={question.topic} />
+            <span className="text-xs text-muted-foreground">Q{slot} of {totalSlots}</span>
+          </div>
+          <p className="font-reading text-foreground" style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}>
+            {question.paragraph}
+          </p>
+        </div>
+
+        {/* Question + options + feedback */}
+        <div className="md:w-[45%]">
+          <TypeBadge type={question.type} />
+          <h2 className="mt-3 font-bold text-foreground" style={{ fontSize: "17px" }}>
+            {question.question}
+          </h2>
+
+          <div className="mt-5 flex flex-col gap-3">
+            {question.options.map((opt, i) => {
+              let optStatus = null;
+              if (entryStatus !== "skipped" && feedback) {
+                if (i === feedback.correctOptionIndex) {
+                  optStatus = selectedOption === i ? "correct" : "correct-unselected";
+                } else if (i === selectedOption) {
+                  optStatus = "wrong";
+                }
+              }
+              return (
+                <OptionCard
+                  key={i}
+                  letter={LETTERS[i]}
+                  text={opt.text}
+                  selected={selectedOption === i}
+                  status={optStatus}
+                  disabled={true}
+                />
+              );
+            })}
+          </div>
+
+          {/* Feedback area */}
+          <div className="mt-6">
+            {entryStatus === "skipped" ? (
+              <p className="text-sm text-muted-foreground italic">This question was skipped.</p>
+            ) : feedback?.deferred ? (
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                AI feedback will be available on the Session Review page after the session ends.
+              </div>
+            ) : feedbackAttempt ? (
+              <>
+                {feedback?.aiError && (
+                  <div className="mb-4 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
+                    {feedback.aiErrorMessage || "AI feedback unavailable for this question."}
+                  </div>
+                )}
+                {mode === "intuition" && feedback ? (
+                  <div className="space-y-3">
+                    <div className={cn("text-xl font-bold", feedback.isCorrect ? "text-success" : "text-destructive")}>
+                      {feedback.isCorrect ? "Correct" : "Incorrect"}
+                    </div>
+                    {feedback.trapType && (
+                      <div className="rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
+                        <span className="font-semibold">Trap: {LETTERS[feedback.trapOptionIndex]}.</span>{" "}
+                        {trapLabel(feedback.trapType)} — {trapDescription(feedback.trapType)}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <FeedbackSections attempt={feedbackAttempt} />
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No reasoning submitted — no AI feedback.</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
