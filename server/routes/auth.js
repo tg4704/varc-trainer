@@ -6,6 +6,31 @@ const db      = require("../db");
 const { signToken, authenticate } = require("../auth");
 const { sendOtpEmail } = require("../email");
 
+// ── Google OAuth config ───────────────────────────────────────────────────────
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const BACKEND_URL  = (process.env.BACKEND_URL  || "http://localhost:3001").replace(/\/$/, "");
+
+// Stateless CSRF state: timestamp.HMAC — no session/cookie storage needed
+function makeOAuthState() {
+  const ts  = Date.now().toString(36);
+  const sig = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev-secret")
+    .update(ts).digest("hex").slice(0, 16);
+  return `${ts}.${sig}`;
+}
+function verifyOAuthState(state) {
+  if (!state || !state.includes(".")) return false;
+  const dot = state.lastIndexOf(".");
+  const ts  = state.slice(0, dot);
+  const sig = state.slice(dot + 1);
+  const expected = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev-secret")
+    .update(ts).digest("hex").slice(0, 16);
+  if (sig !== expected) return false;
+  // Expire after 10 minutes
+  return Date.now() - parseInt(ts, 36) < 10 * 60 * 1000;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function publicUser(u) {
@@ -113,7 +138,7 @@ router.post("/register", async (req, res) => {
 
   // Send verification OTP
   try {
-    const otp = createOtp(user.id, "email_verification");
+    const otp = await createOtp(user.id, "email_verification");
     await sendOtpEmail(email, otp, "email_verification");
   } catch (e) {
     console.error("[auth] Failed to send verification email:", e.message);
@@ -134,7 +159,14 @@ router.post("/login", async (req, res, next) => {
       "SELECT * FROM users WHERE username = $1 OR email = $2",
       [identifier, identifier]
     );
-    if (!user || !bcrypt.compareSync(password, user.password_hash))
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    // Google-only account (no password set)
+    if (!user.password_hash) {
+      return res.status(400).json({
+        error: "This account uses Google sign-in. Please use the 'Continue with Google' button.",
+      });
+    }
+    if (!bcrypt.compareSync(password, user.password_hash))
       return res.status(401).json({ error: "Invalid credentials" });
 
     if (!user.email_verified) {
@@ -256,6 +288,112 @@ router.post("/reset-password", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── GET /api/auth/google ──────────────────────────────────────────────────────
+router.get("/google", (req, res) => {
+  if (!GOOGLE_CLIENT_ID) {
+    return res.status(503).json({ error: "Google OAuth is not configured on this server." });
+  }
+  const state  = makeOAuthState();
+  const params = new URLSearchParams({
+    client_id:     GOOGLE_CLIENT_ID,
+    redirect_uri:  `${BACKEND_URL}/api/auth/google/callback`,
+    response_type: "code",
+    scope:         "openid email profile",
+    access_type:   "offline",
+    prompt:        "select_account",
+    state,
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// ── GET /api/auth/google/callback ─────────────────────────────────────────────
+router.get("/google/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error === "access_denied") {
+    return res.redirect(`${FRONTEND_URL}/login?error=google_cancelled`);
+  }
+  if (!verifyOAuthState(state)) {
+    return res.redirect(`${FRONTEND_URL}/login?error=google_state_invalid`);
+  }
+  if (!code) {
+    return res.redirect(`${FRONTEND_URL}/login?error=google_no_code`);
+  }
+
+  try {
+    // 1. Exchange auth code for tokens
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method:  "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body:    new URLSearchParams({
+        code,
+        client_id:     GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri:  `${BACKEND_URL}/api/auth/google/callback`,
+        grant_type:    "authorization_code",
+      }),
+    });
+    const tokens = await tokenRes.json();
+    if (!tokenRes.ok) {
+      console.error("[google oauth] token exchange failed:", tokens);
+      return res.redirect(`${FRONTEND_URL}/login?error=google_token_failed`);
+    }
+
+    // 2. Get Google user profile
+    const profileRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    const gUser = await profileRes.json();
+    const { id: googleId, email, name } = gUser;
+
+    if (!googleId || !email) {
+      return res.redirect(`${FRONTEND_URL}/login?error=google_no_email`);
+    }
+
+    // 3. Find or create user
+    let user = await db.get("SELECT * FROM users WHERE google_id = $1", [googleId]);
+
+    if (!user) {
+      // Check if email is already registered → link accounts
+      user = await db.get("SELECT * FROM users WHERE email = $1", [email]);
+      if (user) {
+        await db.run(
+          "UPDATE users SET google_id = $1, email_verified = 1 WHERE id = $2",
+          [googleId, user.id]
+        );
+      } else {
+        // New user — derive a unique username from their Google display name
+        const base = (name || email.split("@")[0])
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+          .slice(0, 20) || "user";
+        let username = base;
+        let suffix   = 1;
+        while (await db.get("SELECT 1 FROM users WHERE username = $1", [username])) {
+          username = `${base}${suffix++}`;
+        }
+        const ins = await db.run(
+          `INSERT INTO users (username, email, password_hash, google_id, email_verified, role)
+           VALUES ($1, $2, NULL, $3, 1, 'user') RETURNING id`,
+          [username, email, googleId]
+        );
+        user = await db.get("SELECT * FROM users WHERE id = $1", [ins.lastId]);
+      }
+    }
+
+    // Refresh user row (may have just been updated)
+    user = await db.get("SELECT * FROM users WHERE id = $1", [user.id]);
+
+    // 4. Issue JWT and redirect to frontend
+    const token       = signToken(user.id);
+    const userPayload = encodeURIComponent(JSON.stringify(publicUser(user)));
+    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}&user=${userPayload}`);
+  } catch (err) {
+    console.error("[google oauth] callback error:", err);
+    res.redirect(`${FRONTEND_URL}/login?error=google_failed`);
+  }
+});
+
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────
 router.get("/me", authenticate, async (req, res, next) => {
   try {
@@ -275,6 +413,11 @@ router.patch("/password", authenticate, async (req, res, next) => {
       return res.status(400).json({ error: "New password must be at least 6 characters" });
 
     const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
+    if (!user.password_hash) {
+      return res.status(400).json({
+        error: "This account uses Google sign-in and has no password. Use 'Forgot password' to set one.",
+      });
+    }
     if (!bcrypt.compareSync(currentPassword, user.password_hash))
       return res.status(401).json({ error: "Current password is incorrect" });
 

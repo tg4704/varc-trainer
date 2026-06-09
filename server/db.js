@@ -295,6 +295,13 @@ async function bootstrapAdmins() {
     await ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
     await ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");
     await ensureColumn("users", "email_verified", "INTEGER NOT NULL DEFAULT 1");
+    await ensureColumn("users", "google_id", "TEXT");
+    // Make password_hash nullable so Google-only accounts can exist
+    await db.exec("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL");
+    // Unique partial index on google_id (allows multiple NULLs)
+    await db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL"
+    );
     await ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
     await ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
     await seedQuestions();
