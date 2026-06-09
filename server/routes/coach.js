@@ -12,8 +12,8 @@ const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 
 const LETTERS = ["A", "B", "C", "D"];
-const MIN_WORDS = 300;
-const MAX_WORDS = 1200;
+const MIN_WORDS = 1;   // any non-empty article is acceptable
+const MAX_WORDS = 500;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -492,6 +492,63 @@ router.get("/stats", authenticate, (req, res) => {
       return acc;
     }, {}),
     recentSessions,
+  });
+});
+
+// ── POST /api/coach/sessions/:id/save-to-bank ────────────────────────────────
+// Copies all 4 questions from a Coach session into the user's personal question
+// bank (same `questions` table as user-authored questions).  Idempotent — safe
+// to call multiple times; already-saved questions are skipped via INSERT OR IGNORE.
+router.post("/sessions/:id/save-to-bank", authenticate, (req, res) => {
+  const coachSessionId = parseInt(req.params.id, 10);
+  if (!coachSessionId) return res.status(400).json({ error: "invalid session id" });
+
+  const session = db
+    .prepare("SELECT * FROM coach_sessions WHERE id = ? AND user_id = ?")
+    .get(coachSessionId, req.userId);
+  if (!session) return res.status(404).json({ error: "Coach session not found" });
+
+  const questions = JSON.parse(session.questions_json);
+  const now = new Date().toISOString();
+  const saved = [];
+  const skipped = [];
+
+  const insertStmt = db.prepare(
+    `INSERT OR IGNORE INTO questions
+       (id, topic, paragraph, question, type, options_json,
+        correct_index, trap_index, trap_type, source_lines,
+        source, author_user_id, is_active, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'coach', ?, 1, ?)`
+  );
+
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const id = `coach_${coachSessionId}_${i}`;
+    const result = insertStmt.run(
+      id,
+      "humanities",           // default topic — user can edit in /my-questions
+      session.article_text,
+      q.question,
+      q.type,
+      JSON.stringify(q.options),
+      q.correctIndex,
+      q.trapIndex,
+      q.trapType,
+      q.sourceLines,
+      req.userId,
+      now
+    );
+    if (result.changes > 0) saved.push(id);
+    else skipped.push(id);
+  }
+
+  res.json({
+    saved: saved.length,
+    skipped: skipped.length,
+    message:
+      saved.length > 0
+        ? `${saved.length} question${saved.length > 1 ? "s" : ""} saved to your question bank.`
+        : "Questions were already in your bank.",
   });
 });
 

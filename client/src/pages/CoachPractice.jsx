@@ -6,9 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import OptionCard from "../components/OptionCard.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
+import VoiceMicButton from "../components/VoiceMicButton.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 import { coach } from "../api.js";
+import useVoiceInput from "../hooks/useVoiceInput.js";
 
 const LETTERS = ["A", "B", "C", "D"];
 const MAX_EXCHANGE = 4;
@@ -68,6 +70,16 @@ export default function CoachPractice() {
   const [sending, setSending] = useState(false);
 
   const chatEndRef = useRef(null);
+
+  // Voice input for Socratic chat
+  const [voiceInterim, setVoiceInterim] = useState("");
+  const { isRecording: voiceRecording, isSupported: voiceSupported, toggle: voiceToggle, stop: voiceStop } =
+    useVoiceInput({
+      onFinalTranscript: (text) => {
+        setInputText((prev) => (prev ? prev + " " + text : text));
+      },
+      onInterimTranscript: (text) => setVoiceInterim(text),
+    });
 
   // Load session if navigated directly (not from landing)
   useEffect(() => {
@@ -154,6 +166,8 @@ export default function CoachPractice() {
 
   // ── Move to next question ─────────────────────────────────────────────────────
   function nextQuestion() {
+    voiceStop();
+    setVoiceInterim("");
     if (qIdx >= 3) {
       navigate(`/coach/summary?sessionId=${coachSession.id}`);
       return;
@@ -366,7 +380,7 @@ export default function CoachPractice() {
               {debriefPhase === "active" && (
                 <div className="border-t border-border p-3">
                   <div className="flex gap-2 items-end">
-                    <div className="flex-1">
+                    <div className="flex-1 relative">
                       <textarea
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
@@ -382,6 +396,12 @@ export default function CoachPractice() {
                         className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
                         placeholder="Explain your reasoning… (Enter to send, Shift+Enter for newline)"
                       />
+                      {/* Live voice preview overlay */}
+                      {voiceRecording && voiceInterim && (
+                        <div className="absolute bottom-1 left-1 right-1 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground italic pointer-events-none border border-primary/20">
+                          {voiceInterim}…
+                        </div>
+                      )}
                       <div className={cn(
                         "mt-0.5 text-right text-xs",
                         inputText.length > MAX_MSG_LENGTH * 0.9 ? "text-amber-500" : "text-muted-foreground"
@@ -389,10 +409,20 @@ export default function CoachPractice() {
                         {inputText.length} / {MAX_MSG_LENGTH}
                       </div>
                     </div>
+                    {voiceSupported && (
+                      <VoiceMicButton
+                        isRecording={voiceRecording}
+                        onClick={voiceToggle}
+                        className="mb-5"
+                      />
+                    )}
                     <Button
                       size="sm"
                       disabled={!inputText.trim() || inputText.trim().length > MAX_MSG_LENGTH || sending}
-                      onClick={() => sendMessage()}
+                      onClick={() => {
+                        if (voiceRecording) voiceStop();
+                        sendMessage();
+                      }}
                       className="mb-5"
                     >
                       Send

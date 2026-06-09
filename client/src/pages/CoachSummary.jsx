@@ -5,6 +5,7 @@ import { coach } from "../api.js";
 import { Button } from "../components/ui/button.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import { cn } from "../lib/utils.js";
+import { BookmarkPlus, Check } from "lucide-react";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -16,6 +17,8 @@ export default function CoachSummary() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -141,6 +144,55 @@ export default function CoachSummary() {
             </div>
           );
         })}
+      </div>
+
+      {/* Save to question bank */}
+      <div className="mb-4 rounded-xl border border-border bg-card p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Save to your question bank</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Adds all 4 questions from this article to your personal bank for future practice sessions.
+            </p>
+          </div>
+          <Button
+            variant={savedMsg ? "outline" : "secondary"}
+            size="sm"
+            disabled={saving || !!savedMsg}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                const res = await coach.saveToBank(sessionId);
+                setSavedMsg(res.message);
+              } catch (e) {
+                setSavedMsg("Failed to save: " + e.message);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="flex-none"
+          >
+            {saving ? (
+              <span className="flex items-center gap-1.5">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Saving…
+              </span>
+            ) : savedMsg ? (
+              <span className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-success" />
+                Saved
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <BookmarkPlus className="h-3.5 w-3.5" />
+                Save questions
+              </span>
+            )}
+          </Button>
+        </div>
+        {savedMsg && (
+          <p className="mt-2 text-xs text-success">{savedMsg}</p>
+        )}
       </div>
 
       {/* CTAs */}

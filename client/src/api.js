@@ -110,6 +110,8 @@ export const coach = {
   getSession: (id) => request(`/api/coach/sessions/${id}`),
   history: () => request("/api/coach/history"),
   stats: () => request("/api/coach/stats"),
+  saveToBank: (id) =>
+    request(`/api/coach/sessions/${id}/save-to-bank`, { method: "POST" }),
 };
 
 // ── Admin (Phase 9) ───────────────────────────────────
