@@ -29,126 +29,138 @@ function serializeSession(s) {
   };
 }
 
-function getOwnedSession(id, userId) {
-  return db.prepare("SELECT * FROM sessions WHERE id = ? AND user_id = ?").get(id, userId);
+async function getOwnedSession(id, userId) {
+  return await db.get(
+    "SELECT * FROM sessions WHERE id = $1 AND user_id = $2",
+    [id, userId]
+  );
 }
 
 // POST /api/sessions — create a configured session
-router.post("/", authenticate, (req, res) => {
-  let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice" } = req.body || {};
+router.post("/", authenticate, async (req, res, next) => {
+  try {
+    let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice" } = req.body || {};
 
-  numQuestions = parseInt(numQuestions, 10);
-  if (!numQuestions || numQuestions < 1 || numQuestions > MAX_QUESTIONS) {
-    return res.status(400).json({ error: `numQuestions must be between 1 and ${MAX_QUESTIONS}` });
-  }
-  if (!VALID_MODES.includes(timerMode)) {
-    return res.status(400).json({ error: "Invalid timerMode" });
-  }
-  if (!VALID_FEEDBACK_MODES.includes(feedbackMode)) {
-    return res.status(400).json({ error: "Invalid feedbackMode" });
-  }
-  if (!VALID_SESSION_TYPES.includes(sessionType)) {
-    return res.status(400).json({ error: "Invalid sessionType" });
-  }
-
-  if (timerMode === "untimed") {
-    timerScope = null;
-    timerSeconds = null;
-  } else {
-    if (!VALID_SCOPES.includes(timerScope)) {
-      return res.status(400).json({ error: "timerScope is required for timed sessions" });
+    numQuestions = parseInt(numQuestions, 10);
+    if (!numQuestions || numQuestions < 1 || numQuestions > MAX_QUESTIONS) {
+      return res.status(400).json({ error: `numQuestions must be between 1 and ${MAX_QUESTIONS}` });
     }
-    if (timerMode === "countdown") {
-      timerSeconds = parseInt(timerSeconds, 10);
-      if (!timerSeconds || timerSeconds < 5) {
-        return res.status(400).json({ error: "timerSeconds (>= 5) is required for a countdown" });
-      }
+    if (!VALID_MODES.includes(timerMode)) {
+      return res.status(400).json({ error: "Invalid timerMode" });
+    }
+    if (!VALID_FEEDBACK_MODES.includes(feedbackMode)) {
+      return res.status(400).json({ error: "Invalid feedbackMode" });
+    }
+    if (!VALID_SESSION_TYPES.includes(sessionType)) {
+      return res.status(400).json({ error: "Invalid sessionType" });
+    }
+
+    if (timerMode === "untimed") {
+      timerScope = null;
+      timerSeconds = null;
     } else {
-      timerSeconds = null; // count_up has no fixed duration
+      if (!VALID_SCOPES.includes(timerScope)) {
+        return res.status(400).json({ error: "timerScope is required for timed sessions" });
+      }
+      if (timerMode === "countdown") {
+        timerSeconds = parseInt(timerSeconds, 10);
+        if (!timerSeconds || timerSeconds < 5) {
+          return res.status(400).json({ error: "timerSeconds (>= 5) is required for a countdown" });
+        }
+      } else {
+        timerSeconds = null; // count_up has no fixed duration
+      }
+      // Timed sessions always defer — override any passed value
+      feedbackMode = "deferred";
     }
-    // Timed sessions always defer — override any passed value
-    feedbackMode = "deferred";
-  }
 
-  const result = db
-    .prepare(
+    const result = await db.run(
       `INSERT INTO sessions (user_id, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode, session_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(req.userId, numQuestions, timerMode, timerScope, timerSeconds, feedbackMode, sessionType);
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [req.userId, numQuestions, timerMode, timerScope, timerSeconds, feedbackMode, sessionType]
+    );
 
-  const session = getOwnedSession(result.lastInsertRowid, req.userId);
-  res.json({ session: serializeSession(session) });
+    const session = await getOwnedSession(result.lastId, req.userId);
+    res.json({ session: serializeSession(session) });
+  } catch (e) { next(e); }
 });
 
 // GET /api/sessions — list the user's sessions (most recent first)
-router.get("/", authenticate, (req, res) => {
-  const rows = db
-    .prepare("SELECT * FROM sessions WHERE user_id = ? ORDER BY id DESC")
-    .all(req.userId);
-  res.json({ sessions: rows.map(serializeSession) });
+router.get("/", authenticate, async (req, res, next) => {
+  try {
+    const rows = await db.all(
+      "SELECT * FROM sessions WHERE user_id = $1 ORDER BY id DESC",
+      [req.userId]
+    );
+    res.json({ sessions: rows.map(serializeSession) });
+  } catch (e) { next(e); }
 });
 
 // GET /api/sessions/active — the user's most recent active session, if any
-router.get("/active", authenticate, (req, res) => {
-  const s = db
-    .prepare("SELECT * FROM sessions WHERE user_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1")
-    .get(req.userId);
-  res.json({ session: s ? serializeSession(s) : null });
+router.get("/active", authenticate, async (req, res, next) => {
+  try {
+    const s = await db.get(
+      "SELECT * FROM sessions WHERE user_id = $1 AND status = 'active' ORDER BY id DESC LIMIT 1",
+      [req.userId]
+    );
+    res.json({ session: s ? serializeSession(s) : null });
+  } catch (e) { next(e); }
 });
 
 // GET /api/sessions/:id — config + attempt rows (for the results screen)
-router.get("/:id", authenticate, (req, res) => {
-  const s = getOwnedSession(req.params.id, req.userId);
-  if (!s) return res.status(404).json({ error: "Session not found" });
+router.get("/:id", authenticate, async (req, res, next) => {
+  try {
+    const s = await getOwnedSession(req.params.id, req.userId);
+    if (!s) return res.status(404).json({ error: "Session not found" });
 
-  const attempts = db
-    .prepare(
+    const attempts = await db.all(
       `SELECT question_id, question_type, topic, selected_option_index,
               correct_option_index, is_correct, trap_option_index, trap_type,
               selected_trap, skipped, time_taken_seconds
-       FROM attempts WHERE session_id = ? ORDER BY id`
-    )
-    .all(s.id);
+       FROM attempts WHERE session_id = $1 ORDER BY id`,
+      [s.id]
+    );
 
-  res.json({ session: serializeSession(s), attempts });
+    res.json({ session: serializeSession(s), attempts });
+  } catch (e) { next(e); }
 });
 
 // GET /api/sessions/:id/review — full attempt data for the Session Review screen.
 // Returns paragraph, question text, options, selected/correct/trap indices, and
 // all AI feedback fields. Safe to expose after the session is complete because
 // correctIndex/trapIndex come from the attempt record (already seen by the user).
-router.get("/:id/review", authenticate, (req, res) => {
-  const s = getOwnedSession(req.params.id, req.userId);
-  if (!s) return res.status(404).json({ error: "Session not found" });
+router.get("/:id/review", authenticate, async (req, res, next) => {
+  try {
+    const s = await getOwnedSession(req.params.id, req.userId);
+    if (!s) return res.status(404).json({ error: "Session not found" });
 
-  const attempts = db
-    .prepare(
+    const attempts = await db.all(
       `SELECT a.id, a.question_id, a.selected_option_index, a.correct_option_index,
               a.is_correct, a.trap_option_index, a.trap_type, a.selected_trap, a.skipped,
               a.time_taken_seconds, a.reasoning_text, a.mode,
               a.reasoning_score, a.reasoning_feedback, a.correct_explanation,
               a.trap_explanation, a.key_takeaway
-       FROM attempts a WHERE a.session_id = ? ORDER BY a.id`
-    )
-    .all(s.id);
+       FROM attempts a WHERE a.session_id = $1 ORDER BY a.id`,
+      [s.id]
+    );
 
-  // Attach question display data (paragraph, question text, options) from DB.
-  // We do NOT include correctIndex/trapIndex from the questions table — those
-  // come from the attempt's own fields which were set at answer time.
-  const enriched = attempts.map((a) => {
-    const q = questionsRepo.findById(a.question_id);
-    return {
-      ...a,
-      paragraph: q?.paragraph ?? "",
-      questionText: q?.question ?? "",
-      options: q?.options ?? [],
-      topic: q?.topic ?? "",
-      type: q?.type ?? "",
-    };
-  });
+    // Attach question display data (paragraph, question text, options) from DB.
+    // We do NOT include correctIndex/trapIndex from the questions table — those
+    // come from the attempt's own fields which were set at answer time.
+    const enriched = await Promise.all(attempts.map(async (a) => {
+      const q = await questionsRepo.findById(a.question_id);
+      return {
+        ...a,
+        paragraph: q?.paragraph ?? "",
+        questionText: q?.question ?? "",
+        options: q?.options ?? [],
+        topic: q?.topic ?? "",
+        type: q?.type ?? "",
+      };
+    }));
 
-  res.json({ session: serializeSession(s), attempts: enriched });
+    res.json({ session: serializeSession(s), attempts: enriched });
+  } catch (e) { next(e); }
 });
 
 // POST /api/sessions/:id/batch-evaluate — evaluate all unevaluated analysis
@@ -268,16 +280,17 @@ function buildBatchUserMessage(pendingAttempts, questions) {
 }
 
 // Persist one evaluation result to DB and return the result object
-function saveEvalResult(attemptId, ev) {
-  db.prepare(
+async function saveEvalResult(attemptId, ev) {
+  await db.run(
     `UPDATE attempts SET
-       reasoning_score = ?,
-       reasoning_feedback = ?,
-       correct_explanation = ?,
-       trap_explanation = ?,
-       key_takeaway = ?
-     WHERE id = ?`
-  ).run(ev.reasoningScore, ev.reasoningFeedback, ev.correctExplanation, ev.trapExplanation, ev.keyTakeaway, attemptId);
+       reasoning_score = $1,
+       reasoning_feedback = $2,
+       correct_explanation = $3,
+       trap_explanation = $4,
+       key_takeaway = $5
+     WHERE id = $6`,
+    [ev.reasoningScore, ev.reasoningFeedback, ev.correctExplanation, ev.trapExplanation, ev.keyTakeaway, attemptId]
+  );
   return {
     attemptId,
     reasoningScore: ev.reasoningScore,
@@ -290,7 +303,7 @@ function saveEvalResult(attemptId, ev) {
 }
 
 async function evaluateOneAttempt(attempt, userId) {
-  const q = questionsRepo.findById(attempt.question_id);
+  const q = await questionsRepo.findById(attempt.question_id);
   if (!q) return { attemptId: attempt.id, aiError: true, aiErrorMessage: "Question not found" };
 
   try {
@@ -299,7 +312,7 @@ async function evaluateOneAttempt(attempt, userId) {
       messages: [{ role: "user", content: buildUserMessage(q, attempt.selected_option_index, attempt.reasoning_text) }],
     });
 
-    logApiCall({
+    await logApiCall({
       userId,
       route: "/api/sessions/batch-evaluate",
       provider: "openrouter",
@@ -310,10 +323,10 @@ async function evaluateOneAttempt(attempt, userId) {
     });
 
     const ev = JSON.parse(response.text);
-    return saveEvalResult(attempt.id, ev);
+    return await saveEvalResult(attempt.id, ev);
   } catch (err) {
     console.error("Claude batch error for attempt", attempt.id, err.message);
-    logApiCall({
+    await logApiCall({
       userId,
       route: "/api/sessions/batch-evaluate",
       provider: "openrouter",
@@ -324,19 +337,19 @@ async function evaluateOneAttempt(attempt, userId) {
   }
 }
 
-router.post("/:id/batch-evaluate", authenticate, async (req, res) => {
-  const s = getOwnedSession(req.params.id, req.userId);
+router.post("/:id/batch-evaluate", authenticate, async (req, res, next) => {
+  try {
+  const s = await getOwnedSession(req.params.id, req.userId);
   if (!s) return res.status(404).json({ error: "Session not found" });
 
   // Find all analysis attempts with reasoning but no score yet
-  const pending = db
-    .prepare(
-      `SELECT id, question_id, selected_option_index, reasoning_text
-       FROM attempts
-       WHERE session_id = ? AND skipped = 0 AND mode = 'analysis'
-             AND reasoning_text IS NOT NULL AND reasoning_score IS NULL`
-    )
-    .all(s.id);
+  const pending = await db.all(
+    `SELECT id, question_id, selected_option_index, reasoning_text
+     FROM attempts
+     WHERE session_id = $1 AND skipped = 0 AND mode = 'analysis'
+           AND reasoning_text IS NOT NULL AND reasoning_score IS NULL`,
+    [s.id]
+  );
 
   if (pending.length === 0) {
     return res.json({ results: [] });
@@ -344,7 +357,7 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res) => {
 
   // ── Primary path: single batch call (one API call for all N questions) ──────
   // Look up all questions upfront
-  const questions = pending.map((a) => questionsRepo.findById(a.question_id));
+  const questions = await Promise.all(pending.map((a) => questionsRepo.findById(a.question_id)));
   const missingIdx = questions.findIndex((q) => !q);
   if (missingIdx !== -1) {
     // A question was deleted — fall through to per-question path which handles nulls gracefully
@@ -356,7 +369,7 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res) => {
         messages: [{ role: "user", content: buildBatchUserMessage(pending, questions) }],
       });
 
-      logApiCall({
+      await logApiCall({
         userId: req.userId,
         route: "/api/sessions/batch-evaluate",
         provider: "openrouter",
@@ -371,11 +384,11 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res) => {
         throw new Error(`Expected array of ${pending.length}, got ${Array.isArray(evaluations) ? evaluations.length : typeof evaluations}`);
       }
 
-      const results = pending.map((attempt, i) => saveEvalResult(attempt.id, evaluations[i]));
+      const results = await Promise.all(pending.map((attempt, i) => saveEvalResult(attempt.id, evaluations[i])));
       return res.json({ results });
     } catch (batchErr) {
       console.error("batch-evaluate: single-call failed, falling back to parallel:", batchErr.message);
-      logApiCall({
+      await logApiCall({
         userId: req.userId,
         route: "/api/sessions/batch-evaluate",
         provider: "openrouter",
@@ -389,18 +402,22 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res) => {
   // ── Fallback path: parallel per-question calls ───────────────────────────────
   const results = await Promise.all(pending.map((a) => evaluateOneAttempt(a, req.userId)));
   res.json({ results });
+  } catch (e) { next(e); }
 });
 
 // POST /api/sessions/:id/complete — mark a session finished
-router.post("/:id/complete", authenticate, (req, res) => {
-  const s = getOwnedSession(req.params.id, req.userId);
-  if (!s) return res.status(404).json({ error: "Session not found" });
-  if (s.status !== "completed") {
-    db.prepare(
-      "UPDATE sessions SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?"
-    ).run(s.id);
-  }
-  res.json({ session: serializeSession(getOwnedSession(s.id, req.userId)) });
+router.post("/:id/complete", authenticate, async (req, res, next) => {
+  try {
+    const s = await getOwnedSession(req.params.id, req.userId);
+    if (!s) return res.status(404).json({ error: "Session not found" });
+    if (s.status !== "completed") {
+      await db.run(
+        "UPDATE sessions SET status = 'completed', completed_at = NOW() WHERE id = $1",
+        [s.id]
+      );
+    }
+    res.json({ session: serializeSession(await getOwnedSession(s.id, req.userId)) });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

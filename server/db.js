@@ -1,245 +1,309 @@
-const Database = require("better-sqlite3");
-const path = require("path");
+const { Pool } = require("pg");
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "varc.db");
-const db = new Database(dbPath);
-db.pragma("foreign_keys = ON");
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'user',     -- 'user' | 'admin' (Phase 9)
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+// ── Thin async wrapper around pg Pool ────────────────────────────────────────
+
+const db = {
+  // Returns the first row or null
+  async get(sql, params = []) {
+    const result = await pool.query(sql, params);
+    return result.rows[0] ?? null;
+  },
+
+  // Returns all rows as an array
+  async all(sql, params = []) {
+    const result = await pool.query(sql, params);
+    return result.rows;
+  },
+
+  // Executes an INSERT/UPDATE/DELETE.
+  // For INSERTs that need the new ID, append RETURNING id to the SQL.
+  // Returns { rowCount, lastId, changes } — lastId is rows[0]?.id or null.
+  async run(sql, params = []) {
+    const result = await pool.query(sql, params);
+    return {
+      rowCount: result.rowCount,
+      lastId: result.rows[0]?.id ?? null,
+      changes: result.rowCount,
+    };
+  },
+
+  // Runs raw SQL (DDL)
+  async exec(sql) {
+    await pool.query(sql);
+  },
+
+  // Wraps asyncFn in a BEGIN/COMMIT/ROLLBACK transaction using a dedicated client
+  async transaction(asyncFn) {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await asyncFn(client);
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+};
+
+// ── Schema creation ───────────────────────────────────────────────────────────
+
+async function createTables() {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      daily_goal INTEGER NOT NULL DEFAULT 10,
+      email_verified INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS questions (
+      id TEXT PRIMARY KEY,
+      topic TEXT NOT NULL,
+      paragraph TEXT NOT NULL,
+      question TEXT NOT NULL,
+      type TEXT NOT NULL,
+      options_json TEXT NOT NULL,
+      correct_index INTEGER NOT NULL,
+      trap_index INTEGER,
+      trap_type TEXT,
+      source_lines TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'seed',
+      author_user_id INTEGER REFERENCES users(id),
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS api_calls (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id),
+      route TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      est_cost_usd REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'ok',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS question_flags (
+      id SERIAL PRIMARY KEY,
+      question_id TEXT NOT NULL REFERENCES questions(id),
+      flagged_by_user_id INTEGER REFERENCES users(id),
+      source TEXT NOT NULL DEFAULT 'admin',
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      resolution TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      resolved_at TIMESTAMPTZ
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      num_questions INTEGER NOT NULL DEFAULT 10,
+      timer_mode TEXT NOT NULL DEFAULT 'untimed',
+      timer_scope TEXT,
+      timer_seconds INTEGER,
+      status TEXT NOT NULL DEFAULT 'active',
+      feedback_mode TEXT NOT NULL DEFAULT 'instant',
+      session_type TEXT NOT NULL DEFAULT 'practice',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS attempts (
+      id SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id),
+      question_id TEXT NOT NULL,
+      question_type TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      selected_option_index INTEGER,
+      correct_option_index INTEGER NOT NULL,
+      is_correct INTEGER NOT NULL,
+      trap_option_index INTEGER,
+      trap_type TEXT,
+      selected_trap INTEGER NOT NULL,
+      skipped INTEGER NOT NULL DEFAULT 0,
+      reasoning_text TEXT,
+      reasoning_score INTEGER,
+      reasoning_feedback TEXT,
+      trap_explanation TEXT,
+      correct_explanation TEXT,
+      key_takeaway TEXT,
+      mode TEXT NOT NULL DEFAULT 'analysis',
+      time_taken_seconds INTEGER,
+      eliminated_indices TEXT,
+      intuition_points INTEGER,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS otp_tokens (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      token_hash TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS sr_cards (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      question_id TEXT NOT NULL,
+      bucket INTEGER NOT NULL DEFAULT 0,
+      due_at TEXT NOT NULL,
+      last_seen_at TEXT,
+      last_correct INTEGER,
+      total_attempts INTEGER NOT NULL DEFAULT 0,
+      total_correct INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, question_id)
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS coach_sessions (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      article_text TEXT NOT NULL,
+      article_source TEXT,
+      article_title TEXT,
+      word_count INTEGER NOT NULL,
+      questions_json TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS coach_attempts (
+      id SERIAL PRIMARY KEY,
+      coach_session_id INTEGER NOT NULL REFERENCES coach_sessions(id),
+      question_index INTEGER NOT NULL,
+      question_type TEXT NOT NULL,
+      selected_option_index INTEGER NOT NULL,
+      correct_option_index INTEGER NOT NULL,
+      is_correct INTEGER NOT NULL,
+      selected_trap INTEGER NOT NULL,
+      trap_type TEXT,
+      exchange_count INTEGER NOT NULL DEFAULT 0,
+      conversation_json TEXT NOT NULL DEFAULT '[]',
+      final_verdict TEXT,
+      key_takeaway TEXT,
+      is_complete INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+}
+
+// ── Lightweight additive migrations ──────────────────────────────────────────
+async function ensureColumn(table, column, definition) {
+  const row = await db.get(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_name = $1 AND column_name = $2`,
+    [table, column]
   );
-
-  CREATE TABLE IF NOT EXISTS questions (
-    id TEXT PRIMARY KEY,                          -- 'q001'..'q025' for seeds; uuid for user-created (Phase 10)
-    topic TEXT NOT NULL,                          -- 'economics' | 'humanities' | 'philosophy' | 'science' | 'social'
-    paragraph TEXT NOT NULL,
-    question TEXT NOT NULL,
-    type TEXT NOT NULL,                           -- 'inference' | 'tone' | 'title' | 'detail' | 'application'
-    options_json TEXT NOT NULL,                   -- JSON: [{text, isCorrect, isTrap, trapType}, ...]
-    correct_index INTEGER NOT NULL,
-    trap_index INTEGER,                           -- null for no-trap questions
-    trap_type TEXT,                               -- 'too_extreme' | 'out_of_scope' | 'real_but_unstated' | 'partially_correct' | null
-    source_lines TEXT NOT NULL,
-    source TEXT NOT NULL DEFAULT 'seed',          -- 'seed' | 'user' (Phase 10)
-    author_user_id INTEGER,                       -- null for built-ins; user id for user-created
-    is_active INTEGER NOT NULL DEFAULT 1,         -- 0 = soft-deleted or admin-disabled
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (author_user_id) REFERENCES users(id)
-  );
-
-  -- Phase 9: every AI call is logged for admin cost tracking
-  CREATE TABLE IF NOT EXISTS api_calls (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,                              -- null if pre-auth
-    route TEXT NOT NULL,                          -- '/api/attempts/evaluate' etc
-    provider TEXT NOT NULL,                       -- 'anthropic' | 'openai' | 'google'
-    model TEXT NOT NULL,                          -- 'claude-haiku-4-5' etc
-    input_tokens INTEGER NOT NULL DEFAULT 0,
-    output_tokens INTEGER NOT NULL DEFAULT 0,
-    est_cost_usd REAL NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'ok',            -- 'ok' | 'error'
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
-
-  -- Phase 9: quality-flag review queue for bad questions
-  CREATE TABLE IF NOT EXISTS question_flags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question_id TEXT NOT NULL,
-    flagged_by_user_id INTEGER,                   -- null for AI/admin-system flags
-    source TEXT NOT NULL DEFAULT 'admin',         -- 'user' | 'ai' | 'admin'
-    reason TEXT,                                  -- free text
-    status TEXT NOT NULL DEFAULT 'open',          -- 'open' | 'resolved'
-    resolution TEXT,                              -- 'fixed' | 'deleted' | 'invalid'
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    resolved_at DATETIME,
-    FOREIGN KEY (question_id) REFERENCES questions(id),
-    FOREIGN KEY (flagged_by_user_id) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    num_questions INTEGER NOT NULL DEFAULT 10,
-    timer_mode TEXT NOT NULL DEFAULT 'untimed',   -- 'untimed' | 'count_up' | 'countdown'
-    timer_scope TEXT,                             -- 'per_question' | 'per_session' | null
-    timer_seconds INTEGER,                        -- countdown duration (per question or per session); null otherwise
-    status TEXT NOT NULL DEFAULT 'active',        -- 'active' | 'completed'
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    completed_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS attempts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    question_id TEXT NOT NULL,
-    question_type TEXT NOT NULL,
-    topic TEXT NOT NULL,
-    selected_option_index INTEGER,        -- null when skipped
-    correct_option_index INTEGER NOT NULL,
-    is_correct INTEGER NOT NULL,          -- 0 or 1 (0 when skipped)
-    trap_option_index INTEGER,
-    trap_type TEXT,
-    selected_trap INTEGER NOT NULL,       -- 0 or 1 (0 when skipped)
-    skipped INTEGER NOT NULL DEFAULT 0,   -- 0 or 1
-    reasoning_text TEXT,                  -- null until Phase 4
-    reasoning_score INTEGER,              -- 1-5, null until Phase 4
-    reasoning_feedback TEXT,
-    trap_explanation TEXT,
-    correct_explanation TEXT,
-    key_takeaway TEXT,
-    mode TEXT NOT NULL DEFAULT 'analysis', -- 'analysis' | 'intuition'
-    time_taken_seconds INTEGER,
-    eliminated_indices TEXT,              -- JSON array, used in intuition mode
-    intuition_points INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-  );
-`);
-
-// ── Lightweight migrations for existing DBs ──
-// CREATE TABLE IF NOT EXISTS won't add columns to a table that already exists,
-// so we check and ALTER for each column that may be missing on older DBs.
-function ensureColumn(table, column, definition) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-  if (!cols.some((c) => c.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  if (!row) {
+    await db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
-ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
-ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");  // Phase 16
-ensureColumn("users", "email_verified", "INTEGER NOT NULL DEFAULT 1"); // 1 = verified (existing users grandfathered in)
-ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
-ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
 
-// ── OTP tokens for email verification + password reset ──
-db.exec(`
-  CREATE TABLE IF NOT EXISTS otp_tokens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    token_hash TEXT NOT NULL,         -- SHA-256 of the 6-digit code (never store plain)
-    purpose TEXT NOT NULL,            -- 'email_verification' | 'password_reset'
-    expires_at TEXT NOT NULL,         -- ISO datetime
-    attempts INTEGER NOT NULL DEFAULT 0,
-    used INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
-`);
-
-// ── Phase 15: Spaced repetition cards ──
-db.exec(`
-  CREATE TABLE IF NOT EXISTS sr_cards (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    question_id TEXT NOT NULL,
-    bucket INTEGER NOT NULL DEFAULT 0,   -- 0–4; intervals: 1,3,7,14,30 days
-    due_at TEXT NOT NULL,                -- ISO datetime string
-    last_seen_at TEXT,
-    last_correct INTEGER,                -- 0 or 1
-    total_attempts INTEGER NOT NULL DEFAULT 0,
-    total_correct INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    UNIQUE(user_id, question_id)
-  );
-`);
-
-// ── Phase 14: AI Reading Coach tables ──
-db.exec(`
-  CREATE TABLE IF NOT EXISTS coach_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    article_text TEXT NOT NULL,
-    article_source TEXT,
-    article_title TEXT,
-    word_count INTEGER NOT NULL,
-    questions_json TEXT NOT NULL,   -- full generated questions (with correctIndex etc.) — never sent raw to client
-    status TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'completed'
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    completed_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS coach_attempts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    coach_session_id INTEGER NOT NULL,
-    question_index INTEGER NOT NULL,        -- 0–3
-    question_type TEXT NOT NULL,
-    selected_option_index INTEGER NOT NULL,
-    correct_option_index INTEGER NOT NULL,
-    is_correct INTEGER NOT NULL,            -- 0 or 1
-    selected_trap INTEGER NOT NULL,         -- 0 or 1
-    trap_type TEXT,
-    exchange_count INTEGER NOT NULL DEFAULT 0,
-    conversation_json TEXT NOT NULL DEFAULT '[]',
-    final_verdict TEXT,
-    key_takeaway TEXT,
-    is_complete INTEGER NOT NULL DEFAULT 0, -- 0 or 1
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (coach_session_id) REFERENCES coach_sessions(id)
-  );
-`);
-
-// ── Seed questions on first run (Phase 8) ──
-// Idempotent: only seeds when the questions table is empty. The canonical
-// definition still lives in server/data/questions.js (checked into git) — it
-// is only read at seed time, never at request time.
-function seedQuestions() {
-  const { n } = db.prepare("SELECT COUNT(*) AS n FROM questions").get();
-  if (n > 0) return;
+// ── Seed questions on first run ───────────────────────────────────────────────
+async function seedQuestions() {
+  const row = await db.get("SELECT COUNT(*) AS n FROM questions");
+  if (parseInt(row.n, 10) > 0) return;
 
   const seedData = require("./data/questions");
-  const insert = db.prepare(
-    `INSERT INTO questions
-       (id, topic, paragraph, question, type, options_json,
-        correct_index, trap_index, trap_type, source_lines, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'seed')`
-  );
-  const tx = db.transaction((rows) => {
-    for (const q of rows) {
-      insert.run(
-        q.id, q.topic, q.paragraph, q.question, q.type,
-        JSON.stringify(q.options),
-        q.correctIndex,
-        q.trapIndex ?? null,
-        q.trapType ?? null,
-        q.sourceLines
+  await db.transaction(async (client) => {
+    for (const q of seedData) {
+      await client.query(
+        `INSERT INTO questions
+           (id, topic, paragraph, question, type, options_json,
+            correct_index, trap_index, trap_type, source_lines, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'seed')`,
+        [
+          q.id, q.topic, q.paragraph, q.question, q.type,
+          JSON.stringify(q.options),
+          q.correctIndex,
+          q.trapIndex ?? null,
+          q.trapType ?? null,
+          q.sourceLines,
+        ]
       );
     }
   });
-  tx(seedData);
   console.log(`[db] Seeded ${seedData.length} questions into the database.`);
 }
-seedQuestions();
 
-// ── Bootstrap admins from env var (Phase 9) ──
-// ADMIN_USERNAMES is a comma-separated list of usernames to auto-promote on
-// startup. Promotion is one-way: removing the env var does NOT demote anyone
-// (use a manual UPDATE or the admin UI for that).
-function bootstrapAdmins() {
+// ── Bootstrap admins from env var ────────────────────────────────────────────
+async function bootstrapAdmins() {
   const names = (process.env.ADMIN_USERNAMES || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   if (names.length === 0) return;
-  const stmt = db.prepare(
-    "UPDATE users SET role = 'admin' WHERE username = ? AND role != 'admin'"
-  );
+
   for (const username of names) {
-    const info = stmt.run(username);
-    if (info.changes > 0) {
+    const result = await db.run(
+      "UPDATE users SET role = 'admin' WHERE username = $1 AND role != 'admin'",
+      [username]
+    );
+    if (result.rowCount > 0) {
       console.log(`[db] Promoted ${username} to admin.`);
     }
   }
 }
-bootstrapAdmins();
+
+// ── Initialise everything ─────────────────────────────────────────────────────
+(async () => {
+  try {
+    await createTables();
+    // Ensure additive columns that may be missing on pre-existing DBs
+    await ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
+    await ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");
+    await ensureColumn("users", "email_verified", "INTEGER NOT NULL DEFAULT 1");
+    await ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
+    await ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
+    await seedQuestions();
+    await bootstrapAdmins();
+    console.log("[db] Database initialised.");
+  } catch (err) {
+    console.error("[db] Initialisation error:", err);
+    process.exit(1);
+  }
+})();
 
 module.exports = db;

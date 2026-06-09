@@ -22,131 +22,145 @@ function makeId(userId) {
 
 // ── GET /api/my-questions ──────────────────────────────────────────────────
 // List all questions created by the logged-in user.
-router.get("/", (req, res) => {
-  const rows = db
-    .prepare(
+router.get("/", async (req, res, next) => {
+  try {
+    const rows = await db.all(
       `SELECT id, topic, type, is_active, created_at,
               substr(question, 1, 120) AS question_snippet
        FROM questions
-       WHERE source = 'user' AND author_user_id = ?
-       ORDER BY id DESC`
-    )
-    .all(req.userId);
-  res.json({ questions: rows });
+       WHERE source = 'user' AND author_user_id = $1
+       ORDER BY id DESC`,
+      [req.userId]
+    );
+    res.json({ questions: rows });
+  } catch (e) { next(e); }
 });
 
 // ── POST /api/my-questions ─────────────────────────────────────────────────
 // Create a user question (manual or after editing an AI draft).
-router.post("/", (req, res) => {
-  const err = validateQuestionPayload(req.body);
-  if (err) return res.status(400).json({ error: err });
-
-  const {
-    topic, paragraph, question, type,
-    options, correctIndex, trapIndex, trapType, sourceLines,
-  } = req.body;
-
-  const id = makeId(req.userId);
-
+router.post("/", async (req, res, next) => {
   try {
-    db.prepare(
-      `INSERT INTO questions
-         (id, topic, paragraph, question, type, options_json,
-          correct_index, trap_index, trap_type, source_lines,
-          source, author_user_id, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', ?, 1)`
-    ).run(
-      id, topic, paragraph.trim(), question.trim(), type,
-      JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
-      correctIndex,
-      trapIndex ?? null,
-      trapIndex != null ? (trapType || null) : null,
-      sourceLines.trim(),
-      req.userId
-    );
-    res.json({ ok: true, id });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    const err = validateQuestionPayload(req.body);
+    if (err) return res.status(400).json({ error: err });
+
+    const {
+      topic, paragraph, question, type,
+      options, correctIndex, trapIndex, trapType, sourceLines,
+    } = req.body;
+
+    const id = makeId(req.userId);
+
+    try {
+      await db.run(
+        `INSERT INTO questions
+           (id, topic, paragraph, question, type, options_json,
+            correct_index, trap_index, trap_type, source_lines,
+            source, author_user_id, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'user', $11, 1)`,
+        [
+          id, topic, paragraph.trim(), question.trim(), type,
+          JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
+          correctIndex,
+          trapIndex ?? null,
+          trapIndex != null ? (trapType || null) : null,
+          sourceLines.trim(),
+          req.userId,
+        ]
+      );
+      res.json({ ok: true, id });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  } catch (e) { next(e); }
 });
 
 // ── GET /api/my-questions/:id ──────────────────────────────────────────────
-router.get("/:id", (req, res) => {
-  const row = db
-    .prepare("SELECT * FROM questions WHERE id = ? AND source = 'user' AND author_user_id = ?")
-    .get(req.params.id, req.userId);
-  if (!row) return res.status(404).json({ error: "Not found" });
+router.get("/:id", async (req, res, next) => {
+  try {
+    const row = await db.get(
+      "SELECT * FROM questions WHERE id = $1 AND source = 'user' AND author_user_id = $2",
+      [req.params.id, req.userId]
+    );
+    if (!row) return res.status(404).json({ error: "Not found" });
 
-  const options = JSON.parse(row.options_json);
-  res.json({
-    question: {
-      id: row.id,
-      topic: row.topic,
-      paragraph: row.paragraph,
-      question: row.question,
-      type: row.type,
-      options,
-      correctIndex: row.correct_index,
-      trapIndex: row.trap_index,
-      trapType: row.trap_type,
-      sourceLines: row.source_lines,
-      isActive: row.is_active === 1,
-      createdAt: row.created_at,
-    },
-  });
+    const options = JSON.parse(row.options_json);
+    res.json({
+      question: {
+        id: row.id,
+        topic: row.topic,
+        paragraph: row.paragraph,
+        question: row.question,
+        type: row.type,
+        options,
+        correctIndex: row.correct_index,
+        trapIndex: row.trap_index,
+        trapType: row.trap_type,
+        sourceLines: row.source_lines,
+        isActive: row.is_active === 1,
+        createdAt: row.created_at,
+      },
+    });
+  } catch (e) { next(e); }
 });
 
 // ── PATCH /api/my-questions/:id ────────────────────────────────────────────
 // Update content or toggle is_active.
-router.patch("/:id", (req, res) => {
-  const existing = db
-    .prepare("SELECT id FROM questions WHERE id = ? AND source = 'user' AND author_user_id = ?")
-    .get(req.params.id, req.userId);
-  if (!existing) return res.status(404).json({ error: "Not found" });
-
-  // Quick toggle activation
-  if (typeof req.body.isActive === "boolean") {
-    db.prepare("UPDATE questions SET is_active = ? WHERE id = ?").run(
-      req.body.isActive ? 1 : 0,
-      req.params.id
+router.patch("/:id", async (req, res, next) => {
+  try {
+    const existing = await db.get(
+      "SELECT id FROM questions WHERE id = $1 AND source = 'user' AND author_user_id = $2",
+      [req.params.id, req.userId]
     );
-    return res.json({ ok: true });
-  }
+    if (!existing) return res.status(404).json({ error: "Not found" });
 
-  const err = validateQuestionPayload(req.body);
-  if (err) return res.status(400).json({ error: err });
+    // Quick toggle activation
+    if (typeof req.body.isActive === "boolean") {
+      await db.run(
+        "UPDATE questions SET is_active = $1 WHERE id = $2",
+        [req.body.isActive ? 1 : 0, req.params.id]
+      );
+      return res.json({ ok: true });
+    }
 
-  const {
-    topic, paragraph, question, type,
-    options, correctIndex, trapIndex, trapType, sourceLines,
-  } = req.body;
+    const err = validateQuestionPayload(req.body);
+    if (err) return res.status(400).json({ error: err });
 
-  db.prepare(
-    `UPDATE questions SET
-       topic = ?, paragraph = ?, question = ?, type = ?,
-       options_json = ?, correct_index = ?, trap_index = ?,
-       trap_type = ?, source_lines = ?
-     WHERE id = ?`
-  ).run(
-    topic, paragraph.trim(), question.trim(), type,
-    JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
-    correctIndex,
-    trapIndex ?? null,
-    trapIndex != null ? (trapType || null) : null,
-    sourceLines.trim(),
-    req.params.id
-  );
-  res.json({ ok: true });
+    const {
+      topic, paragraph, question, type,
+      options, correctIndex, trapIndex, trapType, sourceLines,
+    } = req.body;
+
+    await db.run(
+      `UPDATE questions SET
+         topic = $1, paragraph = $2, question = $3, type = $4,
+         options_json = $5, correct_index = $6, trap_index = $7,
+         trap_type = $8, source_lines = $9
+       WHERE id = $10`,
+      [
+        topic, paragraph.trim(), question.trim(), type,
+        JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
+        correctIndex,
+        trapIndex ?? null,
+        trapIndex != null ? (trapType || null) : null,
+        sourceLines.trim(),
+        req.params.id,
+      ]
+    );
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 // ── DELETE /api/my-questions/:id ───────────────────────────────────────────
 // Hard delete — user questions are personal data; no reason to keep them soft.
-router.delete("/:id", (req, res) => {
-  const info = db
-    .prepare("DELETE FROM questions WHERE id = ? AND source = 'user' AND author_user_id = ?")
-    .run(req.params.id, req.userId);
-  if (info.changes === 0) return res.status(404).json({ error: "Not found" });
-  res.json({ ok: true });
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const info = await db.run(
+      "DELETE FROM questions WHERE id = $1 AND source = 'user' AND author_user_id = $2",
+      [req.params.id, req.userId]
+    );
+    if (info.rowCount === 0) return res.status(404).json({ error: "Not found" });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 // ── POST /api/my-questions/generate-draft ──────────────────────────────────
@@ -206,7 +220,7 @@ Schema:
       system: SYSTEM,
       messages: [{ role: "user", content: userMsg }],
     });
-    logApiCall({
+    await logApiCall({
       userId: req.userId,
       route: "/api/my-questions/generate-draft",
       provider: "openrouter",
@@ -248,7 +262,7 @@ Schema:
 
     res.json({ draft: payload });
   } catch (e) {
-    logApiCall({
+    await logApiCall({
       userId: req.userId,
       route: "/api/my-questions/generate-draft",
       provider: "openrouter",

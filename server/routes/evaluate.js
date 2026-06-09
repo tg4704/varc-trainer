@@ -108,14 +108,15 @@ router.post("/evaluate", authenticate, async (req, res) => {
     return res.status(400).json({ error: "reasoningText must be 500 characters or fewer" });
   }
 
-  const session = db
-    .prepare("SELECT * FROM sessions WHERE id = ? AND user_id = ?")
-    .get(sessionId, req.userId);
+  const session = await db.get(
+    "SELECT * FROM sessions WHERE id = $1 AND user_id = $2",
+    [sessionId, req.userId]
+  );
   if (!session) {
     return res.status(404).json({ error: "Session not found" });
   }
 
-  const q = questionsRepo.findById(questionId);
+  const q = await questionsRepo.findById(questionId);
   if (!q) {
     return res.status(404).json({ error: "Question not found" });
   }
@@ -124,21 +125,20 @@ router.post("/evaluate", authenticate, async (req, res) => {
   const selectedTrap = q.trapIndex != null && selectedOptionIndex === q.trapIndex ? 1 : 0;
 
   // Save attempt BEFORE calling Claude — never lose the attempt if the API fails
-  const result = db
-    .prepare(
-      `INSERT INTO attempts
-         (session_id, question_id, question_type, topic,
-          selected_option_index, correct_option_index, is_correct,
-          trap_option_index, trap_type, selected_trap, skipped,
-          reasoning_text, mode, time_taken_seconds)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`
-    )
-    .run(
+  const result = await db.run(
+    `INSERT INTO attempts
+       (session_id, question_id, question_type, topic,
+        selected_option_index, correct_option_index, is_correct,
+        trap_option_index, trap_type, selected_trap, skipped,
+        reasoning_text, mode, time_taken_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, $11, $12, $13) RETURNING id`,
+    [
       sessionId, questionId, q.type, q.topic,
       selectedOptionIndex, q.correctIndex, isCorrect,
       q.trapIndex, q.trapType, selectedTrap,
-      reasoningText.trim(), mode, timeTakenSeconds ?? null
-    );
+      reasoningText.trim(), mode, timeTakenSeconds ?? null,
+    ]
+  );
 
   const base = {
     isCorrect: isCorrect === 1,
@@ -149,7 +149,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
   };
 
   // Update SR card now that we know the result (Phase 15)
-  try { updateCard(req.userId, questionId, isCorrect === 1); } catch {}
+  try { await updateCard(req.userId, questionId, isCorrect === 1); } catch {}
 
   // Deferred mode: save attempt only, skip Claude call, return basic result.
   // The batch-evaluate endpoint will run Claude after the session ends.
@@ -157,7 +157,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     return res.json({ ...base, deferred: true });
   }
 
-  const attemptId = result.lastInsertRowid;
+  const attemptId = result.lastId;
 
   try {
     const response = await callModel({
@@ -166,7 +166,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     });
 
     // Log API call for admin cost tracking (Phase 9)
-    logApiCall({
+    await logApiCall({
       userId: req.userId,
       route: "/api/attempts/evaluate",
       provider: "openrouter",
@@ -178,21 +178,22 @@ router.post("/evaluate", authenticate, async (req, res) => {
 
     const evaluation = JSON.parse(response.text);
 
-    db.prepare(
+    await db.run(
       `UPDATE attempts SET
-         reasoning_score = ?,
-         reasoning_feedback = ?,
-         correct_explanation = ?,
-         trap_explanation = ?,
-         key_takeaway = ?
-       WHERE id = ?`
-    ).run(
-      evaluation.reasoningScore,
-      evaluation.reasoningFeedback,
-      evaluation.correctExplanation,
-      evaluation.trapExplanation,
-      evaluation.keyTakeaway,
-      attemptId
+         reasoning_score = $1,
+         reasoning_feedback = $2,
+         correct_explanation = $3,
+         trap_explanation = $4,
+         key_takeaway = $5
+       WHERE id = $6`,
+      [
+        evaluation.reasoningScore,
+        evaluation.reasoningFeedback,
+        evaluation.correctExplanation,
+        evaluation.trapExplanation,
+        evaluation.keyTakeaway,
+        attemptId,
+      ]
     );
 
     return res.json({
@@ -206,7 +207,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error("AI provider error:", err.message);
-    logApiCall({
+    await logApiCall({
       userId: req.userId,
       route: "/api/attempts/evaluate",
       provider: "openrouter",

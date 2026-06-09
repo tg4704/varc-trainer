@@ -177,7 +177,7 @@ router.post("/sessions", authenticate, async (req, res) => {
         }],
       });
 
-      logApiCall({
+      await logApiCall({
         userId: req.userId,
         route: "/api/coach/sessions",
         provider: "openrouter",
@@ -197,7 +197,7 @@ router.post("/sessions", authenticate, async (req, res) => {
       break;
     } catch (err) {
       lastError = err.message;
-      logApiCall({
+      await logApiCall({
         userId: req.userId,
         route: "/api/coach/sessions",
         provider: "openrouter",
@@ -214,14 +214,13 @@ router.post("/sessions", authenticate, async (req, res) => {
     });
   }
 
-  const result = db
-    .prepare(
-      `INSERT INTO coach_sessions (user_id, article_text, article_source, article_title, word_count, questions_json)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .run(req.userId, articleText.trim(), articleSource.trim(), articleTitle.trim(), wordCount, JSON.stringify(questions));
+  const result = await db.run(
+    `INSERT INTO coach_sessions (user_id, article_text, article_source, article_title, word_count, questions_json)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [req.userId, articleText.trim(), articleSource.trim(), articleTitle.trim(), wordCount, JSON.stringify(questions)]
+  );
 
-  const coachSessionId = result.lastInsertRowid;
+  const coachSessionId = result.lastId;
 
   res.json({
     coachSession: {
@@ -248,32 +247,33 @@ router.post("/exchange", authenticate, async (req, res) => {
     return res.status(400).json({ error: "questionIndex must be 0–3" });
   }
 
-  const session = db
-    .prepare("SELECT * FROM coach_sessions WHERE id = ? AND user_id = ?")
-    .get(coachSessionId, req.userId);
+  const session = await db.get(
+    "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2",
+    [coachSessionId, req.userId]
+  );
   if (!session) return res.status(404).json({ error: "Coach session not found" });
 
   const questions = JSON.parse(session.questions_json);
   const q = questions[questionIndex];
 
   // Find or create the attempt for this question
-  let attempt = db
-    .prepare("SELECT * FROM coach_attempts WHERE coach_session_id = ? AND question_index = ?")
-    .get(coachSessionId, questionIndex);
+  let attempt = await db.get(
+    "SELECT * FROM coach_attempts WHERE coach_session_id = $1 AND question_index = $2",
+    [coachSessionId, questionIndex]
+  );
 
   if (!attempt) {
     const isCorrect = selectedOptionIndex === q.correctIndex ? 1 : 0;
     const selectedTrap = selectedOptionIndex === q.trapIndex ? 1 : 0;
-    const r = db
-      .prepare(
-        `INSERT INTO coach_attempts
-           (coach_session_id, question_index, question_type, selected_option_index,
-            correct_option_index, is_correct, selected_trap, trap_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(coachSessionId, questionIndex, q.type, selectedOptionIndex,
-           q.correctIndex, isCorrect, selectedTrap, q.trapType);
-    attempt = db.prepare("SELECT * FROM coach_attempts WHERE id = ?").get(r.lastInsertRowid);
+    const r = await db.run(
+      `INSERT INTO coach_attempts
+         (coach_session_id, question_index, question_type, selected_option_index,
+          correct_option_index, is_correct, selected_trap, trap_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [coachSessionId, questionIndex, q.type, selectedOptionIndex,
+       q.correctIndex, isCorrect, selectedTrap, q.trapType]
+    );
+    attempt = await db.get("SELECT * FROM coach_attempts WHERE id = $1", [r.lastId]);
   }
 
   if (attempt.is_complete) {
@@ -305,7 +305,7 @@ router.post("/exchange", authenticate, async (req, res) => {
       }],
     });
 
-    logApiCall({
+    await logApiCall({
       userId: req.userId,
       route: "/api/coach/exchange",
       provider: "openrouter",
@@ -322,19 +322,23 @@ router.post("/exchange", authenticate, async (req, res) => {
 
     if (isReveal) {
       // Debrief complete — save verdict and mark attempt done
-      db.prepare(
+      await db.run(
         `UPDATE coach_attempts
-           SET conversation_json = ?, exchange_count = ?, final_verdict = ?, is_complete = 1
-         WHERE id = ?`
-      ).run(JSON.stringify(conversation), newExchangeCount, tutorMessage, attempt.id);
+           SET conversation_json = $1, exchange_count = $2, final_verdict = $3, is_complete = 1
+         WHERE id = $4`,
+        [JSON.stringify(conversation), newExchangeCount, tutorMessage, attempt.id]
+      );
 
       // Check if all 4 questions are now complete; if so, mark session complete
-      const completedCount = db
-        .prepare("SELECT COUNT(*) as n FROM coach_attempts WHERE coach_session_id = ? AND is_complete = 1")
-        .get(coachSessionId).n;
-      if (completedCount >= 4) {
-        db.prepare("UPDATE coach_sessions SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = ?")
-          .run(coachSessionId);
+      const completedRow = await db.get(
+        "SELECT COUNT(*) as n FROM coach_attempts WHERE coach_session_id = $1 AND is_complete = 1",
+        [coachSessionId]
+      );
+      if (parseInt(completedRow.n, 10) >= 4) {
+        await db.run(
+          "UPDATE coach_sessions SET status = 'completed', completed_at = NOW() WHERE id = $1",
+          [coachSessionId]
+        );
       }
 
       return res.json({
@@ -350,9 +354,10 @@ router.post("/exchange", authenticate, async (req, res) => {
       });
     }
 
-    db.prepare(
-      "UPDATE coach_attempts SET conversation_json = ?, exchange_count = ? WHERE id = ?"
-    ).run(JSON.stringify(conversation), newExchangeCount, attempt.id);
+    await db.run(
+      "UPDATE coach_attempts SET conversation_json = $1, exchange_count = $2 WHERE id = $3",
+      [JSON.stringify(conversation), newExchangeCount, attempt.id]
+    );
 
     return res.json({
       tutorMessage,
@@ -362,7 +367,7 @@ router.post("/exchange", authenticate, async (req, res) => {
 
   } catch (err) {
     console.error("Coach exchange error:", err.message);
-    logApiCall({
+    await logApiCall({
       userId: req.userId,
       route: "/api/coach/exchange",
       provider: "openrouter",
@@ -375,16 +380,19 @@ router.post("/exchange", authenticate, async (req, res) => {
 
 // ── GET /api/coach/sessions/:id — full session data ───────────────────────────
 
-router.get("/sessions/:id", authenticate, (req, res) => {
-  const session = db
-    .prepare("SELECT * FROM coach_sessions WHERE id = ? AND user_id = ?")
-    .get(req.params.id, req.userId);
+router.get("/sessions/:id", authenticate, async (req, res, next) => {
+  try {
+  const session = await db.get(
+    "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2",
+    [req.params.id, req.userId]
+  );
   if (!session) return res.status(404).json({ error: "Coach session not found" });
 
   const questions = JSON.parse(session.questions_json);
-  const attempts = db
-    .prepare("SELECT * FROM coach_attempts WHERE coach_session_id = ? ORDER BY question_index")
-    .all(session.id);
+  const attempts = await db.all(
+    "SELECT * FROM coach_attempts WHERE coach_session_id = $1 ORDER BY question_index",
+    [session.id]
+  );
 
   // For completed attempts, expose answer data; for active ones, strip it
   const enrichedAttempts = attempts.map((a) => ({
@@ -418,13 +426,14 @@ router.get("/sessions/:id", authenticate, (req, res) => {
     },
     attempts: enrichedAttempts,
   });
+  } catch (e) { next(e); }
 });
 
 // ── GET /api/coach/history — past sessions with aggregate stats ───────────────
 
-router.get("/history", authenticate, (req, res) => {
-  const sessions = db
-    .prepare(
+router.get("/history", authenticate, async (req, res, next) => {
+  try {
+    const sessions = await db.all(
       `SELECT cs.id, cs.article_title, cs.article_source, cs.word_count, cs.status,
               cs.created_at, cs.completed_at,
               COUNT(ca.id) as attempted,
@@ -432,20 +441,21 @@ router.get("/history", authenticate, (req, res) => {
               AVG(ca.exchange_count) as avg_exchanges
        FROM coach_sessions cs
        LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id AND ca.is_complete = 1
-       WHERE cs.user_id = ?
+       WHERE cs.user_id = $1
        GROUP BY cs.id
-       ORDER BY cs.created_at DESC`
-    )
-    .all(req.userId);
+       ORDER BY cs.created_at DESC`,
+      [req.userId]
+    );
 
-  res.json({ sessions });
+    res.json({ sessions });
+  } catch (e) { next(e); }
 });
 
 // ── GET /api/coach/stats — aggregate stats for Dashboard Coach tab ─────────────
 
-router.get("/stats", authenticate, (req, res) => {
-  const row = db
-    .prepare(
+router.get("/stats", authenticate, async (req, res, next) => {
+  try {
+    const row = await db.get(
       `SELECT
          COUNT(DISTINCT cs.id) as total_sessions,
          COUNT(ca.id) as total_questions,
@@ -453,103 +463,105 @@ router.get("/stats", authenticate, (req, res) => {
          AVG(ca.exchange_count) as avg_exchanges
        FROM coach_sessions cs
        LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id AND ca.is_complete = 1
-       WHERE cs.user_id = ?`
-    )
-    .get(req.userId);
+       WHERE cs.user_id = $1`,
+      [req.userId]
+    );
 
-  const byType = db
-    .prepare(
+    const byType = await db.all(
       `SELECT question_type, COUNT(*) as attempts, SUM(is_correct) as correct
        FROM coach_attempts
-       WHERE coach_session_id IN (SELECT id FROM coach_sessions WHERE user_id = ?)
+       WHERE coach_session_id IN (SELECT id FROM coach_sessions WHERE user_id = $1)
          AND is_complete = 1
-       GROUP BY question_type`
-    )
-    .all(req.userId);
+       GROUP BY question_type`,
+      [req.userId]
+    );
 
-  const recentSessions = db
-    .prepare(
+    const recentSessions = await db.all(
       `SELECT cs.id, cs.article_title, cs.article_source, cs.created_at,
               COUNT(ca.id) as attempted, SUM(ca.is_correct) as correct,
               AVG(ca.exchange_count) as avg_exchanges
        FROM coach_sessions cs
        LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id AND ca.is_complete = 1
-       WHERE cs.user_id = ?
+       WHERE cs.user_id = $1
        GROUP BY cs.id
        ORDER BY cs.created_at DESC
-       LIMIT 10`
-    )
-    .all(req.userId);
+       LIMIT 10`,
+      [req.userId]
+    );
 
-  res.json({
-    totalSessions: row.total_sessions || 0,
-    totalQuestions: row.total_questions || 0,
-    totalCorrect: row.total_correct || 0,
-    avgExchanges: row.avg_exchanges ? Math.round(row.avg_exchanges * 10) / 10 : null,
-    accuracy: row.total_questions ? row.total_correct / row.total_questions : null,
-    byType: byType.reduce((acc, r) => {
-      acc[r.question_type] = { attempts: r.attempts, correct: r.correct };
-      return acc;
-    }, {}),
-    recentSessions,
-  });
+    res.json({
+      totalSessions: parseInt(row.total_sessions, 10) || 0,
+      totalQuestions: parseInt(row.total_questions, 10) || 0,
+      totalCorrect: parseInt(row.total_correct, 10) || 0,
+      avgExchanges: row.avg_exchanges ? Math.round(row.avg_exchanges * 10) / 10 : null,
+      accuracy: row.total_questions ? row.total_correct / row.total_questions : null,
+      byType: byType.reduce((acc, r) => {
+        acc[r.question_type] = { attempts: r.attempts, correct: r.correct };
+        return acc;
+      }, {}),
+      recentSessions,
+    });
+  } catch (e) { next(e); }
 });
 
 // ── POST /api/coach/sessions/:id/save-to-bank ────────────────────────────────
 // Copies all 4 questions from a Coach session into the user's personal question
 // bank (same `questions` table as user-authored questions).  Idempotent — safe
-// to call multiple times; already-saved questions are skipped via INSERT OR IGNORE.
-router.post("/sessions/:id/save-to-bank", authenticate, (req, res) => {
-  const coachSessionId = parseInt(req.params.id, 10);
-  if (!coachSessionId) return res.status(400).json({ error: "invalid session id" });
+// to call multiple times; already-saved questions are skipped via INSERT ON CONFLICT DO NOTHING.
+router.post("/sessions/:id/save-to-bank", authenticate, async (req, res, next) => {
+  try {
+    const coachSessionId = parseInt(req.params.id, 10);
+    if (!coachSessionId) return res.status(400).json({ error: "invalid session id" });
 
-  const session = db
-    .prepare("SELECT * FROM coach_sessions WHERE id = ? AND user_id = ?")
-    .get(coachSessionId, req.userId);
-  if (!session) return res.status(404).json({ error: "Coach session not found" });
-
-  const questions = JSON.parse(session.questions_json);
-  const now = new Date().toISOString();
-  const saved = [];
-  const skipped = [];
-
-  const insertStmt = db.prepare(
-    `INSERT OR IGNORE INTO questions
-       (id, topic, paragraph, question, type, options_json,
-        correct_index, trap_index, trap_type, source_lines,
-        source, author_user_id, is_active, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'coach', ?, 1, ?)`
-  );
-
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const id = `coach_${coachSessionId}_${i}`;
-    const result = insertStmt.run(
-      id,
-      "humanities",           // default topic — user can edit in /my-questions
-      session.article_text,
-      q.question,
-      q.type,
-      JSON.stringify(q.options),
-      q.correctIndex,
-      q.trapIndex,
-      q.trapType,
-      q.sourceLines,
-      req.userId,
-      now
+    const session = await db.get(
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2",
+      [coachSessionId, req.userId]
     );
-    if (result.changes > 0) saved.push(id);
-    else skipped.push(id);
-  }
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
 
-  res.json({
-    saved: saved.length,
-    skipped: skipped.length,
-    message:
-      saved.length > 0
-        ? `${saved.length} question${saved.length > 1 ? "s" : ""} saved to your question bank.`
-        : "Questions were already in your bank.",
-  });
+    const questions = JSON.parse(session.questions_json);
+    const now = new Date().toISOString();
+    const saved = [];
+    const skipped = [];
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const id = `coach_${coachSessionId}_${i}`;
+      const result = await db.run(
+        `INSERT INTO questions
+           (id, topic, paragraph, question, type, options_json,
+            correct_index, trap_index, trap_type, source_lines,
+            source, author_user_id, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'coach', $11, 1, $12)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          id,
+          "humanities",           // default topic — user can edit in /my-questions
+          session.article_text,
+          q.question,
+          q.type,
+          JSON.stringify(q.options),
+          q.correctIndex,
+          q.trapIndex,
+          q.trapType,
+          q.sourceLines,
+          req.userId,
+          now,
+        ]
+      );
+      if (result.rowCount > 0) saved.push(id);
+      else skipped.push(id);
+    }
+
+    res.json({
+      saved: saved.length,
+      skipped: skipped.length,
+      message:
+        saved.length > 0
+          ? `${saved.length} question${saved.length > 1 ? "s" : ""} saved to your question bank.`
+          : "Questions were already in your bank.",
+    });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

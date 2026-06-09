@@ -64,6 +64,12 @@ if (fs.existsSync(distPath)) {
   });
 }
 
+// ── Global async error handler ────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: err.message || "Internal server error" });
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   logger.info(`VARC Trainer server started`, { port: PORT, env: process.env.NODE_ENV || "development" });

@@ -17,27 +17,26 @@ function subtractDays(dateStr, n) {
 }
 
 // Build a map of { 'YYYY-MM-DD': count } for the user's non-skipped attempts.
-function buildDayMap(userId) {
-  const rows = db
-    .prepare(
-      `SELECT date(a.created_at) AS day, COUNT(*) AS cnt
-       FROM attempts a
-       JOIN sessions s ON s.id = a.session_id
-       WHERE s.user_id = ? AND a.skipped = 0
-       GROUP BY day`
-    )
-    .all(userId);
+async function buildDayMap(userId) {
+  const rows = await db.all(
+    `SELECT DATE(a.created_at) AS day, COUNT(*) AS cnt
+     FROM attempts a
+     JOIN sessions s ON s.id = a.session_id
+     WHERE s.user_id = $1 AND a.skipped = 0
+     GROUP BY DATE(a.created_at)`,
+    [userId]
+  );
   const map = {};
-  for (const r of rows) map[r.day] = r.cnt;
+  for (const r of rows) map[r.day] = parseInt(r.cnt, 10);
   return map;
 }
 
 // Compute the current streak and today's progress.
-function computeStreak(userId) {
-  const user = db.prepare("SELECT daily_goal FROM users WHERE id = ?").get(userId);
+async function computeStreak(userId) {
+  const user = await db.get("SELECT daily_goal FROM users WHERE id = $1", [userId]);
   const dailyGoal = user?.daily_goal ?? 10;
 
-  const dayMap = buildDayMap(userId);
+  const dayMap = await buildDayMap(userId);
   const today = todayUTC();
   const yesterday = subtractDays(today, 1);
 
@@ -67,19 +66,23 @@ function computeStreak(userId) {
 }
 
 // GET /api/streak
-router.get("/", authenticate, (req, res) => {
-  res.json(computeStreak(req.userId));
+router.get("/", authenticate, async (req, res, next) => {
+  try {
+    res.json(await computeStreak(req.userId));
+  } catch (e) { next(e); }
 });
 
 // PATCH /api/streak/goal — update the user's daily goal
-router.patch("/goal", authenticate, (req, res) => {
-  const { dailyGoal } = req.body || {};
-  const n = parseInt(dailyGoal, 10);
-  if (!n || n < 1 || n > 50) {
-    return res.status(400).json({ error: "dailyGoal must be between 1 and 50" });
-  }
-  db.prepare("UPDATE users SET daily_goal = ? WHERE id = ?").run(n, req.userId);
-  res.json(computeStreak(req.userId));
+router.patch("/goal", authenticate, async (req, res, next) => {
+  try {
+    const { dailyGoal } = req.body || {};
+    const n = parseInt(dailyGoal, 10);
+    if (!n || n < 1 || n > 50) {
+      return res.status(400).json({ error: "dailyGoal must be between 1 and 50" });
+    }
+    await db.run("UPDATE users SET daily_goal = $1 WHERE id = $2", [n, req.userId]);
+    res.json(await computeStreak(req.userId));
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

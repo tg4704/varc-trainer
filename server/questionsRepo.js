@@ -30,30 +30,30 @@ function hydrate(row) {
 }
 
 // Lookup by id. Returns null if not found or inactive.
-function findById(id) {
-  const row = db
-    .prepare("SELECT * FROM questions WHERE id = ? AND is_active = 1")
-    .get(id);
+async function findById(id) {
+  const row = await db.get(
+    "SELECT * FROM questions WHERE id = $1 AND is_active = 1",
+    [id]
+  );
   return hydrate(row);
 }
 
 // All active questions visible to a given user:
 //   - all seed questions
 //   - that user's own user-created questions (Phase 10)
-function listForUser(userId) {
-  const rows = db
-    .prepare(
-      `SELECT * FROM questions
-       WHERE is_active = 1
-         AND (source = 'seed' OR author_user_id = ?)`
-    )
-    .all(userId);
+async function listForUser(userId) {
+  const rows = await db.all(
+    `SELECT * FROM questions
+     WHERE is_active = 1
+       AND (source = 'seed' OR author_user_id = $1)`,
+    [userId]
+  );
   return rows.map(hydrate);
 }
 
 // All active questions (admin/global view; used by dashboard recent-attempts).
-function listAllActive() {
-  const rows = db.prepare("SELECT * FROM questions WHERE is_active = 1").all();
+async function listAllActive() {
+  const rows = await db.all("SELECT * FROM questions WHERE is_active = 1");
   return rows.map(hydrate);
 }
 

@@ -4,7 +4,7 @@
 const db = require("../db");
 const { estimateCost } = require("./pricing");
 
-function logApiCall({
+async function logApiCall({
   userId = null,
   route,
   provider,
@@ -15,11 +15,12 @@ function logApiCall({
 }) {
   try {
     const cost = estimateCost(model, inputTokens, outputTokens);
-    db.prepare(
+    await db.run(
       `INSERT INTO api_calls
          (user_id, route, provider, model, input_tokens, output_tokens, est_cost_usd, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(userId, route, provider, model, inputTokens, outputTokens, cost, status);
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [userId, route, provider, model, inputTokens, outputTokens, cost, status]
+    );
   } catch (e) {
     console.warn("[apiLog] failed to log api call:", e.message);
   }
