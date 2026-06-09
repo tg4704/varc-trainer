@@ -10,7 +10,7 @@ import VoiceMicButton from "../components/VoiceMicButton.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 import { coach } from "../api.js";
-import useVoiceInput from "../hooks/useVoiceInput.js";
+import { useVoiceInput } from "../hooks/useVoiceInput.js";
 
 const LETTERS = ["A", "B", "C", "D"];
 const MAX_EXCHANGE = 4;
