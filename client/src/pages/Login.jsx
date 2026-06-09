@@ -20,8 +20,12 @@ export default function Login() {
     setError(null);
     setBusy(true);
     try {
-      await login(identifier.trim(), password);
-      navigate(from, { replace: true });
+      const result = await login(identifier.trim(), password);
+      if (result.requiresVerification) {
+        navigate(`/verify-email?email=${encodeURIComponent(result.email)}`);
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -52,6 +56,11 @@ export default function Login() {
             autoComplete="current-password"
             required
           />
+          <div className="mt-1 text-right">
+            <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+              Forgot password?
+            </Link>
+          </div>
         </Field>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

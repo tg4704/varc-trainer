@@ -8,6 +8,9 @@ import ThemeToggle from "./components/ThemeToggle.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+import VerifyEmail from "./pages/VerifyEmail.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import SessionSetup from "./pages/SessionSetup.jsx";
 import Practice from "./pages/Practice.jsx";
 import Results from "./pages/Results.jsx";
@@ -103,6 +106,9 @@ function AppShell() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/setup"     element={<ProtectedRoute><SessionSetup /></ProtectedRoute>} />
           <Route path="/practice"  element={<ProtectedRoute><Practice /></ProtectedRoute>} />
           <Route path="/results"        element={<ProtectedRoute><Results /></ProtectedRoute>} />

@@ -24,8 +24,12 @@ export default function Register() {
     }
     setBusy(true);
     try {
-      await register(username.trim(), email.trim(), password);
-      navigate("/setup", { replace: true });
+      const result = await register(username.trim(), email.trim(), password);
+      if (result.requiresVerification) {
+        navigate(`/verify-email?email=${encodeURIComponent(result.email)}`);
+      } else {
+        navigate("/setup", { replace: true });
+      }
     } catch (err) {
       setError(err.message);
     } finally {

@@ -30,17 +30,29 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(identifier, password) {
-    const { token, user } = await api.login({ identifier, password });
-    api.setToken(token);
-    setUser(user);
-    return user;
+    const result = await api.login({ identifier, password });
+    if (result.requiresVerification) {
+      return { requiresVerification: true, email: result.email };
+    }
+    api.setToken(result.token);
+    setUser(result.user);
+    return { requiresVerification: false };
   }
 
   async function register(username, email, password) {
-    const { token, user } = await api.register({ username, email, password });
+    const result = await api.register({ username, email, password });
+    if (result.requiresVerification) {
+      return { requiresVerification: true, email: result.email };
+    }
+    api.setToken(result.token);
+    setUser(result.user);
+    return { requiresVerification: false };
+  }
+
+  // Called after OTP verification or password reset succeeds
+  function loginWithToken(token, user) {
     api.setToken(token);
     setUser(user);
-    return user;
   }
 
   function logout() {
@@ -50,7 +62,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, loginWithToken }}>
       {children}
     </AuthContext.Provider>
   );

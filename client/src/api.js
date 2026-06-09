@@ -43,6 +43,18 @@ export function fetchMe() {
 export function changePassword(payload) {
   return request("/api/auth/password", { method: "PATCH", body: JSON.stringify(payload) });
 }
+export function verifyEmail(payload) {
+  return request("/api/auth/verify-email", { method: "POST", body: JSON.stringify(payload) });
+}
+export function resendOtp(payload) {
+  return request("/api/auth/resend-otp", { method: "POST", body: JSON.stringify(payload) });
+}
+export function forgotPassword(payload) {
+  return request("/api/auth/forgot-password", { method: "POST", body: JSON.stringify(payload) });
+}
+export function resetPassword(payload) {
+  return request("/api/auth/reset-password", { method: "POST", body: JSON.stringify(payload) });
+}
 
 // ── Sessions ──────────────────────────────────────────
 export function createSession(config) {

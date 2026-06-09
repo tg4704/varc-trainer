@@ -115,8 +115,24 @@ function ensureColumn(table, column, definition) {
 }
 ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
 ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");  // Phase 16
+ensureColumn("users", "email_verified", "INTEGER NOT NULL DEFAULT 1"); // 1 = verified (existing users grandfathered in)
 ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
 ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
+
+// ── OTP tokens for email verification + password reset ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS otp_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL,         -- SHA-256 of the 6-digit code (never store plain)
+    purpose TEXT NOT NULL,            -- 'email_verification' | 'password_reset'
+    expires_at TEXT NOT NULL,         -- ISO datetime
+    attempts INTEGER NOT NULL DEFAULT 0,
+    used INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
 
 // ── Phase 15: Spaced repetition cards ──
 db.exec(`
