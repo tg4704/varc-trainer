@@ -13,7 +13,7 @@ The original phased build spec is in [`varc_trainer_build_prompt.md`](varc_train
 - **Frontend**: React (Vite) + Tailwind CSS + React Router v6 — lives in `client/`
 - **UI system** (Phase 8.5): shadcn/ui-style primitives in `client/src/components/ui/`, built on Radix Slot + `class-variance-authority` + `tailwind-merge`. Design tokens via CSS variables in `client/src/index.css` (light + dark). Icons from `lucide-react`. UI font Inter, reading font Lora.
 - **Backend**: Node.js + Express — lives in `server/`
-- **Database**: SQLite via `better-sqlite3` (file `varc.db` at repo root, gitignored)
+- **Database**: PostgreSQL via `pg` (node-postgres) — `DATABASE_URL` env var; Railway Postgres in production; local Postgres in dev
 - **Auth**: bcryptjs (password hashing) + JSON Web Tokens (`jsonwebtoken`)
 - **AI**: Anthropic Claude API (`claude-haiku-4-5`) — reasoning evaluation only, never used to determine correct answers
 - **Language**: Plain JavaScript throughout, no TypeScript
@@ -40,7 +40,7 @@ There is no test runner configured yet. `.claude/launch.json` defines the `clien
 ```
 server/
 ├── index.js                ← Express app; mounts all /api routes
-├── db.js                   ← SQLite init, migrations, seed + admin bootstrap
+├── db.js                   ← Postgres (pg Pool) init, migrations, seed + admin bootstrap
 ├── auth.js                 ← signToken() + authenticate + requireAdmin middleware
 ├── questionsRepo.js        ← shared DB accessor for questions (Phase 8)
 ├── data/questions.js       ← 25 seed questions (SEED SOURCE only; read at first-run seed,
@@ -205,6 +205,15 @@ Done: **Phase 1** (backend), **Phase 2** (frontend scaffold), **Phase 3** (core 
 **Phase 14**: AI Reading Coach — sub-phases A+B+C+D built together. Users paste any 300–1200 word article at `/coach`; Claude Haiku generates 4 CAT-style questions (inference, tone, title, detail) with validation + 1 retry. Practice page (`/coach/practice`) is a 3-panel layout: article (left, sticky, highlighted after debrief) + question/options (right top) + Socratic chat (right bottom). Each question has a Socratic debrief: exchange 1 = tutor probe, exchanges 2–3 = challenge/validate, exchange 4 = full reveal; max 4 exchanges. "I give up" shortcut jumps straight to reveal. `POST /api/coach/exchange` runs Claude with full Socratic system prompt + conversation history; sensitive fields (correctIndex, trapIndex, sourceLines) are kept server-side until debrief is complete. Session summary at `/coach/summary` shows score, avg exchanges needed, and per-question tutor verdict. Dashboard gets a "Reading Coach" tab with accuracy-by-type chart and recent-sessions list (lazy-loaded via `GET /api/coach/stats`). DB: `coach_sessions` + `coach_attempts` tables. **AI model note**: all AI calls currently use `claude-haiku-4-5`. A multi-model provider abstraction (cheap model for free tier, Haiku/Sonnet for paid) is planned for Phase 17 (monetization) — see `ROADMAP.md` Phase 17 and the "Multi-provider tiered" locked decision.
 **Phase 15**: spaced repetition — SM-2-style bucketed scheduling. `sr_cards` table tracks per-user per-question state (bucket 0–4, due_at, last_seen_at, total_attempts, total_correct). Bucket intervals: [1, 3, 7, 14, 30] days. Rules: first correct → no card; first wrong → card due tomorrow; subsequent answers → bucket advances (correct) or resets to 0 (wrong). `server/sr.js` exports `updateCard`, `getDueCards`, `getDueCount`, `getStats`. `server/routes/sr.js` exposes `GET /api/sr/queue` (dueCount + ordered questionIds) and `GET /api/sr/stats` (totalCards, dueNow, graduated, avgBucket). Both `attempts.js` and `evaluate.js` call `updateCard` on every non-skipped attempt. Review sessions: `session_type='review'` column (default `'practice'`) in sessions table; `GET /api/questions/next` branches into SR mode for review sessions — serves due cards ordered by due_at ASC, ends early if queue is empty. SessionSetup has a "Session type" selector (Practice / Spaced Repetition Review) with live due-count label; selecting Review auto-fills question count. Practice page shows an amber "🔁 Spaced repetition review" banner for review sessions. Dashboard practice tab shows SR widget (total cards, due now, graduated, progress bar, "Review N cards →" CTA) when the user has at least one SR card.
 **Phase 16**: streaks & daily goals. `users.daily_goal` column (default 10, range 1–50). `server/routes/streak.js`: `GET /api/streak` (streak, todayCount, dailyGoal, atRisk) + `PATCH /api/streak/goal`. Streak = consecutive calendar days (UTC) where non-skipped attempts ≥ daily_goal; first-wrong card creates no streak entry, first correct skips. `atRisk = streak > 0 && todayCount < dailyGoal`. `client/src/components/StreakWidget.jsx`: circular SVG progress ring (today vs goal) + flame streak counter + at-risk amber nudge + inline goal stepper; supports `compact` and `showEditor` props. Widget shown on: Home page (full layout, logged-in only), Dashboard practice tab (compact), Profile page (full + editor).
+**Post-Phase-16 additional features** (committed on top of Phase 16):
+- **Coach save-to-bank**: `POST /api/coach/sessions/:id/save-to-bank` saves coach-generated questions as `source='coach'` in the shared `questions` table. CoachSummary page has a "Save questions" card. Idempotent via `ON CONFLICT DO NOTHING`.
+- **Voice input in Socratic debrief**: `useVoiceInput` hook integrated into `CoachPractice.jsx` chat input; `VoiceMicButton` beside the chat textarea; live interim preview overlay; voice stops on `nextQuestion()`.
+- **Option lock-in**: In Analysis mode, options are disabled (`disabled={... || selected !== null}`) once the user clicks one — prevents accidental re-selection.
+- **Question navigator + history review**: `QuestionNavBar` component (colored circles) above the question. Flagged slots shown with amber ring (🚩 button). `HistoryView` component lets user jump back to any completed question (read-only with full feedback). History is pushed on skip and answer. `questionHistory`, `historyViewIdx`, `flaggedSlots` state in `Practice.jsx`.
+- **Batch AI evaluation**: `POST /api/sessions/:id/batch-evaluate` sends a single Claude call with all N pending reasonings in one prompt returning a JSON array. Fallback to parallel per-question calls if parse fails.
+- **Email verification + forgot password**: Full OTP flow via Resend. `otp_tokens` table. Register → `/verify-email` (6-box OTP). Login blocked for unverified users. `POST /forgot-password` + `POST /reset-password`. Dev mode logs OTP to console when no `RESEND_API_KEY`. Existing users grandfathered as verified (`email_verified DEFAULT 1`). `server/email.js` + new pages: `VerifyEmail.jsx`, `ForgotPassword.jsx`, `ResetPassword.jsx`.
+- **PostgreSQL migration**: Database layer fully migrated from SQLite/better-sqlite3 to PostgreSQL (`pg` Pool). `server/db.js` provides async `db.get/all/run/exec/transaction` wrappers. All 14 server files converted: `?` → `$1/$2`, `INSERT OR IGNORE` → `ON CONFLICT DO NOTHING`, `AUTOINCREMENT` → `SERIAL`, `LIKE` → `ILIKE`, `CURRENT_TIMESTAMP` → `NOW()`. `DATABASE_URL` env var required; Railway Postgres in production.
+
 Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch). Pages still on legacy styling: Results, Dashboard, Profile (re-skinned in Phase 19 polish pass).
 
 **Post-Phase-16 UX fixes** (applied on top of Phase 16):
@@ -223,13 +232,10 @@ Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch).
 - **CoachPractice type badge**: Also hidden until verdict is revealed (same logic as Practice).
 
 **Deferred features** (documented in `ROADMAP.md` "Deferred / Backlog Items" section):
-- Practice per-question submit flow (timer stops on option selection; reasoning box appears after)
-- Next/previous question navigation + status sidebar in practice
-- Batch AI evaluation (single prompt for whole session instead of N separate calls)
-- Hide question type/topic during active sessions (reveal in feedback only)
-- Voice input in Socratic debrief (Coach)
-- Coach questions → user question bank (with admin promotion to global)
-- "View answer" toggle in My Questions editor
+- Practice per-question submit flow (timer stops on option selection; reasoning box appears after) ← partially done (lock-in done; reasoning-appears-after still deferred)
+- Coach questions → user question bank admin promotion to global pool
+- Google OAuth ("Continue with Google" — email signup stays as primary)
+- Mobile OTP verification (SMS via Twilio etc. — deferred, costs money)
 
 **Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
 
@@ -238,9 +244,12 @@ Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch).
 ```
 ANTHROPIC_API_KEY=...                    # Phase 4
 PORT=3001
-JWT_SECRET=...                            # change in production
-ADMIN_USERNAMES=tarun,priya                # Phase 9 — comma-separated; auto-promote on startup
-ENABLE_AI_AUTHORING=true                   # Phase 10 — set 'false' to disable AI question generation
+JWT_SECRET=...                           # change in production
+DATABASE_URL=postgresql://...            # Railway Postgres (required — no SQLite fallback)
+ADMIN_USERNAMES=tarun,priya              # Phase 9 — comma-separated; auto-promote on startup
+ENABLE_AI_AUTHORING=true                 # Phase 10 — set 'false' to disable AI question generation
+RESEND_API_KEY=...                       # Email OTP (optional in dev — logs to console if absent)
+RESEND_FROM_EMAIL=noreply@yourdomain.com # Sender address for OTP emails
 ```
 
 In production, the frontend uses `VITE_API_URL` to point at the deployed backend instead of the dev proxy.
