@@ -11,8 +11,9 @@ function fmtDate(s) {
   return new Date(s).toLocaleString();
 }
 function fmtUsd(n) {
-  if (n == null) return "—";
-  if (n < 0.01) return `$${(n || 0).toFixed(4)}`;
+  n = Number(n);
+  if (!Number.isFinite(n)) return "—";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
 }
 

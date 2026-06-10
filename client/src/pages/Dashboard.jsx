@@ -92,7 +92,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
       </div>
     );
   }
-  if (!data || data.totalAttempts === 0) {
+  if (!data || Number(data.totalAttempts) === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-bold text-slate-900">No attempts yet</h1>
@@ -181,7 +181,7 @@ function CoachTab({ stats, loading }) {
       {[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-slate-100" />)}
     </div>
   );
-  if (!stats || stats.totalSessions === 0) return (
+  if (!stats || Number(stats.totalSessions) === 0) return (
     <div className="mt-12 text-center">
       <p className="text-slate-500 text-sm">No Coach sessions yet.</p>
       <Link
@@ -212,7 +212,7 @@ function CoachTab({ stats, loading }) {
       </div>
 
       {/* By question type */}
-      {Object.keys(stats.byType).length > 0 && (
+      {Object.keys(stats.byType || {}).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-4">Accuracy by question type</h2>
           <div className="space-y-3">
@@ -270,7 +270,7 @@ function CoachTab({ stats, loading }) {
 // ── Row 1 ──────────────────────────────────────────────
 function HeaderStats({ data }) {
   const avg =
-    data.avgReasoningScore != null ? `${data.avgReasoningScore.toFixed(1)}/5` : "—";
+    data.avgReasoningScore != null ? `${Number(data.avgReasoningScore).toFixed(1)}/5` : "—";
   const cards = [
     ["Questions Answered", String(data.answeredCount)],
     ["Accuracy", pct(data.accuracy)],
@@ -414,7 +414,7 @@ function TopicAccuracy({ byTopic }) {
 function WeakestArea({ data }) {
   if (!data.weakestType) return null;
   const t = (data.byType || {})[data.weakestType];
-  const avg = t?.avgReasoningScore != null ? `${t.avgReasoningScore.toFixed(1)}/5` : "not yet scored";
+  const avg = t?.avgReasoningScore != null ? `${Number(t.avgReasoningScore).toFixed(1)}/5` : "not yet scored";
   return (
     <section className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5">
       <p className="text-sm text-amber-900">

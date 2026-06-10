@@ -759,33 +759,28 @@ export default function Practice() {
 
           {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-          {/* Submit reasoning / Skip buttons — only when locked & no feedback yet */}
+          {/* Submit reasoning button — only when locked & no feedback yet.
+              No Skip here: the answer is already locked, so the user must submit. */}
           {cs.locked && !fb && (
             <div className="mt-4">
-              <div className="flex gap-3">
-                <Button className="flex-1" size="lg"
-                  disabled={reasoningLen > REASONING_MAX || cs.submitting || cs.isSkipping}
-                  onClick={handleSubmit}>
-                  {cs.submitting ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                      {isDeferred(session) ? "Saving…" : reasoningLen > 0 ? "Analyzing…" : "Submitting…"}
-                    </>
-                  ) : reasoningLen > REASONING_MAX ? (
-                    `Too long (${reasoningLen}/${REASONING_MAX})`
-                  ) : isDeferred(session) ? (
-                    "Submit Answer"
-                  ) : reasoningLen > 0 ? (
-                    "Evaluate My Reasoning"
-                  ) : (
-                    "Submit (No AI Feedback)"
-                  )}
-                </Button>
-                <Button variant="outline" size="lg" disabled={cs.submitting || cs.isSkipping}
-                  onClick={() => doSkip(session, currentIdx)}>
-                  {cs.isSkipping ? "Skipping…" : "Skip"}
-                </Button>
-              </div>
+              <Button className="w-full" size="lg"
+                disabled={reasoningLen > REASONING_MAX || cs.submitting || cs.isSkipping}
+                onClick={handleSubmit}>
+                {cs.submitting ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                    {isDeferred(session) ? "Saving…" : reasoningLen > 0 ? "Analyzing…" : "Submitting…"}
+                  </>
+                ) : reasoningLen > REASONING_MAX ? (
+                  `Too long (${reasoningLen}/${REASONING_MAX})`
+                ) : isDeferred(session) ? (
+                  "Submit Answer"
+                ) : reasoningLen > 0 ? (
+                  "Evaluate My Reasoning"
+                ) : (
+                  "Submit (No AI Feedback)"
+                )}
+              </Button>
               {cs.submitting && isDeferred(session) && <p className="mt-2 text-center text-xs text-muted-foreground">Saving your answer…</p>}
               {cs.submitting && !isDeferred(session) && reasoningLen > 0 && <p className="mt-2 text-center text-xs text-muted-foreground">Analyzing your reasoning…</p>}
             </div>

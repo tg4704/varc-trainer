@@ -3,11 +3,12 @@ import { admin } from "../../api.js";
 import { Card, CardContent } from "../../components/ui/card.jsx";
 
 function fmtUsd(n) {
-  if (n == null) return "—";
-  if (Math.abs(n) < 0.01) return `$${(n || 0).toFixed(4)}`;
+  n = Number(n);
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n) < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
 }
-function fmtNum(n) { return (n || 0).toLocaleString(); }
+function fmtNum(n) { return (Number(n) || 0).toLocaleString(); }
 
 export default function AdminCosts() {
   const [data, setData] = useState(null);

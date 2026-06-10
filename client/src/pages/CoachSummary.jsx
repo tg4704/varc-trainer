@@ -48,7 +48,7 @@ export default function CoachSummary() {
   const correct = attempts.filter((a) => a.is_correct).length;
   const totalAttempted = attempts.length;
   const avgExchanges = totalAttempted
-    ? (attempts.reduce((s, a) => s + a.exchange_count, 0) / totalAttempted).toFixed(1)
+    ? (attempts.reduce((s, a) => s + Number(a.exchange_count || 0), 0) / totalAttempted).toFixed(1)
     : "—";
 
   return (

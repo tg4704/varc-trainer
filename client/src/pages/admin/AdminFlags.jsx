@@ -61,8 +61,8 @@ export default function AdminFlags() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Card className="overflow-hidden">
-        <table className="w-full text-sm">
+      <Card className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-3 py-2">Question</th>
