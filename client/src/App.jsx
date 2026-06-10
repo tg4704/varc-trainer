@@ -22,6 +22,8 @@ import MyQuestionEditor from "./pages/MyQuestionEditor.jsx";
 import CoachLanding from "./pages/CoachLanding.jsx";
 import CoachPractice from "./pages/CoachPractice.jsx";
 import CoachSummary from "./pages/CoachSummary.jsx";
+import CoachHistory from "./pages/CoachHistory.jsx";
+import ChooseUsername from "./pages/ChooseUsername.jsx";
 
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 
@@ -128,10 +130,14 @@ function AppShell() {
           <Route path="/my-questions/new" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
           <Route path="/my-questions/:id" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
 
-          {/* ── Reading Coach ────────────────────────────────────────── */}
+          {/* ── VARC Coach ──────────────────────────────────────────── */}
           <Route path="/coach"          element={<ProtectedRoute><CoachLanding /></ProtectedRoute>} />
           <Route path="/coach/practice" element={<ProtectedRoute><CoachPractice /></ProtectedRoute>} />
           <Route path="/coach/summary"  element={<ProtectedRoute><CoachSummary /></ProtectedRoute>} />
+          <Route path="/coach/history"  element={<ProtectedRoute><CoachHistory /></ProtectedRoute>} />
+
+          {/* ── Auth extras ──────────────────────────────────────────── */}
+          <Route path="/choose-username" element={<ProtectedRoute><ChooseUsername /></ProtectedRoute>} />
 
           {/* ── Admin ───────────────────────────────────────────────── */}
           <Route

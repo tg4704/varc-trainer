@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 
 const MIN_WORDS = 0;
-const MAX_WORDS = 500;
+const MAX_WORDS = 600;
 
 const LOADING_MESSAGES = [
   "Reading your article…",
@@ -79,10 +79,10 @@ export default function CoachLanding() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">AI Reading Coach</h1>
+        <h1 className="text-2xl font-bold text-foreground">VARC Coach</h1>
         <p className="mt-1 text-muted-foreground">
-          Paste any dense article. The Coach generates 4 CAT-style questions, then guides you
-          through a Socratic debrief — like a tutor sitting next to you.
+          Paste any dense article. VARC Coach generates 4 CAT-style questions, then guides you
+          through a structured debrief — like a tutor sitting next to you.
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export default function CoachLanding() {
           disabled={busy}
           rows={14}
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-reading leading-relaxed disabled:opacity-60"
-          placeholder="Paste your article here. Up to 500 words. Good sources: The Economist, Aeon, The Atlantic, Nautilus…"
+          placeholder="Paste your article here. Up to 600 words. Good sources: The Economist, Aeon, The Atlantic, Nautilus…"
         />
       </section>
 
@@ -152,7 +152,7 @@ export default function CoachLanding() {
         ) : wordCount === 0 ? (
           "Paste an article to begin"
         ) : !wordOk ? (
-          `Too long — trim to ${MAX_WORDS} words`
+          `Too long — trim to ${MAX_WORDS} words (${wordCount} words)`
         ) : (
           "Generate Questions →"
         )}
@@ -176,7 +176,7 @@ export default function CoachLanding() {
         <p className="mt-3 text-xs text-muted-foreground">
           Avoid news articles (too factual) and Wikipedia (no argument structure). Dense,
           opinion-forward writing works best — like what appears in CAT passages. Aim for
-          150–500 words for best results.
+          150–600 words for best results.
         </p>
       </div>
     </div>

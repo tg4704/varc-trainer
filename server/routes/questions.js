@@ -89,4 +89,26 @@ router.get("/next", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// POST /api/questions/:id/flag — user reports a problem with a question
+router.post("/:id/flag", authenticate, async (req, res, next) => {
+  try {
+    const VALID_REASONS = ["wrong_answer", "ambiguous", "typo", "poor_quality"];
+    const { reason, note = "" } = req.body || {};
+    if (!VALID_REASONS.includes(reason)) {
+      return res.status(400).json({ error: "reason must be one of: " + VALID_REASONS.join(", ") });
+    }
+
+    const q = await db.get("SELECT id FROM questions WHERE id = $1 AND is_active = 1", [req.params.id]);
+    if (!q) return res.status(404).json({ error: "Question not found" });
+
+    const reasonText = note.trim() ? `${reason}: ${note.trim().slice(0, 300)}` : reason;
+    await db.run(
+      `INSERT INTO question_flags (question_id, flagged_by_user_id, source, reason)
+       VALUES ($1, $2, 'user', $3)`,
+      [req.params.id, req.userId, reasonText]
+    );
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

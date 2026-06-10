@@ -379,17 +379,25 @@ router.get("/flags", async (req, res, next) => {
 
 // ── PATCH /api/admin/flags/:id ─────────────────────────────────────────────
 // Resolve a flag. Body: { resolution: 'fixed' | 'deleted' | 'invalid' }
+// resolution='deleted' also soft-deletes the question (sets is_active=0).
 router.patch("/flags/:id", async (req, res, next) => {
   try {
     const { resolution } = req.body || {};
     if (!["fixed", "deleted", "invalid"].includes(resolution)) {
       return res.status(400).json({ error: "invalid resolution" });
     }
-    const info = await db.run(
+    const flag = await db.get("SELECT * FROM question_flags WHERE id = $1", [req.params.id]);
+    if (!flag) return res.status(404).json({ error: "not found" });
+
+    if (resolution === "deleted") {
+      // Approve flag: remove question from the active bank
+      await db.run("UPDATE questions SET is_active = 0 WHERE id = $1", [flag.question_id]);
+    }
+
+    await db.run(
       "UPDATE question_flags SET status = 'resolved', resolution = $1, resolved_at = NOW() WHERE id = $2",
       [resolution, req.params.id]
     );
-    if (info.rowCount === 0) return res.status(404).json({ error: "not found" });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

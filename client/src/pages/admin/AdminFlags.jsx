@@ -5,6 +5,20 @@ import { Button } from "../../components/ui/button.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 
+const REASON_LABELS = {
+  wrong_answer: "Wrong answer key",
+  ambiguous: "Ambiguous question",
+  typo: "Typo or wording issue",
+  poor_quality: "Poor quality / off-topic",
+};
+
+function humanReason(raw) {
+  if (!raw) return "—";
+  const [code, ...rest] = raw.split(": ");
+  const label = REASON_LABELS[code] || code;
+  return rest.length ? `${label}: ${rest.join(": ")}` : label;
+}
+
 function fmtDate(s) {
   if (!s) return "—";
   return new Date(s).toLocaleString();
@@ -72,7 +86,7 @@ export default function AdminFlags() {
                   <div className="text-foreground max-w-md">{f.question_snippet}</div>
                 </td>
                 <td className="px-3 py-2 hidden md:table-cell"><Badge variant="secondary">{f.source}</Badge></td>
-                <td className="px-3 py-2 text-muted-foreground max-w-xs">{f.reason || "—"}</td>
+                <td className="px-3 py-2 text-muted-foreground max-w-xs">{humanReason(f.reason)}</td>
                 <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{f.flagged_by_username || "—"}</td>
                 <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">{fmtDate(f.created_at)}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -82,6 +96,14 @@ export default function AdminFlags() {
                     </Button>
                     {status === "open" && (
                       <>
+                        <Button size="sm" variant="destructive" disabled={busy}
+                          title="Remove question from bank"
+                          onClick={() => {
+                            if (confirm(`Remove question "${f.question_id}" from the question bank?`))
+                              resolve(f.id, "deleted");
+                          }}>
+                          Approve (remove)
+                        </Button>
                         <Button size="sm" disabled={busy} onClick={() => resolve(f.id, "fixed")}>
                           Fixed
                         </Button>

@@ -43,6 +43,12 @@ export function fetchMe() {
 export function changePassword(payload) {
   return request("/api/auth/password", { method: "PATCH", body: JSON.stringify(payload) });
 }
+export function checkUsernameAvailable(username) {
+  return request(`/api/auth/username-available?u=${encodeURIComponent(username)}`);
+}
+export function changeUsername(username) {
+  return request("/api/auth/username", { method: "PATCH", body: JSON.stringify({ username }) });
+}
 export function verifyEmail(payload) {
   return request("/api/auth/verify-email", { method: "POST", body: JSON.stringify(payload) });
 }
@@ -72,6 +78,9 @@ export function completeSession(sessionId) {
 export function getSessionReview(sessionId) {
   return request(`/api/sessions/${sessionId}/review`);
 }
+export function getSessionQuestions(sessionId) {
+  return request(`/api/sessions/${sessionId}/questions`);
+}
 export function batchEvaluateSession(sessionId) {
   return request(`/api/sessions/${sessionId}/batch-evaluate`, { method: "POST" });
 }
@@ -90,6 +99,14 @@ export function submitEvaluateAttempt(payload) {
 // ── Dashboard ─────────────────────────────────────────
 export function getDashboard() {
   return request("/api/dashboard");
+}
+
+// ── Question flagging (user) ──────────────────────────
+export function flagQuestion(questionId, reason, note) {
+  return request(`/api/questions/${questionId}/flag`, {
+    method: "POST",
+    body: JSON.stringify({ reason, note }),
+  });
 }
 
 // ── Account ───────────────────────────────────────────

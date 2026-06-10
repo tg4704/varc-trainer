@@ -5,6 +5,10 @@ import { saveActiveSession } from "../session.js";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 
+// Cache due-count across mounts so the SR option doesn't flicker "checking…"
+// every time the user visits the setup page.
+let _cachedDueCount = null;
+
 const PER_QUESTION_SECONDS = [30, 45, 60, 90, 120];
 const PER_SESSION_MINUTES = [5, 10, 15, 20, 30];
 
@@ -56,7 +60,7 @@ export default function SessionSetup() {
   const navigate = useNavigate();
 
   const [sessionType, setSessionType] = useState("practice");
-  const [dueCount, setDueCount] = useState(null); // null = loading
+  const [dueCount, setDueCount] = useState(_cachedDueCount); // seed from cache to avoid flicker
   const [practiceMode, setPracticeMode] = useState("analysis");
   const [numQuestions, setNumQuestions] = useState(10);
   const [timerMode, setTimerMode] = useState("untimed");
@@ -68,11 +72,12 @@ export default function SessionSetup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch SR due-card count on mount
+  // Fetch SR due-card count on mount; refresh in background without resetting
+  // to null (which causes the "checking…" flicker on every visit).
   useEffect(() => {
     sr.getQueue()
-      .then(({ dueCount: n }) => setDueCount(n))
-      .catch(() => setDueCount(0));
+      .then(({ dueCount: n }) => { _cachedDueCount = n; setDueCount(n); })
+      .catch(() => { if (_cachedDueCount === null) setDueCount(0); });
   }, []);
 
   // When switching session types, auto-set question count to a sensible default

@@ -1,9 +1,10 @@
-// Phase 14 — AI Reading Coach: 3-panel practice screen
+// Phase 14 — VARC Coach: 3-panel practice screen
 // Left: article (with source-line highlight after debrief)
 // Right top: question + options
-// Right bottom: Socratic chat (appears after option selected)
+// Right bottom: VARC Coach chat (appears after option selected)
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { saveActiveCoachSession, clearActiveCoachSession } from "../coachSession.js";
 import OptionCard from "../components/OptionCard.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import VoiceMicButton from "../components/VoiceMicButton.jsx";
@@ -81,13 +82,36 @@ export default function CoachPractice() {
       onInterimTranscript: (text) => setVoiceInterim(text),
     });
 
+  // Persist active coach session to localStorage so user can resume if they navigate away
+  useEffect(() => {
+    if (sessionId) saveActiveCoachSession(sessionId);
+    return () => { /* don't clear on unmount — clear only on explicit completion */ };
+  }, [sessionId]);
+
   // Load session if navigated directly (not from landing)
   useEffect(() => {
     if (coachSession || !sessionId) return;
     (async () => {
       try {
-        const { coachSession: s } = await coach.getSession(sessionId);
+        const { coachSession: s, attempts } = await coach.getSession(sessionId);
         setCoachSession(s);
+        // Restore in-progress debrief state from DB if any question has a partial conversation
+        if (attempts && attempts.length > 0) {
+          const inProgress = attempts.find((a) => !a.is_complete && a.conversation && a.conversation.length > 0);
+          if (inProgress) {
+            setQIdx(inProgress.question_index);
+            setSelected(inProgress.selected_option_index);
+            setConversation(inProgress.conversation);
+            setExchangeCount(inProgress.exchange_count);
+            setDebriefPhase("active");
+          } else {
+            // Jump to first unanswered question
+            const firstUnanswered = [0,1,2,3].find(
+              (i) => !attempts.find((a) => a.question_index === i && a.is_complete)
+            );
+            if (firstUnanswered != null) setQIdx(firstUnanswered);
+          }
+        }
       } catch (e) {
         setError(e.message);
       } finally {
@@ -96,6 +120,22 @@ export default function CoachPractice() {
     })();
   }, [sessionId, coachSession]);
 
+  // Leave-confirmation state
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const pendingNavRef = useRef(null);
+
+  // Warn on browser tab close/reload when a debrief is active
+  useEffect(() => {
+    const handler = (e) => {
+      if (debriefPhase === "active") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [debriefPhase]);
+
   // Scroll chat to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -103,31 +143,17 @@ export default function CoachPractice() {
 
   const question = coachSession?.questions?.[qIdx];
 
-  // ── Start debrief (exchange 1 — tutor opens with probe) ──────────────────────
-  const startDebrief = useCallback(async () => {
-    if (selected === null || !coachSession || sending) return;
-    setSending(true);
+  // ── Start debrief — user types reasoning first, no AI call yet ───────────────
+  const startDebrief = useCallback(() => {
+    if (selected === null || !coachSession) return;
     setDebriefPhase("active");
-    try {
-      const data = await coach.exchange({
-        coachSessionId: coachSession.id,
-        questionIndex: qIdx,
-        selectedOptionIndex: selected,
-        message: "",
-      });
-      setConversation([{ role: "tutor", text: data.tutorMessage }]);
-      setExchangeCount(1);
-      if (data.isComplete) {
-        setVerdict(data);
-        setDebriefPhase("complete");
-      }
-    } catch (e) {
-      setError(e.message);
-      setDebriefPhase("idle");
-    } finally {
-      setSending(false);
-    }
-  }, [selected, coachSession, qIdx, sending]);
+    // Show a static opening prompt; the AI is called on the student's first message.
+    setConversation([{
+      role: "tutor",
+      text: "Explain why you chose this option. What in the article led you to this choice?",
+    }]);
+    setExchangeCount(0);
+  }, [selected, coachSession]);
 
   // ── Send a student message ────────────────────────────────────────────────────
   const sendMessage = useCallback(async (giveUp = false) => {
@@ -169,6 +195,7 @@ export default function CoachPractice() {
     voiceStop();
     setVoiceInterim("");
     if (qIdx >= 3) {
+      clearActiveCoachSession();
       navigate(`/coach/summary?sessionId=${coachSession.id}`);
       return;
     }
@@ -180,6 +207,24 @@ export default function CoachPractice() {
     setVerdict(null);
     setInputText("");
     setError(null);
+  }
+
+  // ── Navigate away with confirmation when debrief is active ───────────────────
+  function navigateAway(to) {
+    if (debriefPhase === "active") {
+      pendingNavRef.current = to;
+      setShowLeaveModal(true);
+    } else {
+      navigate(to);
+    }
+  }
+
+  function confirmLeave() {
+    setShowLeaveModal(false);
+    if (pendingNavRef.current) {
+      navigate(pendingNavRef.current);
+      pendingNavRef.current = null;
+    }
   }
 
   // ── Render guards ──────────────────────────────────────────────────────────────
@@ -197,8 +242,8 @@ export default function CoachPractice() {
   if (!coachSession || !question) return null;
 
   const isLastQuestion = qIdx === 3;
-  const tutorMessagesSent = conversation.filter((m) => m.role === "tutor").length;
-  const canGiveUp = debriefPhase === "active" && exchangeCount < MAX_EXCHANGE && !sending;
+  const studentMessagesSent = conversation.filter((m) => m.role === "student").length;
+  const canGiveUp = debriefPhase === "active" && studentMessagesSent > 0 && exchangeCount < MAX_EXCHANGE && !sending;
 
   // ── Layout ────────────────────────────────────────────────────────────────────
   return (
@@ -286,15 +331,9 @@ export default function CoachPractice() {
                 <Button
                   className="mt-3 w-full"
                   size="lg"
-                  disabled={sending}
                   onClick={startDebrief}
                 >
-                  {sending ? (
-                    <span className="flex items-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                      Starting debrief…
-                    </span>
-                  ) : "Start Debrief →"}
+                  Explain My Reasoning →
                 </Button>
               </>
             )}
@@ -332,7 +371,7 @@ export default function CoachPractice() {
             <div className="rounded-xl border border-border bg-card flex flex-col overflow-hidden">
               <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Socratic Debrief
+                  VARC Coach
                 </span>
                 {canGiveUp && (
                   <button
@@ -435,6 +474,34 @@ export default function CoachPractice() {
           )}
         </div>
       </div>
+
+      {/* Leave confirmation modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-card border border-border p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-foreground">Leave this session?</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your progress is saved. You can resume from the Coach History tab any time.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={confirmLeave}
+              >
+                End session
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setShowLeaveModal(false); pendingNavRef.current = null; }}
+              >
+                Resume later
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

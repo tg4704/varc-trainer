@@ -124,7 +124,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
 
       {/* Tab switcher */}
       <div className="mt-4 flex gap-1 border-b border-slate-200">
-        {[["practice", "VARC Practice"], ["coach", "Reading Coach"]].map(([t, label]) => (
+        {[["practice", "VARC Practice"], ["coach", "VARC Coach"]].map(([t, label]) => (
           <button
             key={t}
             type="button"

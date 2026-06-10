@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
-import { getDashboard, changePassword, resetAccount, streak as streakApi } from "../api.js";
+import { getDashboard, changePassword, resetAccount, streak as streakApi, checkUsernameAvailable, changeUsername } from "../api.js";
 import { clearActiveSession } from "../session.js";
 import StreakWidget from "../components/StreakWidget.jsx";
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [streakData, setStreakData] = useState(null);
@@ -23,14 +23,14 @@ export default function Profile() {
     navigate("/login", { replace: true });
   }
 
-  const joined = user?.createdAt ? new Date(user.createdAt + "Z").toLocaleDateString() : "—";
+  const joined = user?.createdAt ? (() => { const d = new Date(user.createdAt); return isNaN(d) ? "—" : d.toLocaleDateString(); })() : "—";
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-bold text-slate-900">Profile</h1>
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <Row label="Username" value={user?.username} />
+        <UsernameRow username={user?.username} onUpdate={updateUser} />
         <Row label="Email" value={user?.email} />
         <Row label="Joined" value={joined} />
       </div>
@@ -68,6 +68,78 @@ export default function Profile() {
         </button>
         <ResetData onReset={() => setStats(null)} />
       </div>
+    </div>
+  );
+}
+
+const USERNAME_RE = /^[a-z0-9_]+$/i;
+
+function UsernameRow({ username, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(username || "");
+  const [available, setAvailable] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (!editing || value === username) { setAvailable(null); return; }
+    if (value.length < 3 || !USERNAME_RE.test(value)) { setAvailable(false); return; }
+    const t = setTimeout(async () => {
+      setChecking(true);
+      try { const { available: ok } = await checkUsernameAvailable(value); setAvailable(ok); }
+      catch { setAvailable(null); }
+      finally { setChecking(false); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [value, username, editing]);
+
+  async function save() {
+    if (!value || available === false || saving) return;
+    setSaving(true); setErr(null);
+    try {
+      const { user } = await changeUsername(value);
+      onUpdate(user);
+      setEditing(false);
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(false); }
+  }
+
+  const statusText = checking ? "Checking…" : available === true ? "Available ✓" : available === false ? "Not available" : "";
+  const statusColor = available === true ? "#16a34a" : "#dc2626";
+
+  if (!editing) {
+    return (
+      <div className="flex justify-between py-2 border-b border-slate-100">
+        <span className="text-sm text-slate-500">Username</span>
+        <span className="flex items-center gap-2 text-sm font-medium text-slate-900">
+          {username}
+          <button onClick={() => { setValue(username); setEditing(true); setAvailable(null); }}
+            className="text-xs text-slate-400 hover:text-slate-700 underline underline-offset-2">Edit</button>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="py-2 border-b border-slate-100">
+      <span className="text-sm text-slate-500 block mb-1">Username</span>
+      <div className="flex gap-2 items-center">
+        <input
+          autoFocus
+          value={value}
+          maxLength={30}
+          onChange={(e) => { setValue(e.target.value.trim()); setErr(null); }}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm"
+        />
+        <button onClick={save} disabled={!value || available === false || saving || checking}
+          className="rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40">
+          {saving ? "…" : "Save"}
+        </button>
+        <button onClick={() => setEditing(false)} className="text-xs text-slate-500 hover:text-slate-800">Cancel</button>
+      </div>
+      {statusText && <p className="mt-1 text-xs" style={{ color: statusColor }}>{statusText}</p>}
+      {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
     </div>
   );
 }

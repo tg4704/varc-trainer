@@ -216,7 +216,10 @@ async function handle(req, res, next) {
   } catch (e) { next(e); }
 }
 
+function clearCache(userId) { cache.delete(userId); }
+
 router.get("/", authenticate, handle);
 
 module.exports = router;
 module.exports.handle = handle;
+module.exports.clearCache = clearCache;

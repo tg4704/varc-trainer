@@ -1,4 +1,9 @@
-const { Pool } = require("pg");
+const { Pool, types } = require("pg");
+
+// Make COUNT/SUM (int8, OID 20) and AVG/NUMERIC (OID 1700) return JS numbers
+// instead of strings — pg driver returns them as strings by default.
+types.setTypeParser(20,   (v) => (v === null ? null : parseInt(v, 10)));
+types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -304,6 +309,7 @@ async function bootstrapAdmins() {
     );
     await ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
     await ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
+    await ensureColumn("sessions", "question_ids", "TEXT"); // JSON array of question IDs in session order
     await seedQuestions();
     await bootstrapAdmins();
     console.log("[db] Database initialised.");

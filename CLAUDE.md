@@ -161,7 +161,7 @@ A session is an explicit, configured run created on the **Session Setup** page (
 ## Database Schema (recreated by `server/db.js` on startup)
 
 - `users(id, username UNIQUE, email UNIQUE, password_hash, role['user'|'admin'], created_at)`
-- `sessions(id, user_id FK, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode['instant'|'deferred'], session_type['practice'|'review'], status['active'|'completed'], created_at, completed_at)` — `feedback_mode` added Phase 13 via `ensureColumn`; `session_type` added Phase 15 via `ensureColumn`.
+- `sessions(id, user_id FK, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode['instant'|'deferred'], session_type['practice'|'review'], status['active'|'completed'], question_ids TEXT, created_at, completed_at)` — `feedback_mode` added Phase 13 via `ensureColumn`; `session_type` added Phase 15 via `ensureColumn`; `question_ids` added 2026-06 via `ensureColumn` (JSON array of pre-selected question IDs for free navigation).
 - `attempts(id, session_id FK, question_id, question_type, topic, selected_option_index NULLABLE, correct_option_index, is_correct, trap_option_index, trap_type, selected_trap, skipped, reasoning_* + AI fields, mode, time_taken_seconds, eliminated_indices, intuition_points, created_at)`
 - `questions(id, topic, paragraph, question, type, options_json, correct_index, trap_index, trap_type, source_lines, source['seed'|'user'], author_user_id FK NULLABLE, is_active, created_at)` — **Phase 8**; built-ins have `source='seed'`/`author_user_id=NULL`. User-created questions (Phase 10) set `author_user_id`.
 - `api_calls(id, user_id FK NULLABLE, route, provider, model, input_tokens, output_tokens, est_cost_usd, status['ok'|'error'], created_at)` — **Phase 9**; every AI call is logged here. Cost computed against `server/ai/pricing.js`.
@@ -231,8 +231,26 @@ Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch).
 - **Question count slider**: The preset pill buttons (5/10/15/20/25) in Session Setup replaced with a smooth range slider (1–25). Number shown live beside the slider. Switching to Review mode auto-sets the slider to `dueCount`; switching back to Practice resets to 10.
 - **CoachPractice type badge**: Also hidden until verdict is revealed (same logic as Practice).
 
+**Post-16 bug fixes & UX batch (2026-06)** (13-item batch — see ROADMAP.md for full list):
+- **pg aggregate type fix**: `db.js` sets `types.setTypeParser(20)` (int8) and `types.setTypeParser(1700)` (numeric) so `COUNT`/`SUM`/`AVG` aggregates come back as JS numbers — fixes all "n is not a function" / `avgReasoningScore.toFixed` crashes app-wide.
+- **Dashboard cache invalidation**: `dashboard.js` exports `clearCache(userId)`; called by `attempts.js` and `evaluate.js` after every attempt insert, so the dashboard never shows stale "0 attempts" after a session.
+- **Practice interaction rewrite (items 1, 2, 9, 10)**:
+  - **Prefetch all questions**: `sessions` table gains `question_ids TEXT` column (populated at session creation); `GET /api/sessions/:id/questions` returns all N sanitised questions. `Practice.jsx` fetches them once at boot — no more per-question `/next` round-trips.
+  - **Per-question state array** (`questionStates[]`): replaces single `selected`/`feedback` state. Each entry tracks `tentativeSelected`, `locked`, `lockedSelected`, `lockTime`, `reasoning`, `quotes`, `feedback`, `skipped`.
+  - **Two-step lock flow**: clicking an option is *tentative* (reversible); "Submit Answer →" button locks it, freezes the per-question timer, then reveals the reasoning textarea + quote popover.
+  - **Free navigation**: `QuestionNavBar` all slots are clickable; navigation blocked only while `locked && !feedback` (shows a brief warning message).
+  - **Timer frozen at lock time** (not at feedback arrival): `cs.lockTime` is used in `timerInfo()`.
+  - **End-session confirm modal** (`EndSessionModal`): shown when all questions answered or on the last question's "End Session".
+  - **HistoryView removed**: navigating to a past question just renders the normal view with `cs.feedback` set (read-only because options are disabled).
+- **Flag modal (item 4)**: 🚩 button opens a `FlagModal` with predefined reason radios (Wrong answer key / Ambiguous / Typo / Poor quality) + optional note. Submits to `POST /api/questions/:id/flag`. No amber ring on nav slots. `AdminFlags.jsx` shows human-readable reason labels and has "Approve (remove)" button that calls `resolution='deleted'` (soft-deletes question from bank).
+- **Dashboard cache invalidation** (item 5): `clearCache` called from both attempt routes — dashboard/profile no longer shows stale 0 after a session.
+- **Voice retry reset** (item 3): `retryCount.current` reset after each successful final transcript and on clean `onend`; threshold raised to 5; on network error, recognizer restarts immediately.
+- **Coach → VARC Coach rename** (item 7): `CoachLanding`, `CoachPractice`, `Dashboard` tab all updated to "VARC Coach". Max words 500→600. User sends reasoning *first* (static tutor opener, no AI call on answer-select).
+- **Coach session persistence + History** (item 8): `coachSession.js` localStorage helper persists active session ID. `CoachPractice.jsx` saves on mount, clears on completion. `CoachHistory.jsx` page lists all past sessions with Resume/Review links. Leave-confirmation modal when debrief is active. `beforeunload` handler.
+- **SR setup flicker fix** (item 11): module-level `_cachedDueCount` seeds React state on mount; avoids "checking…" flash on every `/setup` visit.
+- **Google OAuth username flow** (item 12): new users redirected to `/choose-username` (availability check via `GET /api/auth/username-available`; PATCH endpoint to change). Profile page has inline username edit. `Invalid Date` fixed (no longer appends extra "Z" to ISO timestamp). `updateUser` exposed on `AuthContext`.
+
 **Deferred features** (documented in `ROADMAP.md` "Deferred / Backlog Items" section):
-- Practice per-question submit flow (timer stops on option selection; reasoning box appears after) ← partially done (lock-in done; reasoning-appears-after still deferred)
 - Coach questions → user question bank admin promotion to global pool
 - Google OAuth ("Continue with Google" — email signup stays as primary)
 - Mobile OTP verification (SMS via Twilio etc. — deferred, costs money)

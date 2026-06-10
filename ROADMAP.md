@@ -272,36 +272,34 @@ This document plans the next wave of features on top of the shipped app (Phases 
 
 # Deferred / Backlog Items
 
-These were identified during Phase 16 polish and deferred for later implementation.
+These were identified during Phase 16 polish and the 2026-06 UX batch, deferred for later implementation.
 
-## Practice UX — per-question submit flow
-**Status: partially done.** Timer display now freezes on option selection (`selectionTimeRef`), and per-question auto-skip is disabled once an option is picked. Reasoning textarea was already appearing after selection.
+## ~~Practice UX — per-question submit flow~~ ✅ Done (2026-06)
+Full two-step lock flow implemented: selecting an option is tentative (can be changed freely); "Submit Answer →" locks the selection, freezes the per-question timer, and reveals the reasoning textarea + quote popover. Timer frozen at lock time, not when AI feedback returns.
 
-**Remaining (complex):** full "lock-in" UX where the options grid becomes un-clickable the moment one is selected (no changing your mind). Currently users can still change selection before submitting.
+## ~~Practice UX — next/previous navigation + status sidebar~~ ✅ Done (2026-06)
+Full free navigation implemented: all question slots in `QuestionNavBar` are clickable. Sessions pre-select all N questions at creation (`sessions.question_ids`); `GET /api/sessions/:id/questions` returns the full ordered set. Per-question state (`questionStates[]`) tracks each slot independently. Navigation is blocked only while a question is locked but reasoning not yet submitted. `HistoryView` component removed — past questions render in-place with the normal layout (feedback already set → options disabled).
 
-## Practice UX — next/previous navigation + status sidebar
-**Planned behavior:**
-- Side panel showing question status: ✓ correct / ✗ incorrect / skipped / not-attempted / flagged for review.
-- User can jump to any question by clicking the sidebar.
-- "Flag for review" button per question (stored locally, possibly synced).
-- This mirrors the CAT exam navigator.
-**Complexity:** requires rewriting the practice loop to load all questions upfront (or cache visited ones), and a new `questionStatus` state map.
+## ~~Practice UX — question index slider~~ ✅ Done
+Preset pill buttons replaced with a smooth range slider in Session Setup.
 
-## Practice UX — question index slider
-Replace the preset button group (5 / 10 / 15 / 20 / 25) in Session Setup with a slider for selecting question count.
-
-## AI evaluation — batch session prompt (Phase 13 follow-up)
-Currently `POST /api/sessions/:id/batch-evaluate` sends one Claude call **per question**. For a 10-question deferred session, that's 10 API calls. A better approach: send all reasonings in a single prompt and parse the JSON array response. Reduces cost and latency on the session-review page.
-**Blocked on:** prompt engineering for multi-question JSON output.
+## ~~AI evaluation — batch session prompt~~ ✅ Done (Phase 13 follow-up)
+`POST /api/sessions/:id/batch-evaluate` now sends a single Claude call with all N reasonings in one prompt; falls back to parallel per-question calls if JSON parse fails.
 
 ## ~~Question bank — hide type/topic in sessions~~ ✅ Done
 `TypeBadge` and `TopicBadge` now hidden during active sessions in both Practice and Coach modes. Revealed only after submit/verdict.
 
+## ~~Voice input in Socratic debrief~~ ✅ Done (2026-06)
+`VoiceMicButton` + `useVoiceInput` integrated into `CoachPractice.jsx` chat input. Voice retry logic also improved: `retryCount` resets after each successful phrase; threshold raised to 5 consecutive failures; on network error, recognizer restarts immediately.
+
+## ~~Coach → VARC Coach rename~~ ✅ Done (2026-06)
+All references to "AI Reading Coach" / "Reading Coach" updated to "VARC Coach". Article word limit raised to 600. Debrief now user-first (static tutor opener, user sends reasoning, no AI call on answer-select). Session persistence via `coachSession.js` localStorage helper; `/coach/history` page with Resume/Review links; leave-confirmation modal.
+
+## ~~Admin flag workflow~~ ✅ Done (2026-06)
+Users can flag questions from Practice via a modal with 4 predefined reasons (Wrong answer key / Ambiguous question / Typo or wording / Poor quality). `AdminFlags.jsx` shows human-readable reason labels; "Approve (remove)" button soft-deletes the question (`is_active=0`).
+
 ## Question bank — user question bank for Coach articles
-Coach-generated questions could be saved to the user's personal question bank (same table as `my-questions` with `source='coach'`). This lets users revisit Coach article questions in practice mode. Admin can "promote" a user's Coach question to the global seed bank.
+Coach-generated questions can already be saved to the global bank (`POST /api/coach/sessions/:id/save-to-bank`). Remaining: admin UI to "promote" a saved coach question to the seed bank without re-editing from scratch.
 
-## ~~AI question authoring — "view answer" toggle~~ ✅ Done
-"Show answer / Hide answer" toggle added to `MyQuestionEditor.jsx`. Correct/trap indicators and source lines hidden by default; clicking "Show answer" reveals them.
-
-## Voice input in Socratic debrief
-The mic button (`VoiceMicButton` + `useVoiceInput`) should work in the Coach Socratic chat input, not just in the Practice reasoning textarea.
+## Google OAuth ("Continue with Google")
+Basic OAuth flow exists (authorization code exchange, account linking). New users are redirected to `/choose-username` to pick a username. Remaining: surface a "Continue with Google" button on the Login/Register pages as a first-class option (currently email/password is the only primary path).

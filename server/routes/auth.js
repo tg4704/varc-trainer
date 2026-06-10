@@ -352,6 +352,7 @@ router.get("/google/callback", async (req, res) => {
 
     // 3. Find or create user
     let user = await db.get("SELECT * FROM users WHERE google_id = $1", [googleId]);
+    let isNewUser = false;
 
     if (!user) {
       // Check if email is already registered → link accounts
@@ -378,6 +379,7 @@ router.get("/google/callback", async (req, res) => {
           [username, email, googleId]
         );
         user = await db.get("SELECT * FROM users WHERE id = $1", [ins.lastId]);
+        isNewUser = true;
       }
     }
 
@@ -387,7 +389,9 @@ router.get("/google/callback", async (req, res) => {
     // 4. Issue JWT and redirect to frontend
     const token       = signToken(user.id);
     const userPayload = encodeURIComponent(JSON.stringify(publicUser(user)));
-    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}&user=${userPayload}`);
+    // Signal brand-new users so they can confirm/edit their derived username
+    const newUserFlag = isNewUser ? "&newUser=1" : "";
+    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}&user=${userPayload}${newUserFlag}`);
   } catch (err) {
     console.error("[google oauth] callback error:", err);
     res.redirect(`${FRONTEND_URL}/login?error=google_failed`);
@@ -399,6 +403,36 @@ router.get("/me", authenticate, async (req, res, next) => {
   try {
     const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
     if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ user: publicUser(user) });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/auth/username-available ────────────────────────────────────────────
+router.get("/username-available", async (req, res, next) => {
+  try {
+    const u = (req.query.u || "").trim();
+    if (!u || u.length < 3 || u.length > 30 || !/^[a-z0-9_]+$/i.test(u)) {
+      return res.json({ available: false });
+    }
+    const existing = await db.get("SELECT 1 FROM users WHERE username = $1", [u]);
+    res.json({ available: !existing });
+  } catch (e) { next(e); }
+});
+
+// ── PATCH /api/auth/username ──────────────────────────────────────────────────
+router.patch("/username", authenticate, async (req, res, next) => {
+  try {
+    const { username } = req.body || {};
+    if (!username || username.length < 3 || username.length > 30 || !/^[a-z0-9_]+$/i.test(username)) {
+      return res.status(400).json({ error: "Username must be 3–30 characters (letters, numbers, underscores)" });
+    }
+    const existing = await db.get(
+      "SELECT 1 FROM users WHERE username = $1 AND id != $2",
+      [username, req.userId]
+    );
+    if (existing) return res.status(409).json({ error: "That username is already taken" });
+    await db.run("UPDATE users SET username = $1 WHERE id = $2", [username, req.userId]);
+    const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
     res.json({ user: publicUser(user) });
   } catch (e) { next(e); }
 });

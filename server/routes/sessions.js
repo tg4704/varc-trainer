@@ -5,6 +5,7 @@ const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
+const { getDueCards } = require("../sr");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
@@ -24,6 +25,7 @@ function serializeSession(s) {
     feedbackMode: s.feedback_mode || "instant",
     sessionType: s.session_type || "practice",
     status: s.status,
+    questionIds: s.question_ids ? JSON.parse(s.question_ids) : null,
     createdAt: s.created_at,
     completedAt: s.completed_at,
   };
@@ -74,10 +76,28 @@ router.post("/", authenticate, async (req, res, next) => {
       feedbackMode = "deferred";
     }
 
+    // Pre-select all questions for this session so order is stable across refreshes.
+    let questionIds;
+    if (sessionType === "review") {
+      const dueCards = await getDueCards(req.userId);
+      questionIds = dueCards.slice(0, numQuestions).map((c) => c.question_id);
+    } else {
+      const allQuestions = await questionsRepo.listForUser(req.userId);
+      const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
+      questionIds = shuffled.slice(0, numQuestions).map((q) => q.id);
+      // If bank is smaller than requested, repeat questions to fill the session
+      if (questionIds.length < numQuestions) {
+        const extra = [...allQuestions].sort(() => Math.random() - 0.5);
+        while (questionIds.length < numQuestions) {
+          questionIds.push(extra[questionIds.length % extra.length].id);
+        }
+      }
+    }
+
     const result = await db.run(
-      `INSERT INTO sessions (user_id, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode, session_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [req.userId, numQuestions, timerMode, timerScope, timerSeconds, feedbackMode, sessionType]
+      `INSERT INTO sessions (user_id, num_questions, timer_mode, timer_scope, timer_seconds, feedback_mode, session_type, question_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [req.userId, numQuestions, timerMode, timerScope, timerSeconds, feedbackMode, sessionType, JSON.stringify(questionIds)]
     );
 
     const session = await getOwnedSession(result.lastId, req.userId);
@@ -402,6 +422,46 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res, next) => {
   // ── Fallback path: parallel per-question calls ───────────────────────────────
   const results = await Promise.all(pending.map((a) => evaluateOneAttempt(a, req.userId)));
   res.json({ results });
+  } catch (e) { next(e); }
+});
+
+// GET /api/sessions/:id/questions — return all pre-selected questions for this session.
+// Strips server-only fields (correctIndex, trapIndex, sourceLines).
+// Used by Practice.jsx to prefetch all questions for free navigation.
+router.get("/:id/questions", authenticate, async (req, res, next) => {
+  try {
+    const s = await getOwnedSession(req.params.id, req.userId);
+    if (!s) return res.status(404).json({ error: "Session not found" });
+
+    let questionIds = s.question_ids ? JSON.parse(s.question_ids) : null;
+    if (!questionIds || questionIds.length === 0) {
+      // Legacy session without pre-selected IDs — generate on the fly
+      if (s.session_type === "review") {
+        const dueCards = await getDueCards(req.userId);
+        questionIds = dueCards.slice(0, s.num_questions).map((c) => c.question_id);
+      } else {
+        const allQuestions = await questionsRepo.listForUser(req.userId);
+        const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
+        questionIds = shuffled.slice(0, s.num_questions).map((q) => q.id);
+        while (questionIds.length < s.num_questions && allQuestions.length > 0) {
+          questionIds.push(allQuestions[questionIds.length % allQuestions.length].id);
+        }
+      }
+    }
+
+    const questions = await Promise.all(questionIds.map((id) => questionsRepo.findById(id)));
+    const sanitised = questions.map((q, i) => q ? {
+      id: q.id,
+      topic: q.topic,
+      paragraph: q.paragraph,
+      question: q.question,
+      type: q.type,
+      options: q.options.map((o) => ({ text: o.text })),
+      index: i + 1,
+      total: questionIds.length,
+    } : null).filter(Boolean);
+
+    res.json({ questions: sanitised });
   } catch (e) { next(e); }
 });
 

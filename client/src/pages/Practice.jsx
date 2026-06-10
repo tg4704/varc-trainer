@@ -11,11 +11,12 @@ import VoiceMicButton from "../components/VoiceMicButton.jsx";
 import { useVoiceInput } from "../hooks/useVoiceInput.js";
 import { cn } from "../lib/utils.js";
 import {
-  getNextQuestion,
+  getSessionQuestions,
   submitBasicAttempt,
   submitEvaluateAttempt,
   getActiveSession,
   completeSession,
+  flagQuestion,
 } from "../api.js";
 import { loadActiveSession, saveActiveSession, clearActiveSession } from "../session.js";
 import { trapLabel, trapDescription } from "../trapTypes.js";
@@ -28,58 +29,98 @@ function formatTime(totalSeconds) {
   return `${m}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
+// Per-question state shape
+function defaultQState() {
+  return {
+    tentativeSelected: null, // option picked but not yet locked
+    locked: false,           // true after "Submit Answer"
+    lockedSelected: null,    // the final locked option
+    lockTime: null,          // timestamp (ms) at lock — for timer freeze
+    reasoning: "",
+    quotes: [],
+    submitting: false,
+    feedback: null,
+    isSkipping: false,
+    skipped: false,
+    eliminated: [],          // intuition mode: eliminated option indices
+  };
+}
+
 export default function Practice() {
   const navigate = useNavigate();
 
   const [session, setSession] = useState(null);
-  const [question, setQuestion] = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [feedback, setFeedback] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [isSkipping, setIsSkipping] = useState(false);
-  const [loadingQuestion, setLoadingQuestion] = useState(true);
+  const [questions, setQuestions] = useState(null); // null = loading; array when ready
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [questionStates, setQuestionStates] = useState([]); // per-question state
+  const [loadingQuestions, setLoadingQuestions] = useState(true);
 
-  // Question navigator + history review
-  const [questionHistory, setQuestionHistory] = useState([]); // answered/skipped questions (read-only review)
-  const [historyViewIdx, setHistoryViewIdx] = useState(null); // null = live, number = reviewing past question
-  const [flaggedSlots, setFlaggedSlots] = useState(new Set()); // 1-based question.index values flagged for review
+  // Confirm "End Session" modal (shown on last question or when all answered)
+  const [showEndModal, setShowEndModal] = useState(false);
+  // Nav-blocked message (can't leave while locked+no feedback)
+  const [navBlockMsg, setNavBlockMsg] = useState(null);
+
+  // Flag modal
+  const [flagModal, setFlagModal] = useState(null);
+  const [flagToast, setFlagToast] = useState(null);
+
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(Date.now());
 
-  // Analysis-mode reasoning input
-  const [reasoningText, setReasoningText] = useState("");
-  const [interimText, setInterimText] = useState("");     // live voice preview (not committed)
-  const reasoningRef = useRef("");                         // stable ref so voice callbacks don't go stale
+  // Interim voice preview (not committed to state yet)
+  const [interimText, setInterimText] = useState("");
+  const reasoningRef = useRef(""); // stable ref for voice callbacks
 
-  // Phase 12: quote-to-reasoning
-  const [quotes, setQuotes] = useState([]);
-  const [selectionPopover, setSelectionPopover] = useState(null); // { text, x, y }
+  // Quote popover
+  const [selectionPopover, setSelectionPopover] = useState(null);
   const paragraphRef = useRef(null);
 
-  // Mobile paragraph toggle
+  // Mobile paragraph toggle (per-question, reset on nav)
   const [paragraphOpen, setParagraphOpen] = useState(true);
 
-  // Intuition-mode state
-  const [eliminated, setEliminated] = useState(new Set());
+  // Intuition mode points accumulator
   const [sessionPoints, setSessionPoints] = useState(0);
 
-  const questionStartRef = useRef(Date.now());
+  // Timing refs
+  const questionStartTimesRef = useRef({}); // idx → ms when first shown
   const sessionStartRef = useRef(Date.now());
-  const frozenElapsedRef = useRef(null);
-  const selectionTimeRef = useRef(null); // set when first option is picked in analysis mode
   const autoActedRef = useRef(false);
   const endedRef = useRef(false);
 
   const practiceMode = session?.practiceMode || "analysis";
 
-  // ── Voice input (Phase 11) ────────────────────────────────────────────────
-  // Keep the ref in sync so voice callbacks always see the latest text.
-  useEffect(() => { reasoningRef.current = reasoningText; }, [reasoningText]);
+  // Read / patch per-question state (using functional updates to avoid stale closures)
+  function getCS(idx) { return questionStates[idx] || defaultQState(); }
+
+  function patchCS(idx, patch) {
+    setQuestionStates(prev => {
+      const arr = [...prev];
+      arr[idx] = { ...(arr[idx] || defaultQState()), ...patch };
+      return arr;
+    });
+  }
+
+  const cs = getCS(currentIdx); // current question state
+
+  // Keep reasoningRef in sync for voice callbacks
+  useEffect(() => { reasoningRef.current = cs.reasoning; }, [cs.reasoning]);
+
+  // ── Voice input ────────────────────────────────────────────────────────────
+  const currentIdxRef = useRef(currentIdx);
+  useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
 
   const handleFinalTranscript = useCallback((text) => {
     const current = reasoningRef.current;
     const sep = current && !current.endsWith(" ") ? " " : "";
-    setReasoningText(current + sep + text);
+    const next = current + sep + text;
+    // Use ref to get current idx — avoids stale closure in this useCallback
+    setQuestionStates(prev => {
+      const arr = [...prev];
+      const idx = currentIdxRef.current;
+      arr[idx] = { ...(arr[idx] || defaultQState()), reasoning: next };
+      return arr;
+    });
+    reasoningRef.current = next;
     setInterimText("");
   }, []);
 
@@ -89,43 +130,38 @@ export default function Practice() {
     onInterimTranscript: setInterimText,
   });
 
-  // Stop recording if the user submits mid-speech
+  // Stop voice when submitting
   useEffect(() => {
-    if (submitting && isVoiceRecording) stopVoice();
-  }, [submitting, isVoiceRecording, stopVoice]);
+    if (cs.submitting && isVoiceRecording) stopVoice();
+  }, [cs.submitting, isVoiceRecording, stopVoice]);
 
-  // Clear interim text when moving to the next question
-  const resetVoice = useCallback(() => {
-    stopVoice();
-    setInterimText("");
-  }, [stopVoice]);
+  // Reset autoActedRef when moving to a new question
+  useEffect(() => { autoActedRef.current = false; }, [currentIdx]);
 
-  // ── Quote-to-reasoning (Phase 12) ────────────────────────────────────────
+  // ── Quote-to-reasoning (Phase 12) ─────────────────────────────────────────
+  // Quote is only available after lock (Submit Answer) and before feedback
   function handleParagraphMouseUp() {
-    if (feedback || practiceMode !== "analysis") return;
+    if (!cs.locked || cs.feedback || practiceMode !== "analysis") return;
     const sel = window.getSelection();
     const text = sel?.toString().trim();
     if (!text || text.length < 5) { setSelectionPopover(null); return; }
-    if (
-      !sel.rangeCount ||
-      !paragraphRef.current?.contains(sel.anchorNode) ||
-      !paragraphRef.current?.contains(sel.focusNode)
-    ) { setSelectionPopover(null); return; }
+    if (!sel.rangeCount || !paragraphRef.current?.contains(sel.anchorNode) || !paragraphRef.current?.contains(sel.focusNode)) {
+      setSelectionPopover(null); return;
+    }
     const rect = sel.getRangeAt(0).getBoundingClientRect();
     setSelectionPopover({ text, x: rect.left + rect.width / 2, y: rect.bottom + 8 });
   }
 
   function addQuote(text) {
-    setQuotes((prev) => (prev.includes(text) ? prev : [...prev, text]));
+    patchCS(currentIdx, { quotes: [...cs.quotes.filter(q => q !== text), text] });
     setSelectionPopover(null);
     window.getSelection()?.removeAllRanges();
   }
 
   function removeQuote(text) {
-    setQuotes((prev) => prev.filter((q) => q !== text));
+    patchCS(currentIdx, { quotes: cs.quotes.filter(q => q !== text) });
   }
 
-  // Dismiss quote popover on any click outside it
   useEffect(() => {
     if (!selectionPopover) return;
     const dismiss = () => setSelectionPopover(null);
@@ -133,82 +169,252 @@ export default function Practice() {
     return () => document.removeEventListener("mousedown", dismiss);
   }, [selectionPopover]);
 
-  // A session is "deferred" if it has a timer OR the user picked "after session" feedback.
-  // In deferred mode, reasoning is saved but AI evaluation runs at the end.
+  // ── Session helpers ────────────────────────────────────────────────────────
   function isDeferred(sess) {
     if (!sess) return false;
     if (sess.practiceMode !== "analysis") return false;
     return sess.timerMode !== "untimed" || sess.feedbackMode === "deferred";
   }
 
-  const finishSession = useCallback(
-    async (sess) => {
-      if (endedRef.current) return;
-      endedRef.current = true;
-      try { await completeSession(sess.id); } catch {}
-      clearActiveSession();
-      if (isDeferred(sess)) {
-        navigate(`/session-review?sessionId=${sess.id}`, { replace: true });
+  const finishSession = useCallback(async (sess) => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    try { await completeSession(sess.id); } catch {}
+    clearActiveSession();
+    if (isDeferred(sess)) {
+      navigate(`/session-review?sessionId=${sess.id}`, { replace: true });
+    } else {
+      navigate(`/results?sessionId=${sess.id}`, { replace: true });
+    }
+  }, [navigate]);
+
+  // Navigate to question by 0-based index
+  function navigateTo(idx) {
+    if (!questions || idx < 0 || idx >= questions.length) return;
+    // Block if current question is locked but not yet submitted
+    if (cs.locked && !cs.feedback) {
+      setNavBlockMsg("Submit your reasoning before jumping to another question.");
+      setTimeout(() => setNavBlockMsg(null), 2500);
+      return;
+    }
+    stopVoice();
+    setInterimText("");
+    setSelectionPopover(null);
+    setParagraphOpen(true);
+    if (!questionStartTimesRef.current[idx]) {
+      questionStartTimesRef.current[idx] = Date.now();
+    }
+    setCurrentIdx(idx);
+  }
+
+  // Check if all questions are done (have feedback or are skipped)
+  function allDone(statesSnapshot, feedbackForIdx, skipForIdx) {
+    if (!questions) return false;
+    return questions.every((_, i) => {
+      if (i === currentIdx && feedbackForIdx !== undefined) return true;
+      if (i === currentIdx && skipForIdx) return true;
+      const s = statesSnapshot[i] || defaultQState();
+      return s.feedback !== null || s.skipped;
+    });
+  }
+
+  // Skip current question
+  const doSkip = useCallback(async (sess, idx, isAutoSkip = false) => {
+    if (!questions || !questions[idx]) return;
+    // Can't skip a locked question — must submit
+    setQuestionStates(prev => {
+      const s = prev[idx] || defaultQState();
+      if (s.locked || s.skipped || s.feedback) return prev; // already handled
+      return prev; // actual update happens outside
+    });
+    const currentS = questionStates[idx] || defaultQState();
+    if (currentS.locked || currentS.skipped || currentS.feedback) return;
+    if (isAutoSkip) autoActedRef.current = true;
+
+    const q = questions[idx];
+    const startTime = questionStartTimesRef.current[idx] || Date.now();
+    const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+
+    patchCS(idx, { isSkipping: true });
+    try {
+      await submitBasicAttempt({
+        sessionId: sess.id,
+        questionId: q.id,
+        skipped: true,
+        timeTakenSeconds: timeTaken,
+        mode: sess.practiceMode || "analysis",
+      });
+      patchCS(idx, { isSkipping: false, skipped: true });
+      // Auto-advance to next unanswered
+      setQuestionStates(prev => {
+        const nextIdx = findNextUnanswered(prev, idx);
+        if (nextIdx !== null) {
+          if (!questionStartTimesRef.current[nextIdx]) questionStartTimesRef.current[nextIdx] = Date.now();
+          setCurrentIdx(nextIdx);
+        } else {
+          setShowEndModal(true);
+        }
+        return prev;
+      });
+    } catch (e) {
+      patchCS(idx, { isSkipping: false });
+      setError(e.message);
+    }
+  }, [questions, questionStates]);
+
+  function findNextUnanswered(states, afterIdx) {
+    if (!questions) return null;
+    // First check after current index
+    for (let i = afterIdx + 1; i < questions.length; i++) {
+      const s = states[i] || defaultQState();
+      if (!s.feedback && !s.skipped) return i;
+    }
+    // Wrap to beginning
+    for (let i = 0; i < afterIdx; i++) {
+      const s = states[i] || defaultQState();
+      if (!s.feedback && !s.skipped) return i;
+    }
+    return null; // all done
+  }
+
+  // Lock the current answer (Analysis mode "Submit Answer" button)
+  function lockAnswer() {
+    if (cs.tentativeSelected === null || cs.locked) return;
+    patchCS(currentIdx, {
+      locked: true,
+      lockedSelected: cs.tentativeSelected,
+      lockTime: Date.now(),
+    });
+  }
+
+  // Submit reasoning (after lock)
+  async function handleSubmit() {
+    const s = cs;
+    if (!s.locked || s.lockedSelected === null || !questions || s.submitting) return;
+    const q = questions[currentIdx];
+    const sess = session;
+    const startTime = questionStartTimesRef.current[currentIdx] || Date.now();
+    const timeTaken = Math.floor(((s.lockTime || Date.now()) - startTime) / 1000);
+    const reasoning = s.reasoning.trim();
+
+    patchCS(currentIdx, { submitting: true });
+    setError(null);
+    try {
+      let fb;
+      if (practiceMode === "analysis") {
+        if (reasoning && !isDeferred(sess)) {
+          fb = await submitEvaluateAttempt({
+            sessionId: sess.id, questionId: q.id,
+            selectedOptionIndex: s.lockedSelected,
+            reasoningText: reasoning, timeTakenSeconds: timeTaken,
+            mode: practiceMode, quotedLines: s.quotes, deferred: false,
+          });
+        } else if (reasoning && isDeferred(sess)) {
+          fb = await submitEvaluateAttempt({
+            sessionId: sess.id, questionId: q.id,
+            selectedOptionIndex: s.lockedSelected,
+            reasoningText: reasoning, timeTakenSeconds: timeTaken,
+            mode: practiceMode, quotedLines: s.quotes, deferred: true,
+          });
+        } else {
+          fb = await submitBasicAttempt({
+            sessionId: sess.id, questionId: q.id,
+            selectedOptionIndex: s.lockedSelected,
+            timeTakenSeconds: timeTaken, mode: practiceMode,
+          });
+        }
       } else {
-        navigate(`/results?sessionId=${sess.id}`, { replace: true });
-      }
-    },
-    [navigate]
-  );
-
-  const loadNext = useCallback(
-    async (sess) => {
-      resetVoice();
-      setQuotes([]);
-      setSelectionPopover(null);
-      setLoadingQuestion(true);
-      setError(null);
-      setFeedback(null);
-      setSelected(null);
-      setEliminated(new Set());
-      setReasoningText("");
-      setParagraphOpen(true);
-      frozenElapsedRef.current = null;
-      selectionTimeRef.current = null;
-      try {
-        const q = await getNextQuestion(sess.id);
-        if (q.done) { await finishSession(sess); return; }
-        setQuestion(q);
-        questionStartRef.current = Date.now();
-        autoActedRef.current = false;
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoadingQuestion(false);
-      }
-    },
-    [finishSession, resetVoice]
-  );
-
-  const doSkip = useCallback(
-    async (sess, q, isAutoSkip = false) => {
-      if (autoActedRef.current && isAutoSkip) return;
-      if (isAutoSkip) autoActedRef.current = true;
-      const timeTaken = Math.floor((Date.now() - questionStartRef.current) / 1000);
-      setIsSkipping(true);
-      try {
-        await submitBasicAttempt({
-          sessionId: sess.id,
-          questionId: q.id,
-          skipped: true,
-          timeTakenSeconds: timeTaken,
-          mode: sess.practiceMode || "analysis",
+        // Intuition mode
+        const elim = s.eliminated || [];
+        fb = await submitBasicAttempt({
+          sessionId: sess.id, questionId: q.id,
+          selectedOptionIndex: s.tentativeSelected,
+          timeTakenSeconds: timeTaken, mode: practiceMode,
+          eliminatedIndices: elim,
         });
-        setQuestionHistory((prev) => [
-          ...prev,
-          { question: q, status: "skipped", selectedOption: null, feedback: null, mode: sess.practiceMode || "analysis" },
-        ]);
-        await loadNext(sess);
-      } catch (e) { setError(e.message); }
-      finally { setIsSkipping(false); }
-    },
-    [loadNext]
-  );
+      }
+      patchCS(currentIdx, { feedback: fb, submitting: false });
+      if (practiceMode === "intuition" && fb.intuitionPoints != null) {
+        setSessionPoints(p => p + fb.intuitionPoints);
+      }
+      // Check if all done
+      setQuestionStates(prev => {
+        const done = questions.every((_, i) => {
+          if (i === currentIdx) return true; // just answered
+          const ss = prev[i] || defaultQState();
+          return ss.feedback !== null || ss.skipped;
+        });
+        if (done) setShowEndModal(true);
+        return prev;
+      });
+    } catch (e) {
+      patchCS(currentIdx, { submitting: false });
+      setError(e.message);
+    }
+  }
+
+  // Intuition submit (simpler — no lock step)
+  async function handleIntuitionSubmit() {
+    if (cs.tentativeSelected === null || cs.submitting || cs.skipped) return;
+    const q = questions[currentIdx];
+    const sess = session;
+    const startTime = questionStartTimesRef.current[currentIdx] || Date.now();
+    const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+    const elim = cs.eliminated || [];
+
+    patchCS(currentIdx, { submitting: true });
+    setError(null);
+    try {
+      const fb = await submitBasicAttempt({
+        sessionId: sess.id, questionId: q.id,
+        selectedOptionIndex: cs.tentativeSelected,
+        timeTakenSeconds: timeTaken, mode: "intuition",
+        eliminatedIndices: elim,
+      });
+      patchCS(currentIdx, { feedback: fb, submitting: false, locked: true, lockedSelected: cs.tentativeSelected });
+      if (fb.intuitionPoints != null) setSessionPoints(p => p + fb.intuitionPoints);
+      setQuestionStates(prev => {
+        const done = questions.every((_, i) => {
+          if (i === currentIdx) return true;
+          const ss = prev[i] || defaultQState();
+          return ss.feedback !== null || ss.skipped;
+        });
+        if (done) setShowEndModal(true);
+        return prev;
+      });
+    } catch (e) {
+      patchCS(currentIdx, { submitting: false });
+      setError(e.message);
+    }
+  }
+
+  function optionStatus(i) {
+    const fb = cs.feedback;
+    if (!fb) return null;
+    const sel = cs.lockedSelected ?? cs.tentativeSelected;
+    if (i === fb.correctOptionIndex) return sel === i ? "correct" : "correct-unselected";
+    if (i === sel) return "wrong";
+    return null;
+  }
+
+  // Timer helpers
+  function timerInfo() {
+    if (!session || session.practiceMode === "intuition") return null;
+    if (session.timerMode === "untimed") return null;
+    const perSession = session.timerScope === "per_session";
+    const base = perSession ? sessionStartRef.current : (questionStartTimesRef.current[currentIdx] || Date.now());
+    let elapsed = (tick - base) / 1000;
+    if (!perSession && cs.lockTime) elapsed = (cs.lockTime - base) / 1000; // frozen at lock
+    if (session.timerMode === "count_up") return { text: formatTime(elapsed), tone: "neutral" };
+    const remaining = session.timerSeconds - elapsed;
+    return { text: formatTime(remaining), tone: remaining <= 10 ? "danger" : remaining <= 20 ? "warn" : "ok" };
+  }
+
+  function intuitionSecondsLeft() {
+    if (!session || session.timerMode !== "countdown") return null;
+    const start = questionStartTimesRef.current[currentIdx] || Date.now();
+    return Math.max(0, session.timerSeconds - (tick - start) / 1000);
+  }
 
   // Bootstrap
   useEffect(() => {
@@ -224,13 +430,18 @@ export default function Practice() {
         if (!s) { navigate("/setup", { replace: true }); return; }
         sessionStartRef.current = s.startedAt || Date.now();
         setSession(s);
-        await loadNext(s);
+        const { questions: qs } = await getSessionQuestions(s.id);
+        if (cancelled) return;
+        questionStartTimesRef.current = { 0: Date.now() };
+        setQuestions(qs);
+        setQuestionStates(qs.map(() => defaultQState()));
+        setLoadingQuestions(false);
       } catch (e) {
-        if (!cancelled) { setError(e.message); setLoadingQuestion(false); }
+        if (!cancelled) { setError(e.message); setLoadingQuestions(false); }
       }
     })();
     return () => { cancelled = true; };
-  }, [navigate, loadNext]);
+  }, [navigate]);
 
   // Timer tick
   useEffect(() => {
@@ -241,17 +452,17 @@ export default function Practice() {
     return () => clearInterval(id);
   }, [session]);
 
-  // Countdown enforcement (analysis) + intuition per-question auto-submit
+  // Countdown enforcement
   useEffect(() => {
-    if (!session || !question || endedRef.current) return;
+    if (!session || !questions || endedRef.current) return;
+    const q = questions[currentIdx];
+    if (!q) return;
 
     if (session.practiceMode === "intuition" && session.timerMode === "countdown") {
-      if (feedback || submitting || isSkipping) return;
-      const remaining = session.timerSeconds - (Date.now() - questionStartRef.current) / 1000;
-      if (remaining <= 0 && !autoActedRef.current) {
-        autoActedRef.current = true;
-        doSkip(session, question, true);
-      }
+      if (cs.feedback || cs.submitting || cs.isSkipping) return;
+      const start = questionStartTimesRef.current[currentIdx] || Date.now();
+      const remaining = session.timerSeconds - (Date.now() - start) / 1000;
+      if (remaining <= 0 && !autoActedRef.current) doSkip(session, currentIdx, true);
       return;
     }
 
@@ -260,206 +471,71 @@ export default function Practice() {
       const remaining = session.timerSeconds - (Date.now() - sessionStartRef.current) / 1000;
       if (remaining <= 0) finishSession(session);
     } else {
-      // Don't auto-skip once an option has been selected — user is writing reasoning
-      if (feedback || submitting || isSkipping || selected !== null) return;
-      const remaining = session.timerSeconds - (Date.now() - questionStartRef.current) / 1000;
-      if (remaining <= 0 && !autoActedRef.current) {
-        autoActedRef.current = true;
-        doSkip(session, question, true);
-      }
+      if (cs.locked || cs.feedback || cs.submitting || cs.isSkipping) return;
+      const start = questionStartTimesRef.current[currentIdx] || Date.now();
+      const remaining = session.timerSeconds - (Date.now() - start) / 1000;
+      if (remaining <= 0 && !autoActedRef.current) doSkip(session, currentIdx, true);
     }
-  }, [tick, feedback, submitting, isSkipping, selected, question, session, finishSession, doSkip]);
+  }, [tick, currentIdx, session, questions, cs.locked, cs.feedback, cs.submitting, cs.isSkipping, finishSession, doSkip]);
 
-  async function handleSubmit() {
-    if (selected === null || !question || !session || submitting || isSkipping) return;
-    const timeTaken = Math.floor((Date.now() - questionStartRef.current) / 1000);
-    frozenElapsedRef.current = timeTaken;
-    setSubmitting(true);
-    setError(null);
-    try {
-      let fb;
-      if (practiceMode === "analysis") {
-        const hasReasoning = reasoningText.trim().length > 0;
-        if (hasReasoning && !isDeferred(session)) {
-          // Has reasoning + not deferred → full AI evaluation
-          fb = await submitEvaluateAttempt({
-            sessionId: session.id,
-            questionId: question.id,
-            selectedOptionIndex: selected,
-            reasoningText: reasoningText.trim(),
-            timeTakenSeconds: timeTaken,
-            mode: practiceMode,
-            quotedLines: quotes,
-            deferred: false,
-          });
-        } else if (hasReasoning && isDeferred(session)) {
-          // Has reasoning + deferred → save reasoning, evaluate later
-          fb = await submitEvaluateAttempt({
-            sessionId: session.id,
-            questionId: question.id,
-            selectedOptionIndex: selected,
-            reasoningText: reasoningText.trim(),
-            timeTakenSeconds: timeTaken,
-            mode: practiceMode,
-            quotedLines: quotes,
-            deferred: true,
-          });
-        } else {
-          // No reasoning → basic attempt, no AI (instant ✓/✗ only)
-          fb = await submitBasicAttempt({
-            sessionId: session.id,
-            questionId: question.id,
-            selectedOptionIndex: selected,
-            timeTakenSeconds: timeTaken,
-            mode: practiceMode,
-          });
-        }
-      } else {
-        fb = await submitBasicAttempt({
-          sessionId: session.id,
-          questionId: question.id,
-          selectedOptionIndex: selected,
-          timeTakenSeconds: timeTaken,
-          mode: practiceMode,
-          eliminatedIndices: [...eliminated],
-        });
-      }
-      setFeedback(fb);
-      if (practiceMode === "intuition" && fb.intuitionPoints != null) {
-        setSessionPoints((p) => p + fb.intuitionPoints);
-      }
-    } catch (e) { setError(e.message); }
-    finally { setSubmitting(false); }
-  }
-
-  function optionStatus(i) {
-    if (!feedback) return null;
-    if (i === feedback.correctOptionIndex) return selected === i ? "correct" : "correct-unselected";
-    if (i === selected) return "wrong";
-    return null;
-  }
-
-  // Timer helpers (analysis mode)
-  function timerInfo() {
-    if (!session || session.practiceMode === "intuition") return null;
-    if (session.timerMode === "untimed") return null;
-    const perSession = session.timerScope === "per_session";
-    const base = perSession ? sessionStartRef.current : questionStartRef.current;
-    let elapsed = (tick - base) / 1000;
-    // Freeze per-question timer display when an option is selected (before submit)
-    if (!perSession && selected !== null && !feedback && selectionTimeRef.current != null) {
-      elapsed = (selectionTimeRef.current - base) / 1000;
-    }
-    if (!perSession && feedback && frozenElapsedRef.current != null) elapsed = frozenElapsedRef.current;
-    if (session.timerMode === "count_up") return { text: formatTime(elapsed), tone: "neutral" };
-    const remaining = session.timerSeconds - elapsed;
-    return {
-      text: formatTime(remaining),
-      tone: remaining <= 10 ? "danger" : remaining <= 20 ? "warn" : "ok",
-    };
-  }
-
-  function intuitionSecondsLeft() {
-    if (!session || session.timerMode !== "countdown") return null;
-    return Math.max(0, session.timerSeconds - (tick - questionStartRef.current) / 1000);
-  }
-
-  if (error && !question) {
+  // ── Loading ────────────────────────────────────────────────────────────────
+  if (error && !questions) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <p className="text-destructive">Something went wrong: {error}</p>
-        <Button className="mt-4" onClick={() => session && loadNext(session)}>
+        <Button className="mt-4" onClick={() => { setError(null); setLoadingQuestions(true); }}>
           Retry
         </Button>
       </div>
     );
   }
 
-  if (loadingQuestion || !question) {
+  if (loadingQuestions || !questions) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">
-        Loading question…
+        Loading questions…
       </div>
     );
   }
 
-  // ── History view mode — reviewing a past question (read-only) ────────────
-  if (historyViewIdx !== null && questionHistory[historyViewIdx]) {
-    return (
-      <HistoryView
-        entry={questionHistory[historyViewIdx]}
-        historyViewIdx={historyViewIdx}
-        questionHistory={questionHistory}
-        currentLiveSlot={question.index}
-        totalSlots={question.total}
-        flaggedSlots={flaggedSlots}
-        onToggleFlag={(slot) =>
-          setFlaggedSlots((prev) => {
-            const next = new Set(prev);
-            if (next.has(slot)) next.delete(slot); else next.add(slot);
-            return next;
-          })
-        }
-        onJump={(idx) => setHistoryViewIdx(idx)}
-        onReturnToLive={() => setHistoryViewIdx(null)}
-      />
-    );
-  }
+  const question = questions[currentIdx];
+  if (!question) return null;
 
-  // ── Intuition mode layout ─────────────────────────────────────────────────
+  // ── Intuition mode ─────────────────────────────────────────────────────────
   if (practiceMode === "intuition") {
     const secsLeft = intuitionSecondsLeft();
     const totalSecs = session.timerSeconds || 60;
+    const fb = cs.feedback;
+    const elim = new Set(cs.eliminated || []);
 
     return (
       <div className="max-w-6xl mx-auto px-4 py-8">
         <QuestionNavBar
-          total={question.total}
-          questionHistory={questionHistory}
-          currentSlot={question.index}
-          flaggedSlots={flaggedSlots}
-          historyViewIdx={null}
-          onJump={(idx) => setHistoryViewIdx(idx)}
+          total={questions.length}
+          currentIdx={currentIdx}
+          questionStates={questionStates}
+          onJump={navigateTo}
         />
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Left — paragraph */}
           <div className="md:w-[55%]">
             <div className="flex items-center justify-between mb-4">
-              {feedback
-                ? <TopicBadge topic={question.topic} />
-                : <span className="text-xs text-muted-foreground opacity-0 select-none">·</span>
-              }
+              {fb ? <TopicBadge topic={question.topic} /> : <span className="opacity-0 text-xs">·</span>}
               <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">
-                  Question {question.index} of {question.total}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setFlaggedSlots((prev) => { const n = new Set(prev); if (n.has(question.index)) n.delete(question.index); else n.add(question.index); return n; })}
-                  className={cn("text-xs transition-colors", flaggedSlots.has(question.index) ? "text-amber-500" : "text-muted-foreground hover:text-amber-500")}
-                >
-                  🚩
-                </button>
+                <span className="text-xs text-muted-foreground">Q{currentIdx + 1} of {questions.length}</span>
+                <button type="button" onClick={() => setFlagModal({ questionId: question.id })}
+                  title="Report issue" className="text-xs text-muted-foreground hover:text-amber-500 transition-colors">🚩</button>
               </div>
             </div>
-            <p
-              className="font-reading text-foreground"
-              style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}
-            >
-              {question.paragraph}
-            </p>
+            <p className="font-reading text-foreground" style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}>{question.paragraph}</p>
           </div>
 
-          {/* Right — question, timer ring, options */}
           <div className="md:w-[45%]">
             <div className="flex items-start justify-between">
               <div>
-                {feedback && <TypeBadge type={question.type} />}
-                <h2 className={cn("font-bold text-foreground", feedback ? "mt-2" : "")} style={{ fontSize: "17px" }}>
-                  {question.question}
-                </h2>
+                {fb && <TypeBadge type={question.type} />}
+                <h2 className={cn("font-bold text-foreground", fb ? "mt-2" : "")} style={{ fontSize: "17px" }}>{question.question}</h2>
               </div>
-              {secsLeft !== null && !feedback ? (
+              {secsLeft !== null && !fb ? (
                 <IntuitionTimer seconds={secsLeft} total={totalSecs} />
               ) : (
                 <div className="text-center">
@@ -471,37 +547,29 @@ export default function Practice() {
 
             <div className="mt-5 flex flex-col gap-2">
               {question.options.map((opt, i) => {
-                const isElim = eliminated.has(i);
-                const afterStatus = optionStatus(i);
+                const isElim = elim.has(i);
                 return (
                   <div key={i} className="flex items-center gap-2">
-                    <div className={cn("flex-1", isElim && !feedback && "opacity-50")}>
+                    <div className={cn("flex-1", isElim && !fb && "opacity-50")}>
                       <OptionCard
                         letter={LETTERS[i]}
-                        text={isElim && !feedback ? <s>{opt.text}</s> : opt.text}
-                        selected={selected === i}
-                        status={afterStatus}
-                        disabled={feedback !== null || submitting}
-                        onClick={() => { if (!isElim) setSelected(i); }}
+                        text={isElim && !fb ? <s>{opt.text}</s> : opt.text}
+                        selected={cs.tentativeSelected === i}
+                        status={optionStatus(i)}
+                        disabled={!!fb || cs.submitting}
+                        onClick={() => { if (!isElim) patchCS(currentIdx, { tentativeSelected: i }); }}
                       />
                     </div>
-                    {!feedback && (
-                      <button
-                        type="button"
-                        title={isElim ? "Restore" : "Eliminate"}
-                        onClick={() => setEliminated((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(i)) { next.delete(i); }
-                          else { next.add(i); if (selected === i) setSelected(null); }
-                          return next;
-                        })}
-                        className={cn(
-                          "flex-none h-8 w-8 rounded-full border text-xs font-bold transition-colors",
-                          isElim
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-input text-muted-foreground hover:border-destructive hover:text-destructive"
-                        )}
-                      >
+                    {!fb && (
+                      <button type="button" title={isElim ? "Restore" : "Eliminate"}
+                        onClick={() => {
+                          const next = new Set(elim);
+                          if (next.has(i)) next.delete(i);
+                          else { next.add(i); if (cs.tentativeSelected === i) patchCS(currentIdx, { tentativeSelected: null }); }
+                          patchCS(currentIdx, { eliminated: [...next] });
+                        }}
+                        className={cn("flex-none h-8 w-8 rounded-full border text-xs font-bold transition-colors",
+                          isElim ? "border-foreground bg-foreground text-background" : "border-input text-muted-foreground hover:border-destructive hover:text-destructive")}>
                         ✕
                       </button>
                     )}
@@ -512,57 +580,44 @@ export default function Practice() {
 
             {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-            {!feedback ? (
+            {!fb ? (
               <div className="mt-6 flex gap-3">
-                <Button
-                  className="flex-1"
-                  size="lg"
-                  disabled={selected === null || submitting || isSkipping}
-                  onClick={handleSubmit}
-                >
-                  {submitting ? "Submitting…" : "Submit"}
+                <Button className="flex-1" size="lg"
+                  disabled={cs.tentativeSelected === null || cs.submitting || cs.isSkipping}
+                  onClick={handleIntuitionSubmit}>
+                  {cs.submitting ? "Submitting…" : "Submit"}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  disabled={submitting || isSkipping}
-                  onClick={() => doSkip(session, question)}
-                >
-                  {isSkipping ? "Skipping…" : "Skip"}
+                <Button variant="outline" size="lg" disabled={cs.submitting || cs.isSkipping}
+                  onClick={() => doSkip(session, currentIdx)}>
+                  {cs.isSkipping ? "Skipping…" : "Skip"}
                 </Button>
               </div>
             ) : (
               <IntuitionFeedback
-                feedback={feedback}
+                feedback={fb}
                 sessionPoints={sessionPoints}
-                isLast={question.index === question.total}
-                onNext={() => {
-                  setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "intuition" }]);
-                  loadNext(session);
-                }}
-                onEnd={() => {
-                  setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "intuition" }]);
-                  finishSession(session);
-                }}
+                isLast={currentIdx === questions.length - 1}
+                onNext={() => navigateTo(currentIdx + 1)}
+                onEnd={() => setShowEndModal(true)}
               />
             )}
           </div>
         </div>
+
+        {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
+          onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
+        {flagToast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-900 text-white px-5 py-3 text-sm shadow-lg">{flagToast}</div>}
+        {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
       </div>
     );
   }
 
-  // ── Analysis mode layout ──────────────────────────────────────────────────
+  // ── Analysis mode ──────────────────────────────────────────────────────────
   const timer = timerInfo();
-  const timerColor =
-    timer?.tone === "danger"
-      ? "text-destructive"
-      : timer?.tone === "warn"
-      ? "text-warning"
-      : "text-muted-foreground";
-  const reasoningLen = reasoningText.trim().length;
+  const timerColor = timer?.tone === "danger" ? "text-destructive" : timer?.tone === "warn" ? "text-warning" : "text-muted-foreground";
   const REASONING_MAX = 500;
-  const canSubmit = selected !== null && reasoningLen <= REASONING_MAX;
+  const reasoningLen = cs.reasoning.trim().length;
+  const fb = cs.feedback;
 
   return (
     <>
@@ -570,77 +625,59 @@ export default function Practice() {
       {session?.sessionType === "review" && (
         <div className="mb-6 rounded-md bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
           <span className="text-base">🔁</span>
-          <span><strong>Spaced repetition review</strong> — these are questions you previously got wrong, due for reinforcement.</span>
-        </div>
-      )}
-      {question.repeating && session?.sessionType !== "review" && (
-        <div className="mb-6 rounded-md bg-primary/10 px-4 py-3 text-sm text-primary">
-          You've seen all 25 questions — repeating from the full question bank.
+          <span><strong>Spaced repetition review</strong> — questions you previously got wrong, due for reinforcement.</span>
         </div>
       )}
       <QuestionNavBar
-        total={question.total}
-        questionHistory={questionHistory}
-        currentSlot={question.index}
-        flaggedSlots={flaggedSlots}
-        historyViewIdx={null}
-        onJump={(idx) => setHistoryViewIdx(idx)}
+        total={questions.length}
+        currentIdx={currentIdx}
+        questionStates={questionStates}
+        onJump={navigateTo}
       />
+
+      {/* Nav-blocked message */}
+      {navBlockMsg && (
+        <div className="mb-4 rounded-md bg-warning/15 border border-warning/30 px-4 py-2 text-sm text-warning">
+          {navBlockMsg}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-8">
         {/* Left — paragraph */}
         <div className="md:w-[55%]">
           <div className="flex items-center justify-between mb-4">
-            {feedback
-              ? <TopicBadge topic={question.topic} />
-              : <span className="invisible h-5" aria-hidden="true" />
-            }
+            {fb ? <TopicBadge topic={question.topic} /> : <span className="invisible h-5" aria-hidden="true" />}
             <div className="flex items-center gap-3">
               {timer && (
-                <span className={cn("text-sm font-mono tabular-nums", timerColor)}>
-                  {timer.text}
-                </span>
+                <span className={cn("text-sm font-mono tabular-nums", timerColor)}>{timer.text}</span>
               )}
-              {/* Mobile paragraph toggle */}
-              <button
-                type="button"
-                onClick={() => setParagraphOpen((o) => !o)}
-                className="md:hidden text-xs text-muted-foreground hover:text-foreground"
-              >
+              <button type="button" onClick={() => setParagraphOpen(o => !o)}
+                className="md:hidden text-xs text-muted-foreground hover:text-foreground">
                 {paragraphOpen ? "▲ Hide" : "▼ Passage"}
               </button>
             </div>
           </div>
-          <div className={cn("transition-opacity duration-300", loadingQuestion ? "opacity-0" : "opacity-100")}>
-            {paragraphOpen && (
-              <p
-                ref={paragraphRef}
-                onMouseUp={handleParagraphMouseUp}
-                className="font-reading text-foreground select-text cursor-text"
-                style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}
-              >
-                {question.paragraph}
-              </p>
-            )}
-          </div>
-          <div className="mt-6 flex items-center gap-3">
-            <p className="text-xs text-muted-foreground">
-              Question {question.index} of {question.total}
+          {paragraphOpen && (
+            <p ref={paragraphRef} onMouseUp={handleParagraphMouseUp}
+              className="font-reading text-foreground select-text cursor-text"
+              style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}>
+              {question.paragraph}
             </p>
-            <button
-              type="button"
-              onClick={() => setFlaggedSlots((prev) => { const n = new Set(prev); if (n.has(question.index)) n.delete(question.index); else n.add(question.index); return n; })}
-              title={flaggedSlots.has(question.index) ? "Unflag this question" : "Flag for review"}
-              className={cn("text-xs flex items-center gap-1 transition-colors", flaggedSlots.has(question.index) ? "text-amber-500" : "text-muted-foreground hover:text-amber-500")}
-            >
-              🚩 {flaggedSlots.has(question.index) ? "Flagged" : "Flag"}
+          )}
+          <div className="mt-6 flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">Question {currentIdx + 1} of {questions.length}</p>
+            <button type="button" onClick={() => setFlagModal({ questionId: question.id })}
+              title="Report an issue with this question"
+              className="text-xs flex items-center gap-1 text-muted-foreground hover:text-amber-500 transition-colors">
+              🚩 Report
             </button>
           </div>
         </div>
 
         {/* Right — question + options + reasoning + submit */}
         <div className="md:w-[45%]">
-          {feedback && <TypeBadge type={question.type} />}
-          <h2 className={cn("font-bold text-foreground", feedback ? "mt-3" : "")} style={{ fontSize: "17px" }}>
+          {fb && <TypeBadge type={question.type} />}
+          <h2 className={cn("font-bold text-foreground", fb ? "mt-3" : "")} style={{ fontSize: "17px" }}>
             {question.question}
           </h2>
 
@@ -650,20 +687,30 @@ export default function Practice() {
                 key={i}
                 letter={LETTERS[i]}
                 text={opt.text}
-                selected={selected === i}
+                selected={cs.locked ? cs.lockedSelected === i : cs.tentativeSelected === i}
                 status={optionStatus(i)}
-                disabled={feedback !== null || submitting || isSkipping || selected !== null}
+                disabled={!!fb || cs.submitting || cs.locked}
                 onClick={() => {
-                  // Record when the first selection is made so the timer can freeze
-                  if (selectionTimeRef.current === null) selectionTimeRef.current = Date.now();
-                  setSelected(i);
+                  if (!cs.locked && !fb) patchCS(currentIdx, { tentativeSelected: i });
                 }}
               />
             ))}
           </div>
 
-          {/* Reasoning textarea — appears after option is selected, before feedback */}
-          {selected !== null && !feedback && (
+          {/* Submit Answer button — visible when option selected but not yet locked */}
+          {!cs.locked && !fb && cs.tentativeSelected !== null && (
+            <div className="mt-4 animate-slide-up">
+              <Button className="w-full" size="lg" onClick={lockAnswer}>
+                Submit Answer →
+              </Button>
+              <p className="mt-1 text-center text-xs text-muted-foreground">
+                You can still change your selection above
+              </p>
+            </div>
+          )}
+
+          {/* Reasoning textarea — appears after lock, before feedback */}
+          {cs.locked && !fb && (
             <div className="mt-5 animate-slide-up">
               <div className="flex items-baseline justify-between">
                 <label className="block text-sm font-semibold text-foreground">
@@ -677,62 +724,34 @@ export default function Practice() {
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Add reasoning to get AI feedback. Leave blank to just see if you were correct.
+                Add reasoning to get AI feedback. Leave blank for instant ✓/✗ only.
               </p>
-              {quotes.length > 0 && (
+              {cs.quotes.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {quotes.map((q, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs text-primary"
-                    >
+                  {cs.quotes.map((q, qi) => (
+                    <span key={qi} className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs text-primary">
                       <span className="italic" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}>"{q}"</span>
-                      <button
-                        type="button"
-                        onClick={() => removeQuote(q)}
-                        aria-label="Remove quote"
-                        className="ml-0.5 flex-none opacity-60 hover:opacity-100"
-                      >×</button>
+                      <button type="button" onClick={() => removeQuote(q)} className="ml-0.5 flex-none opacity-60 hover:opacity-100">×</button>
                     </span>
                   ))}
                 </div>
               )}
               <div className="mt-2 flex items-start gap-2">
                 <Textarea
-                  value={reasoningText}
-                  onChange={(e) => setReasoningText(e.target.value)}
-                  disabled={submitting}
+                  value={cs.reasoning}
+                  onChange={(e) => patchCS(currentIdx, { reasoning: e.target.value })}
+                  disabled={cs.submitting}
                   rows={3}
                   className="flex-1 resize-none"
                   placeholder="e.g. The paragraph says… which supports option B because…"
                 />
                 {voiceSupported && (
-                  <VoiceMicButton
-                    isRecording={isVoiceRecording}
-                    onClick={toggleVoice}
-                    disabled={submitting}
-                  />
+                  <VoiceMicButton isRecording={isVoiceRecording} onClick={toggleVoice} disabled={cs.submitting} />
                 )}
               </div>
-
-              {/* Live interim preview while speaking */}
-              {interimText && (
-                <p className="mt-1 text-xs text-muted-foreground italic px-1 truncate">
-                  🎙 {interimText}
-                </p>
-              )}
-
-              {/* Voice error */}
-              {voiceError && (
-                <p className="mt-1 text-xs text-destructive">{voiceError}</p>
-              )}
-
-              <div
-                className={cn(
-                  "mt-1 text-right text-xs",
-                  reasoningLen > REASONING_MAX ? "text-destructive" : "text-muted-foreground"
-                )}
-              >
+              {interimText && <p className="mt-1 text-xs text-muted-foreground italic px-1 truncate">🎙 {interimText}</p>}
+              {voiceError && <p className="mt-1 text-xs text-destructive">{voiceError}</p>}
+              <div className={cn("mt-1 text-right text-xs", reasoningLen > REASONING_MAX ? "text-destructive" : "text-muted-foreground")}>
                 {reasoningLen} / {REASONING_MAX}
               </div>
             </div>
@@ -740,24 +759,20 @@ export default function Practice() {
 
           {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-          {!feedback ? (
+          {/* Submit reasoning / Skip buttons — only when locked & no feedback yet */}
+          {cs.locked && !fb && (
             <div className="mt-4">
               <div className="flex gap-3">
-                <Button
-                  className="flex-1"
-                  size="lg"
-                  disabled={!canSubmit || submitting || isSkipping}
-                  onClick={handleSubmit}
-                >
-                  {submitting ? (
+                <Button className="flex-1" size="lg"
+                  disabled={reasoningLen > REASONING_MAX || cs.submitting || cs.isSkipping}
+                  onClick={handleSubmit}>
+                  {cs.submitting ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                       {isDeferred(session) ? "Saving…" : reasoningLen > 0 ? "Analyzing…" : "Submitting…"}
                     </>
-                  ) : selected === null ? (
-                    "Select an option first"
                   ) : reasoningLen > REASONING_MAX ? (
-                    `Reasoning too long (${reasoningLen}/${REASONING_MAX})`
+                    `Too long (${reasoningLen}/${REASONING_MAX})`
                   ) : isDeferred(session) ? (
                     "Submit Answer"
                   ) : reasoningLen > 0 ? (
@@ -766,80 +781,98 @@ export default function Practice() {
                     "Submit (No AI Feedback)"
                   )}
                 </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  disabled={submitting || isSkipping}
-                  onClick={() => doSkip(session, question)}
-                >
-                  {isSkipping ? "Skipping…" : "Skip"}
+                <Button variant="outline" size="lg" disabled={cs.submitting || cs.isSkipping}
+                  onClick={() => doSkip(session, currentIdx)}>
+                  {cs.isSkipping ? "Skipping…" : "Skip"}
                 </Button>
               </div>
-              {submitting && isDeferred(session) && (
-                <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Saving your answer…
-                </p>
-              )}
-              {submitting && !isDeferred(session) && reasoningLen > 0 && (
-                <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Analyzing your reasoning…
-                </p>
-              )}
+              {cs.submitting && isDeferred(session) && <p className="mt-2 text-center text-xs text-muted-foreground">Saving your answer…</p>}
+              {cs.submitting && !isDeferred(session) && reasoningLen > 0 && <p className="mt-2 text-center text-xs text-muted-foreground">Analyzing your reasoning…</p>}
             </div>
-          ) : isDeferred(session) && feedback?.deferred ? (
-            <DeferredSavedCard
-              feedback={feedback}
-              isLast={question.index === question.total}
-              onNext={() => {
-                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
-                loadNext(session);
-              }}
-              onEnd={() => {
-                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
-                finishSession(session);
-              }}
-            />
-          ) : (
-            <AnalysisFeedback
-              feedback={feedback}
-              question={question}
-              selectedOptionIndex={selected}
-              isLast={question.index === question.total}
-              onNext={() => {
-                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
-                loadNext(session);
-              }}
-              onEnd={() => {
-                setQuestionHistory((prev) => [...prev, { question, status: feedback.isCorrect ? "correct" : "wrong", selectedOption: selected, feedback, mode: "analysis" }]);
-                finishSession(session);
-              }}
-            />
+          )}
+
+          {/* Not yet started state — show skip only */}
+          {!cs.locked && !fb && cs.tentativeSelected === null && (
+            <div className="mt-4">
+              <Button variant="outline" size="lg" className="w-full" disabled={cs.isSkipping}
+                onClick={() => doSkip(session, currentIdx)}>
+                {cs.isSkipping ? "Skipping…" : "Skip"}
+              </Button>
+            </div>
+          )}
+
+          {/* Feedback */}
+          {fb && (
+            isDeferred(session) && fb?.deferred ? (
+              <DeferredSavedCard
+                feedback={fb}
+                isLast={currentIdx === questions.length - 1}
+                onNext={() => {
+                  const nextIdx = findNextUnanswered(questionStates, currentIdx);
+                  if (nextIdx !== null) navigateTo(nextIdx);
+                  else setShowEndModal(true);
+                }}
+                onEnd={() => setShowEndModal(true)}
+              />
+            ) : (
+              <AnalysisFeedback
+                feedback={fb}
+                question={question}
+                selectedOptionIndex={cs.lockedSelected}
+                isLast={currentIdx === questions.length - 1}
+                onNext={() => {
+                  const nextIdx = findNextUnanswered(questionStates, currentIdx);
+                  if (nextIdx !== null) navigateTo(nextIdx);
+                  else setShowEndModal(true);
+                }}
+                onEnd={() => setShowEndModal(true)}
+              />
+            )
           )}
         </div>
       </div>
     </div>
 
-    {/* Quote popover — fixed position near text selection */}
+    {/* Quote popover */}
     {selectionPopover && (
-      <div
-        style={{
-          position: "fixed",
-          left: selectionPopover.x,
-          top: selectionPopover.y,
-          transform: "translateX(-50%)",
-          zIndex: 50,
-        }}
-      >
-        <button
-          type="button"
+      <div style={{ position: "fixed", left: selectionPopover.x, top: selectionPopover.y, transform: "translateX(-50%)", zIndex: 50 }}>
+        <button type="button"
           onMouseDown={(e) => { e.stopPropagation(); addQuote(selectionPopover.text); }}
-          className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-lg"
-        >
+          className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-lg">
           ❝ Quote
         </button>
       </div>
     )}
+
+    {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
+      onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks for the feedback!"); setTimeout(() => setFlagToast(null), 3500); }} />}
+
+    {flagToast && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-900 text-white px-5 py-3 text-sm font-medium shadow-lg">
+        {flagToast}
+      </div>
+    )}
+
+    {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
     </>
+  );
+}
+
+// ── End session confirm modal ─────────────────────────────────────────────────
+function EndSessionModal({ onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-xl">
+        <h2 className="text-base font-bold text-foreground mb-2">Submit session?</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          All questions answered. Submit the session to see your results, or keep reviewing.
+        </p>
+        <div className="flex gap-3">
+          <Button className="flex-1" onClick={onConfirm}>Submit session</Button>
+          <Button variant="outline" className="flex-1" onClick={onCancel}>Keep reviewing</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -898,51 +931,41 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, isLast, onN
 }
 
 // ── Question navigator bar ────────────────────────────────────────────────────
-// Renders a row of numbered circles (one per slot). Clicking a completed slot
-// enters history-review mode for that question.
-function QuestionNavBar({ total, questionHistory, currentSlot, flaggedSlots, historyViewIdx, onJump }) {
+// All slots are clickable. Navigation is blocked externally when locked+no feedback.
+function QuestionNavBar({ total, currentIdx, questionStates, onJump }) {
   return (
     <div className="flex flex-wrap gap-1.5 mb-5">
       {Array.from({ length: total }, (_, i) => {
-        const slot = i + 1;
-        const entry = questionHistory[i];    // history is 0-indexed, slot is 1-based
-        const isCurrent = slot === currentSlot && historyViewIdx === null;
-        const isViewing = historyViewIdx === i;
-        const isFlagged = flaggedSlots.has(slot);
-        const isAnswered = !!entry;
+        const s = questionStates[i] || defaultQState();
+        const isCurrent = i === currentIdx;
 
-        let colorCls =
-          "border-border text-muted-foreground opacity-30 cursor-default"; // future slot
-        if (isAnswered) {
-          if (entry.status === "correct")
-            colorCls = "border-success bg-success text-white cursor-pointer hover:opacity-80";
-          else if (entry.status === "wrong")
-            colorCls = "border-destructive bg-destructive text-white cursor-pointer hover:opacity-80";
-          else
-            colorCls = "border-border bg-muted text-muted-foreground cursor-pointer hover:opacity-80"; // skipped
+        let colorCls = "border-border text-muted-foreground hover:border-primary hover:text-primary cursor-pointer"; // unvisited
+        if (s.feedback !== null) {
+          colorCls = s.feedback.isCorrect
+            ? "border-success bg-success text-white cursor-pointer hover:opacity-80"
+            : "border-destructive bg-destructive text-white cursor-pointer hover:opacity-80";
+        } else if (s.skipped) {
+          colorCls = "border-border bg-muted text-muted-foreground cursor-pointer hover:opacity-80";
+        } else if (s.locked) {
+          colorCls = "border-warning bg-warning/20 text-warning cursor-pointer hover:opacity-80"; // awaiting reasoning
         }
         if (isCurrent) colorCls = "border-primary bg-primary text-primary-foreground cursor-default";
-        if (isViewing) colorCls = "border-primary bg-primary/20 text-primary cursor-pointer";
+
+        const statusLabel = s.feedback !== null ? (s.feedback.isCorrect ? "correct" : "wrong")
+          : s.skipped ? "skipped" : s.locked ? "locked" : "unanswered";
 
         return (
           <button
-            key={slot}
+            key={i}
             type="button"
-            disabled={!isAnswered && !isCurrent}
-            onClick={() => { if (isAnswered) onJump(i); }}
-            title={
-              isCurrent ? `Q${slot} — Current` :
-              isAnswered ? `Q${slot} — ${entry.status}${isFlagged ? " (flagged)" : ""}` :
-              `Q${slot} — Not reached`
-            }
+            onClick={() => !isCurrent && onJump(i)}
+            title={`Q${i + 1} — ${isCurrent ? "current" : statusLabel}`}
             className={cn(
               "h-7 w-7 rounded-full text-xs font-bold border flex items-center justify-center transition-all flex-none",
               colorCls,
-              isFlagged && "ring-2 ring-amber-400 ring-offset-1 ring-offset-background",
-              isViewing && "ring-2 ring-primary ring-offset-1 ring-offset-background",
             )}
           >
-            {slot}
+            {i + 1}
           </button>
         );
       })}
@@ -950,168 +973,78 @@ function QuestionNavBar({ total, questionHistory, currentSlot, flaggedSlots, his
   );
 }
 
-// ── History view — read-only review of a past question ────────────────────────
-function HistoryView({ entry, historyViewIdx, questionHistory, currentLiveSlot, totalSlots, flaggedSlots, onToggleFlag, onJump, onReturnToLive }) {
-  const slot = historyViewIdx + 1;
-  const { question, status: entryStatus, selectedOption, feedback, mode } = entry;
-  const canGoPrev = historyViewIdx > 0;
-  const canGoNext = historyViewIdx < questionHistory.length - 1;
-  const isFlagged = flaggedSlots.has(slot);
+// ── Flag modal — report a problem with a question ──────────────────────────────
+const FLAG_REASONS = [
+  { value: "wrong_answer",  label: "Wrong answer key" },
+  { value: "ambiguous",     label: "Ambiguous question" },
+  { value: "typo",          label: "Typo or wording issue" },
+  { value: "poor_quality",  label: "Poor quality / off-topic" },
+];
 
-  // Build a FeedbackSections-compatible attempt object
-  const feedbackAttempt = feedback && !feedback.deferred ? {
-    options: question.options,
-    correctOptionIndex: feedback.correctOptionIndex,
-    selectedOptionIndex: selectedOption,
-    trapOptionIndex: feedback.trapOptionIndex,
-    isCorrect: feedback.isCorrect,
-    skipped: false,
-    trapType: feedback.trapType,
-    reasoningScore: feedback.reasoningScore,
-    reasoningFeedback: feedback.reasoningFeedback,
-    correctExplanation: feedback.correctExplanation,
-    trapExplanation: feedback.trapExplanation,
-    keyTakeaway: feedback.keyTakeaway,
-  } : null;
+function FlagModal({ questionId, onClose, onSuccess }) {
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!reason) { setErr("Please select a reason."); return; }
+    setBusy(true); setErr(null);
+    try {
+      await flagQuestion(questionId, reason, note);
+      onSuccess();
+    } catch (ex) { setErr(ex.message); }
+    finally { setBusy(false); }
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
-      {/* Navigator */}
-      <QuestionNavBar
-        total={totalSlots}
-        questionHistory={questionHistory}
-        currentSlot={currentLiveSlot}
-        flaggedSlots={flaggedSlots}
-        historyViewIdx={historyViewIdx}
-        onJump={onJump}
-      />
-
-      {/* Review banner */}
-      <div className="mb-6 rounded-md bg-muted/40 border border-border px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-semibold text-foreground">
-            Reviewing Q{slot} — read only
-          </span>
-          <span className={cn(
-            "rounded-full px-2 py-0.5 text-xs font-semibold",
-            entryStatus === "correct" ? "bg-success/10 text-success" :
-            entryStatus === "wrong" ? "bg-destructive/10 text-destructive" :
-            "bg-muted text-muted-foreground"
-          )}>
-            {entryStatus === "correct" ? "✓ Correct" : entryStatus === "wrong" ? "✗ Incorrect" : "Skipped"}
-          </span>
-          <button
-            type="button"
-            onClick={() => onToggleFlag(slot)}
-            className={cn(
-              "text-xs flex items-center gap-1 rounded-md px-2 py-0.5 border transition-colors",
-              isFlagged
-                ? "border-amber-400 bg-amber-400/10 text-amber-500"
-                : "border-border text-muted-foreground hover:border-amber-400 hover:text-amber-500"
-            )}
-          >
-            🚩 {isFlagged ? "Flagged" : "Flag"}
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={!canGoPrev}
-            onClick={() => onJump(historyViewIdx - 1)}
-            className="h-7 w-7 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Previous question"
-          >←</button>
-          <button
-            type="button"
-            disabled={!canGoNext}
-            onClick={() => onJump(historyViewIdx + 1)}
-            className="h-7 w-7 rounded-md border border-border flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Next reviewed question"
-          >→</button>
-          <Button size="sm" onClick={onReturnToLive}>
-            Return to Q{currentLiveSlot} →
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Paragraph */}
-        <div className="md:w-[55%]">
-          <div className="flex items-center justify-between mb-4">
-            <TopicBadge topic={question.topic} />
-            <span className="text-xs text-muted-foreground">Q{slot} of {totalSlots}</span>
-          </div>
-          <p className="font-reading text-foreground" style={{ fontSize: "16px", lineHeight: 1.85, maxWidth: "600px" }}>
-            {question.paragraph}
-          </p>
-        </div>
-
-        {/* Question + options + feedback */}
-        <div className="md:w-[45%]">
-          <TypeBadge type={question.type} />
-          <h2 className="mt-3 font-bold text-foreground" style={{ fontSize: "17px" }}>
-            {question.question}
-          </h2>
-
-          <div className="mt-5 flex flex-col gap-3">
-            {question.options.map((opt, i) => {
-              let optStatus = null;
-              if (entryStatus !== "skipped" && feedback) {
-                if (i === feedback.correctOptionIndex) {
-                  optStatus = selectedOption === i ? "correct" : "correct-unselected";
-                } else if (i === selectedOption) {
-                  optStatus = "wrong";
-                }
-              }
-              return (
-                <OptionCard
-                  key={i}
-                  letter={LETTERS[i]}
-                  text={opt.text}
-                  selected={selectedOption === i}
-                  status={optStatus}
-                  disabled={true}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-base font-bold text-foreground mb-1">Report a problem</h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Your report goes to the admin queue. Select the best reason below.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-2">
+            {FLAG_REASONS.map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="flag_reason"
+                  value={value}
+                  checked={reason === value}
+                  onChange={() => setReason(value)}
+                  className="accent-primary"
                 />
-              );
-            })}
+                <span className="text-sm text-foreground">{label}</span>
+              </label>
+            ))}
           </div>
-
-          {/* Feedback area */}
-          <div className="mt-6">
-            {entryStatus === "skipped" ? (
-              <p className="text-sm text-muted-foreground italic">This question was skipped.</p>
-            ) : feedback?.deferred ? (
-              <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                AI feedback will be available on the Session Review page after the session ends.
-              </div>
-            ) : feedbackAttempt ? (
-              <>
-                {feedback?.aiError && (
-                  <div className="mb-4 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
-                    {feedback.aiErrorMessage || "AI feedback unavailable for this question."}
-                  </div>
-                )}
-                {mode === "intuition" && feedback ? (
-                  <div className="space-y-3">
-                    <div className={cn("text-xl font-bold", feedback.isCorrect ? "text-success" : "text-destructive")}>
-                      {feedback.isCorrect ? "Correct" : "Incorrect"}
-                    </div>
-                    {feedback.trapType && (
-                      <div className="rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
-                        <span className="font-semibold">Trap: {LETTERS[feedback.trapOptionIndex]}.</span>{" "}
-                        {trapLabel(feedback.trapType)} — {trapDescription(feedback.trapType)}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <FeedbackSections attempt={feedbackAttempt} />
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">No reasoning submitted — no AI feedback.</p>
-            )}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Additional note (optional)</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              maxLength={300}
+              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Any extra detail…"
+            />
           </div>
-        </div>
+          {err && <p className="text-xs text-destructive">{err}</p>}
+          <div className="flex gap-2 pt-1">
+            <Button type="submit" size="sm" className="flex-1" disabled={busy}>
+              {busy ? "Sending…" : "Submit report"}
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );

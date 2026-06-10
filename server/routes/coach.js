@@ -13,7 +13,7 @@ const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 
 const LETTERS = ["A", "B", "C", "D"];
 const MIN_WORDS = 1;   // any non-empty article is acceptable
-const MAX_WORDS = 500;
+const MAX_WORDS = 600;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -89,7 +89,7 @@ Respond ONLY with a valid JSON array. No preamble, no markdown fences, no text o
   }
 ]`;
 
-const SOCRATIC_SYSTEM = `You are a CAT RC tutor conducting a Socratic debrief. A student has answered an RC question. You know the correct answer. Your job is NOT to reveal it — your job is to guide the student to figure it out themselves through targeted questions.
+const SOCRATIC_SYSTEM = `You are a VARC Coach conducting a structured debrief. A student has answered an RC question and shared their reasoning. You know the correct answer. Your job is NOT to reveal it — your job is to guide the student to figure it out themselves through targeted questions.
 
 Your response rules:
 - Keep your response under 100 words. This is a conversation, not a lecture.
@@ -101,10 +101,10 @@ Your response rules:
 - If the student's reasoning is essentially correct (even if they picked the wrong option), acknowledge the sound logic before redirecting
 
 Exchange number rules:
-- Exchange 1: Probe — ask them to show their evidence from the article (student message will be empty here — just ask the first probe question)
-- Exchange 2: Challenge or validate based on their response
-- Exchange 3: If still wrong, give a strong redirect to the relevant section of the article
-- Exchange 4: Reveal the correct answer with full explanation (150–200 words)
+- Exchange 1: The student has shared their reasoning. Challenge or probe it — ask them to show their evidence from the article more specifically, or push back on a weak assumption.
+- Exchange 2: Validate or challenge their follow-up; if still off-track, push them toward the relevant section of the article.
+- Exchange 3: If still wrong, give a strong redirect with a direct reference to the key sentence(s).
+- Exchange 4: Reveal the correct answer with full explanation (150–200 words).
 
 Tone: direct, intellectually honest, no false praise, patient but not soft.
 
@@ -281,12 +281,13 @@ router.post("/exchange", authenticate, async (req, res) => {
   }
 
   const conversation = JSON.parse(attempt.conversation_json || "[]");
-  // exchange_number = how many tutor messages have been sent + 1 (for this one)
-  const tutorMessagesSent = conversation.filter((m) => m.role === "tutor").length;
-  const exchangeNumber = tutorMessagesSent + 1;
+  // exchange_number = how many student messages have been sent + 1 (for this one).
+  // The student now opens — so exchange 1 is the first student message → first tutor reply.
+  const studentMessagesSent = conversation.filter((m) => m.role === "student").length;
+  const exchangeNumber = studentMessagesSent + 1;
 
-  // Add student's message to conversation (skip for exchange 1 — tutor opens)
-  if (message.trim() && exchangeNumber > 1) {
+  // Always add the student's message to the conversation.
+  if (message.trim()) {
     conversation.push({ role: "student", text: message.trim() });
   }
 

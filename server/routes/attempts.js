@@ -4,6 +4,7 @@ const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { updateCard } = require("../sr");
+const { clearCache: clearDashCache } = require("./dashboard");
 
 // Calculate intuition-mode points (server-side, spec §Phase 6)
 function calcIntuitionPoints({ isCorrect, timeTakenSeconds, eliminatedIndices, correctIndex, skipped }) {
@@ -96,6 +97,9 @@ router.post("/basic", authenticate, async (req, res, next) => {
     if (!isSkipped) {
       try { await updateCard(req.userId, questionId, isCorrect === 1); } catch {}
     }
+
+    // Invalidate dashboard cache so stats refresh immediately
+    clearDashCache(req.userId);
 
     res.json({
       isCorrect: isCorrect === 1,

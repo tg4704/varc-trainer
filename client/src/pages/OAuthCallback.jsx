@@ -26,9 +26,11 @@ export default function OAuthCallback() {
     }
 
     try {
-      const user = JSON.parse(decodeURIComponent(userRaw));
+      const user    = JSON.parse(decodeURIComponent(userRaw));
+      const isNew   = params.get("newUser") === "1";
       loginWithToken(token, user);
-      navigate("/setup", { replace: true });
+      // New Google users go to the username-choice page before entering the app
+      navigate(isNew ? "/choose-username" : "/setup", { replace: true });
     } catch {
       navigate("/login?oauthError=oauth_parse_error", { replace: true });
     }

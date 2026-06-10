@@ -6,6 +6,7 @@ const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 const { updateCard } = require("../sr");
+const { clearCache: clearDashCache } = require("./dashboard");
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -150,6 +151,9 @@ router.post("/evaluate", authenticate, async (req, res) => {
 
   // Update SR card now that we know the result (Phase 15)
   try { await updateCard(req.userId, questionId, isCorrect === 1); } catch {}
+
+  // Invalidate dashboard cache so stats refresh immediately
+  clearDashCache(req.userId);
 
   // Deferred mode: save attempt only, skip Claude call, return basic result.
   // The batch-evaluate endpoint will run Claude after the session ends.

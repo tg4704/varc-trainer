@@ -39,6 +39,7 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
+          retryCount.current = 0; // successful phrase resets consecutive-error counter
           onFinalRef.current(t.trim());
           onInterimRef.current("");
         } else {
@@ -51,9 +52,17 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
     recognition.onerror = (event) => {
       if (event.error === "no-speech") return;
       if (event.error === "network") {
-        // Allow up to 3 silent retries for transient blips before giving up.
-        if (retryCount.current < 3) {
+        // Up to 5 consecutive network blips before surfacing the error.
+        if (retryCount.current < 5) {
           retryCount.current += 1;
+          // Restart the recognizer immediately instead of waiting for onend.
+          try {
+            const next = spawnInstance();
+            next.start();
+            recognitionRef.current = next;
+          } catch {
+            setIsRecording(false);
+          }
           return;
         }
         setError(
@@ -77,7 +86,8 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
         onInterimRef.current("");
         return;
       }
-      // Phrase finished — restart immediately to keep listening.
+      // Phrase finished cleanly — reset retry counter, restart to keep listening.
+      retryCount.current = 0;
       try {
         const next = spawnInstance();
         next.start();
