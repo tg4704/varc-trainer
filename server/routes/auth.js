@@ -40,6 +40,8 @@ function publicUser(u) {
     email: u.email,
     role: u.role || "user",
     createdAt: u.created_at,
+    dateOfBirth: u.date_of_birth || null,
+    profileComplete: u.profile_complete !== false,
   };
 }
 
@@ -373,8 +375,8 @@ router.get("/google/callback", async (req, res) => {
           username = `${base}${suffix++}`;
         }
         const ins = await db.run(
-          `INSERT INTO users (username, email, password_hash, google_id, email_verified, role)
-           VALUES ($1, $2, NULL, $3, 1, 'user') RETURNING id`,
+          `INSERT INTO users (username, email, password_hash, google_id, email_verified, role, profile_complete)
+           VALUES ($1, $2, NULL, $3, 1, 'user', FALSE) RETURNING id`,
           [username, email, googleId]
         );
         user = await db.get("SELECT * FROM users WHERE id = $1", [ins.lastId]);
@@ -392,6 +394,40 @@ router.get("/google/callback", async (req, res) => {
     console.error("[google oauth] callback error:", err);
     res.redirect(`${FRONTEND_URL}/login?error=google_failed`);
   }
+});
+
+// ── PATCH /api/auth/complete-profile ─────────────────────────────────────────
+router.patch("/complete-profile", authenticate, async (req, res, next) => {
+  try {
+    const { username, dateOfBirth } = req.body || {};
+
+    if (!username || username.length < 3)
+      return res.status(400).json({ error: "Username must be at least 3 characters" });
+    if (!/^[a-zA-Z0-9_]+$/.test(username))
+      return res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
+
+    // Check uniqueness excluding current user
+    const conflict = await db.get(
+      "SELECT id FROM users WHERE username = $1 AND id != $2",
+      [username, req.userId]
+    );
+    if (conflict)
+      return res.status(409).json({ error: "That username is already taken" });
+
+    if (dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      if (isNaN(dob.getTime()))
+        return res.status(400).json({ error: "Invalid date of birth" });
+    }
+
+    await db.run(
+      "UPDATE users SET username = $1, date_of_birth = $2, profile_complete = TRUE WHERE id = $3",
+      [username, dateOfBirth || null, req.userId]
+    );
+
+    const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
+    res.json({ user: publicUser(user) });
+  } catch (e) { next(e); }
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────

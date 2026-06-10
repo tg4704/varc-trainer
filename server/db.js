@@ -296,6 +296,8 @@ async function bootstrapAdmins() {
     await ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");
     await ensureColumn("users", "email_verified", "INTEGER NOT NULL DEFAULT 1");
     await ensureColumn("users", "google_id", "TEXT");
+    await ensureColumn("users", "date_of_birth", "TEXT");
+    await ensureColumn("users", "profile_complete", "BOOLEAN NOT NULL DEFAULT TRUE");
     // Make password_hash nullable so Google-only accounts can exist
     await db.exec("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL");
     // Unique partial index on google_id (allows multiple NULLs)

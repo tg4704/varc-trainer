@@ -12,6 +12,7 @@ import VerifyEmail from "./pages/VerifyEmail.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import OAuthCallback from "./pages/OAuthCallback.jsx";
+import CompleteProfile from "./pages/CompleteProfile.jsx";
 import SessionSetup from "./pages/SessionSetup.jsx";
 import Practice from "./pages/Practice.jsx";
 import Results from "./pages/Results.jsx";
@@ -111,6 +112,7 @@ function AppShell() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/oauth-callback" element={<OAuthCallback />} />
+          <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
           <Route path="/setup"     element={<ProtectedRoute><SessionSetup /></ProtectedRoute>} />
           <Route path="/practice"  element={<ProtectedRoute><Practice /></ProtectedRoute>} />
           <Route path="/results"        element={<ProtectedRoute><Results /></ProtectedRoute>} />

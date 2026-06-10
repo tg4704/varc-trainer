@@ -28,7 +28,7 @@ export default function OAuthCallback() {
     try {
       const user = JSON.parse(decodeURIComponent(userRaw));
       loginWithToken(token, user);
-      navigate("/setup", { replace: true });
+      navigate(user.profileComplete === false ? "/complete-profile" : "/setup", { replace: true });
     } catch {
       navigate("/login?oauthError=oauth_parse_error", { replace: true });
     }
