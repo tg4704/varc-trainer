@@ -92,22 +92,12 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
       </div>
     );
   }
-  if (!data || Number(data.totalAttempts) === 0) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-        <h1 className="text-2xl font-bold text-slate-900">No attempts yet</h1>
-        <p className="mt-2 text-slate-600">
-          Run a practice session and your weakness breakdown will show up here.
-        </p>
-        <Link
-          to="/setup"
-          className="mt-6 inline-flex rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
-        >
-          Start a session
-        </Link>
-      </div>
-    );
-  }
+  if (!data) return null;
+
+  // Always render the dashboard scaffold — even with zero attempts it shows
+  // 0-value stat cards (the per-section components degrade gracefully). A new
+  // user gets a real dashboard, not a dead-end placeholder.
+  const hasAttempts = Number(data.totalAttempts) > 0;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -145,6 +135,19 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
       ) : (
         <>
           <p className="mt-4 text-sm text-slate-500">Lifetime stats across all your sessions.</p>
+          {!hasAttempts && (
+            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
+              <p className="text-sm text-slate-600">
+                No attempts yet — run a practice session and your breakdown fills in here.
+              </p>
+              <Link
+                to="/setup"
+                className="flex-none rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+              >
+                Start a session
+              </Link>
+            </div>
+          )}
           {streakData && (
             <div className="mt-4">
               <StreakWidget data={streakData} onUpdate={setStreakData} compact />

@@ -18,6 +18,10 @@ async function handle(req, res, next) {
     const userId = req.userId;
     const skipCache = req.adminImpersonating === true;
 
+    // Never let the browser cache dashboard JSON — otherwise a conditional GET
+    // can serve a stale "0 attempts" body (304) right after a session.
+    res.set("Cache-Control", "no-store");
+
     const cached = cache.get(userId);
     if (!skipCache && cached && Date.now() - cached.at < CACHE_TTL) {
       return res.json(cached.data);

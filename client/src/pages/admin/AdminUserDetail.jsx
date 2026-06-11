@@ -25,7 +25,9 @@ export default function AdminUserDetail() {
   const [busy, setBusy] = useState(false);
 
   const reload = () => admin.getUser(id).then(setData).catch((e) => setError(e.message));
-  useEffect(reload, [id]);
+  // Wrap so the effect returns undefined, not reload()'s Promise (React would
+  // call it as a cleanup fn on unmount → "n is not a function" crash).
+  useEffect(() => { reload(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <p className="text-destructive">{error}</p>;
   if (!data) return <p className="text-muted-foreground">Loading…</p>;

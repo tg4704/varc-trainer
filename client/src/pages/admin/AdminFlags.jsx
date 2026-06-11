@@ -31,7 +31,10 @@ export default function AdminFlags() {
   const [busy, setBusy] = useState(false);
 
   const reload = () => admin.listFlags(status).then(setData).catch((e) => setError(e.message));
-  useEffect(reload, [status]);
+  // NB: wrap in a block so the effect returns undefined, not the Promise from
+  // reload() — React would otherwise call the Promise as a cleanup function on
+  // unmount ("n is not a function" crash).
+  useEffect(() => { reload(); }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function resolve(id, resolution) {
     setBusy(true);
