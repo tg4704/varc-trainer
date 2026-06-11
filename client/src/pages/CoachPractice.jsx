@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { saveActiveCoachSession, clearActiveCoachSession } from "../coachSession.js";
+import { useNavGuard } from "../navGuard.jsx";
 import OptionCard from "../components/OptionCard.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import VoiceMicButton from "../components/VoiceMicButton.jsx";
@@ -209,22 +210,41 @@ export default function CoachPractice() {
     setError(null);
   }
 
-  // ── Navigate away with confirmation when debrief is active ───────────────────
-  function navigateAway(to) {
-    if (debriefPhase === "active") {
-      pendingNavRef.current = to;
-      setShowLeaveModal(true);
-    } else {
-      navigate(to);
-    }
+  // ── Nav guard: intercept NavBar clicks while a coach session is in progress ──
+  const { registerGuard, clearGuard } = useNavGuard();
+  const inProgressRef = useRef(false);
+  useEffect(() => { inProgressRef.current = !!coachSession; }, [coachSession]);
+  useEffect(() => {
+    registerGuard((to) => {
+      if (inProgressRef.current) {
+        pendingNavRef.current = to;
+        setShowLeaveModal(true);
+        return false; // intercept — modal will navigate on confirm
+      }
+      return true;
+    });
+    return () => clearGuard();
+  }, [registerGuard, clearGuard]);
+
+  // Save & leave: the session already persists in the DB; keep the active
+  // pointer so it can be resumed later from VARC Coach → History.
+  function saveAndLeave() {
+    setShowLeaveModal(false);
+    const to = pendingNavRef.current || "/coach";
+    pendingNavRef.current = null;
+    navigate(to);
   }
 
-  function confirmLeave() {
+  // Discard: delete the coach session entirely so it never happened.
+  async function discardAndLeave() {
     setShowLeaveModal(false);
-    if (pendingNavRef.current) {
-      navigate(pendingNavRef.current);
-      pendingNavRef.current = null;
-    }
+    const to = pendingNavRef.current || "/coach";
+    pendingNavRef.current = null;
+    inProgressRef.current = false;
+    const id = coachSession?.id || sessionId;
+    try { if (id) await coach.deleteSession(id); } catch {}
+    clearActiveCoachSession();
+    navigate(to);
   }
 
   // ── Render guards ──────────────────────────────────────────────────────────────
@@ -479,24 +499,24 @@ export default function CoachPractice() {
       {showLeaveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-card border border-border p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-foreground">Leave this session?</h2>
+            <h2 className="text-lg font-bold text-foreground">Leave this Coach session?</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Your progress is saved. You can resume from the Coach History tab any time.
+              <strong>Save</strong> keeps it so you can resume any time from VARC Coach → History.
+              <strong> Discard</strong> deletes it permanently.
             </p>
-            <div className="mt-6 flex gap-3">
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={confirmLeave}
-              >
-                End session
+            <div className="mt-6 flex flex-col gap-2">
+              <Button className="w-full" onClick={saveAndLeave}>
+                Save &amp; leave
+              </Button>
+              <Button variant="destructive" className="w-full" onClick={discardAndLeave}>
+                Discard session
               </Button>
               <Button
                 variant="outline"
-                className="flex-1"
+                className="w-full"
                 onClick={() => { setShowLeaveModal(false); pendingNavRef.current = null; }}
               >
-                Resume later
+                Stay
               </Button>
             </div>
           </div>

@@ -1,7 +1,8 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route, Link, useLocation } from "react-router-dom";
+import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { AuthProvider, useAuth } from "./auth.jsx";
+import { NavGuardProvider, useNavGuard } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 import ThemeToggle from "./components/ThemeToggle.jsx";
@@ -59,10 +60,16 @@ const AdminFlags          = lazyWithReload(() => import("./pages/admin/AdminFlag
 function NavBar() {
   const { pathname } = useLocation();
   const { user } = useAuth();
+  const { attemptNav } = useNavGuard();
+
+  // If a page registered a nav guard and it intercepts, block the Link's default
+  // navigation — the guard shows its own confirm modal and navigates on confirm.
+  const guarded = (to) => (e) => { if (!attemptNav(to)) e.preventDefault(); };
 
   const link = (to, label) => (
     <Link
       to={to}
+      onClick={guarded(to)}
       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
         pathname === to || (to !== "/" && pathname.startsWith(to))
           ? "bg-foreground text-background"
@@ -76,7 +83,7 @@ function NavBar() {
   return (
     <header className="border-b border-border bg-card">
       <nav className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to="/" className="font-bold text-foreground tracking-tight">
+        <Link to="/" onClick={guarded("/")} className="font-bold text-foreground tracking-tight">
           VARC Trainer
         </Link>
         <div className="flex items-center gap-1">
@@ -119,6 +126,7 @@ const AdminLoading = (
 
 function AppShell() {
   return (
+    <NavGuardProvider>
     <div className="min-h-screen bg-background text-foreground">
       <NavBar />
       <main>
@@ -180,6 +188,7 @@ function AppShell() {
         </ErrorBoundary>
       </main>
     </div>
+    </NavGuardProvider>
   );
 }
 

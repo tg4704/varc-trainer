@@ -75,6 +75,9 @@ export function getActiveSession() {
 export function completeSession(sessionId) {
   return request(`/api/sessions/${sessionId}/complete`, { method: "POST" });
 }
+export function deleteSession(sessionId) {
+  return request(`/api/sessions/${sessionId}`, { method: "DELETE" });
+}
 export function getSessionReview(sessionId) {
   return request(`/api/sessions/${sessionId}/review`);
 }
@@ -141,6 +144,8 @@ export const coach = {
   stats: () => request("/api/coach/stats"),
   saveToBank: (id) =>
     request(`/api/coach/sessions/${id}/save-to-bank`, { method: "POST" }),
+  deleteSession: (id) =>
+    request(`/api/coach/sessions/${id}`, { method: "DELETE" }),
 };
 
 // ── Admin (Phase 9) ───────────────────────────────────

@@ -565,4 +565,21 @@ router.post("/sessions/:id/save-to-bank", authenticate, async (req, res, next) =
   } catch (e) { next(e); }
 });
 
+// ── DELETE /api/coach/sessions/:id ───────────────────────────────────────────
+// Discard a coach session entirely (the user chose "Discard" on leave).
+router.delete("/sessions/:id", authenticate, async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "invalid session id" });
+    const session = await db.get(
+      "SELECT id FROM coach_sessions WHERE id = $1 AND user_id = $2",
+      [id, req.userId]
+    );
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
+    await db.run("DELETE FROM coach_attempts WHERE coach_session_id = $1", [id]);
+    await db.run("DELETE FROM coach_sessions WHERE id = $1 AND user_id = $2", [id, req.userId]);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

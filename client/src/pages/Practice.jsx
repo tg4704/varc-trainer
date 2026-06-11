@@ -16,9 +16,11 @@ import {
   submitEvaluateAttempt,
   getActiveSession,
   completeSession,
+  deleteSession,
   flagQuestion,
 } from "../api.js";
 import { loadActiveSession, saveActiveSession, clearActiveSession } from "../session.js";
+import { useNavGuard } from "../navGuard.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -187,6 +189,74 @@ export default function Practice() {
       navigate(`/results?sessionId=${sess.id}`, { replace: true });
     }
   }, [navigate]);
+
+  // ── Nav guard: intercept NavBar clicks while a practice session is in progress.
+  // Practice sessions aren't resumable — the user must End (attempted counted,
+  // unattempted skipped) or Discard (deleted, never happened).
+  const { registerGuard, clearGuard } = useNavGuard();
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const leavePendingRef = useRef(null);
+  const inProgressRef = useRef(false);
+  useEffect(() => {
+    // In progress while questions are loaded and the session hasn't ended.
+    inProgressRef.current = !!questions && !endedRef.current;
+  });
+  useEffect(() => {
+    registerGuard((to) => {
+      if (inProgressRef.current) {
+        leavePendingRef.current = to;
+        setShowLeaveModal(true);
+        return false;
+      }
+      return true;
+    });
+    return () => clearGuard();
+  }, [registerGuard, clearGuard]);
+
+  // End session: record skips for every unanswered question, complete, leave.
+  async function endSessionAndLeave() {
+    if (leaving || !session || !questions) return;
+    setLeaving(true);
+    const to = leavePendingRef.current || "/dashboard";
+    try {
+      for (let i = 0; i < questions.length; i++) {
+        const st = questionStates[i] || defaultQState();
+        if (st.feedback || st.skipped) continue; // already resolved
+        const startTime = questionStartTimesRef.current[i] || Date.now();
+        try {
+          await submitBasicAttempt({
+            sessionId: session.id, questionId: questions[i].id,
+            skipped: true,
+            timeTakenSeconds: Math.floor((Date.now() - startTime) / 1000),
+            mode: session.practiceMode || "analysis",
+          });
+        } catch {}
+      }
+      try { await completeSession(session.id); } catch {}
+    } finally {
+      endedRef.current = true;
+      inProgressRef.current = false;
+      clearActiveSession();
+      setShowLeaveModal(false);
+      leavePendingRef.current = null;
+      navigate(to);
+    }
+  }
+
+  // Discard: delete the session and all its attempts — as if it never happened.
+  async function discardSessionAndLeave() {
+    if (leaving || !session) return;
+    setLeaving(true);
+    const to = leavePendingRef.current || "/dashboard";
+    try { await deleteSession(session.id); } catch {}
+    endedRef.current = true;
+    inProgressRef.current = false;
+    clearActiveSession();
+    setShowLeaveModal(false);
+    leavePendingRef.current = null;
+    navigate(to);
+  }
 
   // Navigate to question by 0-based index
   function navigateTo(idx) {
@@ -608,6 +678,7 @@ export default function Practice() {
           onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
         {flagToast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-900 text-white px-5 py-3 text-sm shadow-lg">{flagToast}</div>}
         {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
+        {showLeaveModal && <LeaveSessionModal busy={leaving} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
       </div>
     );
   }
@@ -849,6 +920,7 @@ export default function Practice() {
     )}
 
     {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
+    {showLeaveModal && <LeaveSessionModal busy={leaving} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
     </>
   );
 }
@@ -865,6 +937,35 @@ function EndSessionModal({ onConfirm, onCancel }) {
         <div className="flex gap-3">
           <Button className="flex-1" onClick={onConfirm}>Submit session</Button>
           <Button variant="outline" className="flex-1" onClick={onCancel}>Keep reviewing</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Leave-session modal (nav away mid-practice) ───────────────────────────────
+// Practice sessions aren't resumable: End (counts answered, skips the rest) or
+// Discard (deletes the session entirely — as if it never happened).
+function LeaveSessionModal({ busy, onEnd, onDiscard, onStay }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-xl">
+        <h2 className="text-base font-bold text-foreground mb-2">Leave this session?</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          Practice sessions can't be resumed. <strong>End</strong> keeps your answered
+          questions (the rest count as skipped). <strong>Discard</strong> deletes the
+          session entirely — as if it never happened.
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button className="w-full" disabled={busy} onClick={onEnd}>
+            {busy ? "Ending…" : "End session"}
+          </Button>
+          <Button variant="destructive" className="w-full" disabled={busy} onClick={onDiscard}>
+            {busy ? "Discarding…" : "Discard session"}
+          </Button>
+          <Button variant="outline" className="w-full" disabled={busy} onClick={onStay}>
+            Stay
+          </Button>
         </div>
       </div>
     </div>

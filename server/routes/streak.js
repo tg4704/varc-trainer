@@ -18,12 +18,15 @@ function subtractDays(dateStr, n) {
 
 // Build a map of { 'YYYY-MM-DD': count } for the user's non-skipped attempts.
 async function buildDayMap(userId) {
+  // TO_CHAR(... AT TIME ZONE 'UTC') guarantees a 'YYYY-MM-DD' STRING that matches
+  // the todayUTC() lookup keys. DATE() returns a JS Date object via node-postgres,
+  // whose string key never matched the lookup → streak/todayCount stuck at 0.
   const rows = await db.all(
-    `SELECT DATE(a.created_at) AS day, COUNT(*) AS cnt
+    `SELECT TO_CHAR(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*) AS cnt
      FROM attempts a
      JOIN sessions s ON s.id = a.session_id
      WHERE s.user_id = $1 AND a.skipped = 0
-     GROUP BY DATE(a.created_at)`,
+     GROUP BY TO_CHAR(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
     [userId]
   );
   const map = {};

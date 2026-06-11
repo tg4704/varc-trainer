@@ -28,7 +28,7 @@ router.get("/", async (req, res, next) => {
       `SELECT id, topic, type, is_active, created_at,
               substr(question, 1, 120) AS question_snippet
        FROM questions
-       WHERE source = 'user' AND author_user_id = $1
+       WHERE author_user_id = $1
        ORDER BY id DESC`,
       [req.userId]
     );
@@ -78,7 +78,7 @@ router.post("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const row = await db.get(
-      "SELECT * FROM questions WHERE id = $1 AND source = 'user' AND author_user_id = $2",
+      "SELECT * FROM questions WHERE id = $1 AND author_user_id = $2",
       [req.params.id, req.userId]
     );
     if (!row) return res.status(404).json({ error: "Not found" });
@@ -108,7 +108,7 @@ router.get("/:id", async (req, res, next) => {
 router.patch("/:id", async (req, res, next) => {
   try {
     const existing = await db.get(
-      "SELECT id FROM questions WHERE id = $1 AND source = 'user' AND author_user_id = $2",
+      "SELECT id FROM questions WHERE id = $1 AND author_user_id = $2",
       [req.params.id, req.userId]
     );
     if (!existing) return res.status(404).json({ error: "Not found" });
@@ -155,7 +155,7 @@ router.patch("/:id", async (req, res, next) => {
 router.delete("/:id", async (req, res, next) => {
   try {
     const info = await db.run(
-      "DELETE FROM questions WHERE id = $1 AND source = 'user' AND author_user_id = $2",
+      "DELETE FROM questions WHERE id = $1 AND author_user_id = $2",
       [req.params.id, req.userId]
     );
     if (info.rowCount === 0) return res.status(404).json({ error: "Not found" });

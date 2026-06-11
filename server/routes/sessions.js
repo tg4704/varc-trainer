@@ -465,6 +465,20 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// DELETE /api/sessions/:id — discard a session and all its attempts ("never
+// happened"). Used when the user chooses "Discard" on leaving a practice session.
+router.delete("/:id", authenticate, async (req, res, next) => {
+  try {
+    const s = await getOwnedSession(req.params.id, req.userId);
+    if (!s) return res.status(404).json({ error: "Session not found" });
+    await db.transaction(async (client) => {
+      await client.query("DELETE FROM attempts WHERE session_id = $1", [s.id]);
+      await client.query("DELETE FROM sessions WHERE id = $1 AND user_id = $2", [s.id, req.userId]);
+    });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 // POST /api/sessions/:id/complete — mark a session finished
 router.post("/:id/complete", authenticate, async (req, res, next) => {
   try {
