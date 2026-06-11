@@ -24,7 +24,7 @@ const app = express();
 // Build/version marker so we can confirm exactly which backend code is live
 // (Railway "Redeploy" can rebuild a stale deployment instead of the latest
 // commit; this header makes the running version externally verifiable).
-const APP_VERSION = "debug-counts-1";
+const APP_VERSION = "debug-counts-2";
 app.use((req, res, next) => {
   res.setHeader("X-App-Version", APP_VERSION);
   next();
@@ -66,6 +66,14 @@ app.use((req, res, next) => {
         `SELECT a.id, a.session_id, s.user_id AS session_user_id
          FROM attempts a LEFT JOIN sessions s ON a.session_id = s.id
          ORDER BY a.id DESC LIMIT 6`);
+      // Run the EXACT dashboard totals query to compare against /api/dashboard
+      const dashTotals = await db.get(
+        `SELECT COUNT(*) AS "totalAttempts",
+                COALESCE(SUM(CASE WHEN a.skipped = 0 THEN 1 ELSE 0 END), 0) AS "answeredCount",
+                COALESCE(SUM(a.is_correct), 0) AS "correctCount",
+                AVG(a.reasoning_score) AS "avgReasoningScore"
+         FROM attempts a JOIN sessions s ON a.session_id = s.id
+         WHERE s.user_id = $1`, [uid]);
       res.json({
         reqUserId: uid,
         reqUserIdType: typeof uid,
@@ -73,6 +81,7 @@ app.use((req, res, next) => {
         attemptsViaJoin: attemptsViaJoin.n,
         attemptsTotalInDb: attemptsTotal.n,
         srCardsForUser: srForUser.n,
+        dashTotalsRaw: dashTotals,
         recentSessions,
         recentAttempts,
       });
