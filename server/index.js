@@ -24,7 +24,7 @@ const app = express();
 // Build/version marker so we can confirm exactly which backend code is live
 // (Railway "Redeploy" can rebuild a stale deployment instead of the latest
 // commit; this header makes the running version externally verifiable).
-const APP_VERSION = "dashboard-inline-1";
+const APP_VERSION = "dashboard-inline-2";
 app.use((req, res, next) => {
   res.setHeader("X-App-Version", APP_VERSION);
   next();
@@ -46,48 +46,6 @@ app.use((req, res, next) => {
   });
   next();
 });
-
-// ── Temporary debug endpoint — reports raw row counts for the logged-in user
-// so we can see exactly where attempts/sessions live. Remove after diagnosing.
-{
-  const db = require("./db");
-  const { authenticate } = require("./auth");
-  app.get("/api/debug/counts", authenticate, async (req, res, next) => {
-    try {
-      const uid = req.userId;
-      const sessionsForUser = await db.get("SELECT COUNT(*) AS n FROM sessions WHERE user_id = $1", [uid]);
-      const attemptsViaJoin = await db.get(
-        "SELECT COUNT(*) AS n FROM attempts a JOIN sessions s ON a.session_id = s.id WHERE s.user_id = $1", [uid]);
-      const attemptsTotal = await db.get("SELECT COUNT(*) AS n FROM attempts");
-      const srForUser = await db.get("SELECT COUNT(*) AS n FROM sr_cards WHERE user_id = $1", [uid]);
-      const recentSessions = await db.all(
-        "SELECT id, user_id, num_questions, status FROM sessions ORDER BY id DESC LIMIT 6");
-      const recentAttempts = await db.all(
-        `SELECT a.id, a.session_id, s.user_id AS session_user_id
-         FROM attempts a LEFT JOIN sessions s ON a.session_id = s.id
-         ORDER BY a.id DESC LIMIT 6`);
-      // Run the EXACT dashboard totals query to compare against /api/dashboard
-      const dashTotals = await db.get(
-        `SELECT COUNT(*) AS "totalAttempts",
-                COALESCE(SUM(CASE WHEN a.skipped = 0 THEN 1 ELSE 0 END), 0) AS "answeredCount",
-                COALESCE(SUM(a.is_correct), 0) AS "correctCount",
-                AVG(a.reasoning_score) AS "avgReasoningScore"
-         FROM attempts a JOIN sessions s ON a.session_id = s.id
-         WHERE s.user_id = $1`, [uid]);
-      res.json({
-        reqUserId: uid,
-        reqUserIdType: typeof uid,
-        sessionsForUser: sessionsForUser.n,
-        attemptsViaJoin: attemptsViaJoin.n,
-        attemptsTotalInDb: attemptsTotal.n,
-        srCardsForUser: srForUser.n,
-        dashTotalsRaw: dashTotals,
-        recentSessions,
-        recentAttempts,
-      });
-    } catch (e) { next(e); }
-  });
-}
 
 // ── Fresh /api/dashboard handler defined HERE in index.js ─────────────────────
 // The deployed routes/dashboard.js has been observed running stale code (its
