@@ -57,9 +57,32 @@ app.use("/api/streak", require("./routes/streak"));
 // Express then serves it statically and catches SPA deep links with the wildcard.
 const distPath = path.join(__dirname, "../client/dist");
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  // SPA catch-all: any non-API GET returns index.html so React Router handles it
+  // Hashed assets are immutable — cache them hard. index.html must NOT be
+  // cached so a new deploy is picked up immediately (prevents stale bundles
+  // that reference chunk hashes the server no longer has).
+  app.use(
+    express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
+    })
+  );
+
+  // SPA catch-all: any non-API GET returns index.html so React Router handles it.
+  // IMPORTANT: never fall through to index.html for static-asset requests
+  // (e.g. a stale client requesting a deleted /assets/*.js chunk). Returning
+  // HTML for a missing .js makes the browser execute HTML as JS → cryptic
+  // "n is not a function" crashes. Return 404 so React.lazy throws a proper
+  // ChunkLoadError instead.
   app.get("*", (req, res) => {
+    if (req.path.startsWith("/assets/") || path.extname(req.path)) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.join(distPath, "index.html"));
   });
 }

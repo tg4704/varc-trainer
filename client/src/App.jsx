@@ -25,18 +25,36 @@ import CoachSummary from "./pages/CoachSummary.jsx";
 import CoachHistory from "./pages/CoachHistory.jsx";
 import ChooseUsername from "./pages/ChooseUsername.jsx";
 
-const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
+// Wraps React.lazy so a failed chunk import (stale client after a new deploy —
+// the old chunk hash no longer exists on the server) triggers a one-time full
+// reload to fetch the fresh index.html + matching chunks, instead of crashing.
+// A sessionStorage flag prevents an infinite reload loop on a genuine failure.
+function lazyWithReload(factory) {
+  return lazy(() =>
+    factory().catch((err) => {
+      const KEY = "chunk_reload_once";
+      if (!sessionStorage.getItem(KEY)) {
+        sessionStorage.setItem(KEY, "1");
+        window.location.reload();
+        return new Promise(() => {}); // hang until reload takes over
+      }
+      throw err;
+    })
+  );
+}
+
+const Dashboard = lazyWithReload(() => import("./pages/Dashboard.jsx"));
 
 // Admin pages — lazy-loaded so the bundle stays small for regular users.
-const AdminLayout         = lazy(() => import("./pages/admin/AdminLayout.jsx"));
-const AdminOverview       = lazy(() => import("./pages/admin/AdminOverview.jsx"));
-const AdminUsers          = lazy(() => import("./pages/admin/AdminUsers.jsx"));
-const AdminUserDetail     = lazy(() => import("./pages/admin/AdminUserDetail.jsx"));
-const AdminUserDashboard  = lazy(() => import("./pages/admin/AdminUserDashboard.jsx"));
-const AdminQuestions      = lazy(() => import("./pages/admin/AdminQuestions.jsx"));
-const AdminQuestionEditor = lazy(() => import("./pages/admin/AdminQuestionEditor.jsx"));
-const AdminCosts          = lazy(() => import("./pages/admin/AdminCosts.jsx"));
-const AdminFlags          = lazy(() => import("./pages/admin/AdminFlags.jsx"));
+const AdminLayout         = lazyWithReload(() => import("./pages/admin/AdminLayout.jsx"));
+const AdminOverview       = lazyWithReload(() => import("./pages/admin/AdminOverview.jsx"));
+const AdminUsers          = lazyWithReload(() => import("./pages/admin/AdminUsers.jsx"));
+const AdminUserDetail     = lazyWithReload(() => import("./pages/admin/AdminUserDetail.jsx"));
+const AdminUserDashboard  = lazyWithReload(() => import("./pages/admin/AdminUserDashboard.jsx"));
+const AdminQuestions      = lazyWithReload(() => import("./pages/admin/AdminQuestions.jsx"));
+const AdminQuestionEditor = lazyWithReload(() => import("./pages/admin/AdminQuestionEditor.jsx"));
+const AdminCosts          = lazyWithReload(() => import("./pages/admin/AdminCosts.jsx"));
+const AdminFlags          = lazyWithReload(() => import("./pages/admin/AdminFlags.jsx"));
 
 function NavBar() {
   const { pathname } = useLocation();
