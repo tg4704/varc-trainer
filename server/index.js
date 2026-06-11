@@ -24,7 +24,7 @@ const app = express();
 // Build/version marker so we can confirm exactly which backend code is live
 // (Railway "Redeploy" can rebuild a stale deployment instead of the latest
 // commit; this header makes the running version externally verifiable).
-const APP_VERSION = "dashboard-inline-2";
+const APP_VERSION = "api-404-1";
 app.use((req, res, next) => {
   res.setHeader("X-App-Version", APP_VERSION);
   next();
@@ -212,7 +212,10 @@ if (fs.existsSync(distPath)) {
   // "n is not a function" crashes. Return 404 so React.lazy throws a proper
   // ChunkLoadError instead.
   app.get("*", (req, res) => {
-    if (req.path.startsWith("/assets/") || path.extname(req.path)) {
+    // Unknown API paths and static-asset requests must NOT fall through to
+    // index.html — returning HTML for a missing /api/* or /assets/*.js makes
+    // clients parse HTML as JSON/JS (cryptic crashes). Return a real 404.
+    if (req.path.startsWith("/api/") || req.path.startsWith("/assets/") || path.extname(req.path)) {
       return res.status(404).json({ error: "Not found" });
     }
     res.setHeader("Cache-Control", "no-cache");
