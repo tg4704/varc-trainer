@@ -24,7 +24,7 @@ const app = express();
 // Build/version marker so we can confirm exactly which backend code is live
 // (Railway "Redeploy" can rebuild a stale deployment instead of the latest
 // commit; this header makes the running version externally verifiable).
-const APP_VERSION = "debug-counts-2";
+const APP_VERSION = "dashboard-inline-1";
 app.use((req, res, next) => {
   res.setHeader("X-App-Version", APP_VERSION);
   next();
@@ -87,6 +87,130 @@ app.use((req, res, next) => {
       });
     } catch (e) { next(e); }
   });
+}
+
+// ── Fresh /api/dashboard handler defined HERE in index.js ─────────────────────
+// The deployed routes/dashboard.js has been observed running stale code (its
+// route was missing `authenticate`, so req.userId was undefined → query matched
+// 0 rows → "0 attempts"). index.js deploys reliably, so we own the route here to
+// guarantee correct, authenticated computation. Registered BEFORE the router
+// mount below so it takes precedence for GET /api/dashboard.
+{
+  const db = require("./db");
+  const { authenticate } = require("./auth");
+  const questionsRepo = require("./questionsRepo");
+
+  async function computeDashboard(userId) {
+    const totals = await db.get(
+      `SELECT COUNT(*) AS "totalAttempts",
+              COALESCE(SUM(CASE WHEN a.skipped = 0 THEN 1 ELSE 0 END), 0) AS "answeredCount",
+              COALESCE(SUM(a.is_correct), 0) AS "correctCount",
+              COALESCE(SUM(a.selected_trap), 0) AS "trapCount",
+              COALESCE(SUM(a.skipped), 0) AS "skippedCount",
+              AVG(a.reasoning_score) AS "avgReasoningScore"
+       FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1`, [userId]);
+
+    const answered = Number(totals.answeredCount) || 0;
+    const accuracy = answered ? Number(totals.correctCount) / answered : 0;
+    const trapPickRate = answered ? Number(totals.trapCount) / answered : 0;
+
+    const byType = {};
+    for (const r of await db.all(
+      `SELECT a.question_type AS type, COUNT(*) AS attempts,
+              COALESCE(SUM(a.is_correct),0) AS correct,
+              COALESCE(SUM(a.selected_trap),0) AS "trapPicked",
+              AVG(a.reasoning_score) AS "avgReasoningScore"
+       FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.skipped = 0 GROUP BY a.question_type`, [userId])) {
+      byType[r.type] = { attempts: Number(r.attempts), correct: Number(r.correct),
+        trapPicked: Number(r.trapPicked), avgReasoningScore: r.avgReasoningScore };
+    }
+
+    const byTopic = {};
+    for (const r of await db.all(
+      `SELECT a.topic, COUNT(*) AS attempts, COALESCE(SUM(a.is_correct),0) AS correct
+       FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.skipped = 0 GROUP BY a.topic`, [userId])) {
+      byTopic[r.topic] = { attempts: Number(r.attempts), correct: Number(r.correct) };
+    }
+
+    const byTrapType = {};
+    for (const r of await db.all(
+      `SELECT a.trap_type AS "trapType", COUNT(*) AS encountered,
+              COALESCE(SUM(a.selected_trap),0) AS "fellFor"
+       FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.skipped = 0 AND a.trap_type IS NOT NULL
+       GROUP BY a.trap_type`, [userId])) {
+      byTrapType[r.trapType] = { encountered: Number(r.encountered), fell_for: Number(r.fellFor) };
+    }
+
+    let weakestType = null, lowestAcc = Infinity;
+    for (const [type, s] of Object.entries(byType)) {
+      const acc = s.attempts ? s.correct / s.attempts : 1;
+      if (acc < lowestAcc) { lowestAcc = acc; weakestType = type; }
+    }
+    let mostDangerousTrap = null, highestRate = -1;
+    for (const [type, s] of Object.entries(byTrapType)) {
+      const rate = s.encountered ? s.fell_for / s.encountered : 0;
+      if (rate > highestRate) { highestRate = rate; mostDangerousTrap = type; }
+    }
+
+    const intuitionRow = await db.get(
+      `SELECT COUNT(*) AS "totalIntuition", COALESCE(SUM(a.intuition_points),0) AS "totalPoints",
+              AVG(a.time_taken_seconds) AS "avgTimeSecs"
+       FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.mode = 'intuition'`, [userId]);
+    const elimRows = await db.all(
+      `SELECT a.eliminated_indices, a.correct_option_index
+       FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.mode = 'intuition' AND a.eliminated_indices IS NOT NULL`, [userId]);
+    let totalElim = 0, correctElim = 0;
+    for (const row of elimRows) {
+      try { for (const idx of JSON.parse(row.eliminated_indices)) { totalElim++; if (idx !== row.correct_option_index) correctElim++; } } catch {}
+    }
+    const intuitionStats = {
+      totalAttempts: Number(intuitionRow.totalIntuition), totalPoints: Number(intuitionRow.totalPoints),
+      avgTimeSecs: intuitionRow.avgTimeSecs, eliminationAccuracy: totalElim > 0 ? correctElim / totalElim : null,
+    };
+
+    const recentRows = await db.all(
+      `SELECT a.* FROM attempts a JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 ORDER BY a.id DESC LIMIT 10`, [userId]);
+    const recentAttempts = await Promise.all(recentRows.map(async (a) => {
+      const q = await questionsRepo.findById(a.question_id);
+      return {
+        questionId: a.question_id,
+        questionSnippet: q ? q.question.split(/\s+/).slice(0, 8).join(" ") + "…" : a.question_id,
+        question: q ? q.question : null, paragraph: q ? q.paragraph : null,
+        options: q ? q.options.map((o) => ({ text: o.text })) : [],
+        type: a.question_type, topic: a.topic,
+        selectedOptionIndex: a.selected_option_index, correctOptionIndex: a.correct_option_index,
+        trapOptionIndex: a.trap_option_index, isCorrect: a.is_correct === 1,
+        selectedTrap: a.selected_trap === 1, skipped: a.skipped === 1, trapType: a.trap_type,
+        reasoningScore: a.reasoning_score, reasoningFeedback: a.reasoning_feedback,
+        correctExplanation: a.correct_explanation, trapExplanation: a.trap_explanation,
+        keyTakeaway: a.key_takeaway, timeTakenSeconds: a.time_taken_seconds,
+      };
+    }));
+
+    return {
+      totalAttempts: Number(totals.totalAttempts), answeredCount: answered,
+      correctCount: Number(totals.correctCount), skippedCount: Number(totals.skippedCount),
+      accuracy, trapPickRate, avgReasoningScore: totals.avgReasoningScore,
+      byType, byTopic, byTrapType, weakestType, mostDangerousTrap, recentAttempts, intuitionStats,
+    };
+  }
+
+  app.get("/api/dashboard", authenticate, async (req, res, next) => {
+    try {
+      res.set("Cache-Control", "no-store");
+      res.json(await computeDashboard(req.userId));
+    } catch (e) { next(e); }
+  });
+
+  // Expose for the admin impersonation route to reuse (fresh, correct).
+  app.locals.computeDashboard = computeDashboard;
 }
 
 // ── API routes ────────────────────────────────────────────────────────────────
