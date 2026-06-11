@@ -21,6 +21,15 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 
+// Build/version marker so we can confirm exactly which backend code is live
+// (Railway "Redeploy" can rebuild a stale deployment instead of the latest
+// commit; this header makes the running version externally verifiable).
+const APP_VERSION = "dash-nocache-1";
+app.use((req, res, next) => {
+  res.setHeader("X-App-Version", APP_VERSION);
+  next();
+});
+
 app.use(cors());
 app.use(express.json());
 
