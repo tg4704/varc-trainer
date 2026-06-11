@@ -4,28 +4,20 @@ const db = require("../db");
 const { authenticate } = require("../auth");
 const questionsRepo = require("../questionsRepo");
 
-// Simple 30-second TTL cache keyed by userId
-const cache = new Map();
-const CACHE_TTL = 30_000;
-
 // GET /api/dashboard — aggregate stats across all of the user's sessions.
 // Accuracy, trap-pick rate, and per-type/topic/trap breakdowns are computed over
 // ANSWERED (non-skipped) attempts.
+// Computed fresh on every request: the queries are cheap indexed aggregates and
+// any server-side caching here risks showing a stale "0 attempts" snapshot right
+// after a session (the exact bug we hit).
 // Exported as `handle` so the admin impersonation route can reuse the same
 // computation by spoofing req.userId.
 async function handle(req, res, next) {
   try {
     const userId = req.userId;
-    const skipCache = req.adminImpersonating === true;
 
-    // Never let the browser cache dashboard JSON — otherwise a conditional GET
-    // can serve a stale "0 attempts" body (304) right after a session.
+    // Never let the browser cache dashboard JSON either.
     res.set("Cache-Control", "no-store");
-
-    const cached = cache.get(userId);
-    if (!skipCache && cached && Date.now() - cached.at < CACHE_TTL) {
-      return res.json(cached.data);
-    }
 
     const totals = await db.get(
       `SELECT COUNT(*) AS "totalAttempts",
@@ -215,12 +207,13 @@ async function handle(req, res, next) {
       intuitionStats,
     };
 
-    if (!skipCache) cache.set(userId, { data: responseData, at: Date.now() });
     res.json(responseData);
   } catch (e) { next(e); }
 }
 
-function clearCache(userId) { cache.delete(userId); }
+// Kept as a no-op so existing callers (attempts.js, evaluate.js) don't break.
+// The dashboard no longer caches, so there is nothing to invalidate.
+function clearCache() {}
 
 router.get("/", authenticate, handle);
 
