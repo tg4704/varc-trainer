@@ -37,14 +37,14 @@ export default function Results() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-slate-400">
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center muted">
         Loading results…
       </div>
     );
   }
   if (error) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-red-600">{error}</div>
+      <div className="max-w-3xl mx-auto px-4 py-16 text-center text-destructive">{error}</div>
     );
   }
 
@@ -67,32 +67,32 @@ export default function Results() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-slate-900">Session complete</h1>
-      <p className="mt-1 text-slate-500">Here's how this session went.</p>
+      <h1 className="display text-[34px] leading-none">Session complete</h1>
+      <p className="mt-2 muted text-sm">Here's how this session went.</p>
 
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
         {stats.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-2xl font-bold text-slate-900">{value}</div>
-            <div className="mt-1 text-sm text-slate-500">{label}</div>
+          <div key={label} className="rounded-xl border border-border bg-card p-5">
+            <div className="mono text-[26px] leading-none text-foreground">{value}</div>
+            <div className="mt-2 text-sm muted">{label}</div>
           </div>
         ))}
       </div>
 
       <section className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Question by question
         </h2>
-        <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+        <div className="mt-3 divide-y divide-border rounded-xl border border-border bg-card">
           {attempts.map((a, i) => (
             <div key={i} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-400 w-6">{i + 1}</span>
+                <span className="text-sm dim w-6 mono">{i + 1}</span>
                 <TypeBadge type={a.question_type} />
                 <TopicBadge topic={a.topic} />
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs mono dim">
                   {formatTime(a.time_taken_seconds)}
                 </span>
                 <ResultBadge attempt={a} />
@@ -103,16 +103,10 @@ export default function Results() {
       </section>
 
       <div className="mt-8 flex gap-3">
-        <Link
-          to="/setup"
-          className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
-        >
+        <Link to="/setup" className="btn btn-primary">
           New session
         </Link>
-        <Link
-          to="/dashboard"
-          className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:border-slate-400"
-        >
+        <Link to="/dashboard" className="btn btn-ghost">
           View dashboard
         </Link>
       </div>
@@ -123,17 +117,20 @@ export default function Results() {
 function ResultBadge({ attempt }) {
   if (attempt.skipped === 1) {
     return (
-      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+      <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+        style={{ color: "var(--text-2)", background: "var(--surface-2)" }}>
         Skipped
       </span>
     );
   }
   return attempt.is_correct === 1 ? (
-    <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+      style={{ color: "var(--green)", background: "rgba(74,222,128,0.12)" }}>
       Correct
     </span>
   ) : (
-    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+    <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+      style={{ color: "var(--red)", background: "rgba(248,113,113,0.12)" }}>
       Incorrect
     </span>
   );

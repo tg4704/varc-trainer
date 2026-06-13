@@ -27,9 +27,9 @@ export default function Profile() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-slate-900">Profile</h1>
+      <h1 className="display text-[34px] leading-none">Profile</h1>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mt-6 rounded-xl border border-border bg-card p-6">
         <UsernameRow username={user?.username} onUpdate={updateUser} />
         <Row label="Email" value={user?.email} />
         <Row label="Joined" value={joined} />
@@ -46,8 +46,8 @@ export default function Profile() {
       {/* Streak & Daily Goal — Phase 16 */}
       {streakData && (
         <div className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 mb-3">
-            Streak & Daily Goal
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-3">
+            Streak &amp; daily goal
           </h2>
           <StreakWidget
             data={streakData}
@@ -60,10 +60,7 @@ export default function Profile() {
       <ChangePassword />
 
       <div className="mt-8 flex gap-3">
-        <button
-          onClick={handleLogout}
-          className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:border-slate-400"
-        >
+        <button onClick={handleLogout} className="btn btn-ghost">
           Log out
         </button>
         <ResetData onReset={() => setStats(null)} />
@@ -106,23 +103,23 @@ function UsernameRow({ username, onUpdate }) {
   }
 
   const statusText = checking ? "Checking…" : available === true ? "Available ✓" : available === false ? "Not available" : "";
-  const statusColor = available === true ? "#16a34a" : "#dc2626";
+  const statusColor = available === true ? "var(--green)" : "var(--red)";
 
   if (!editing) {
     return (
-      <div className="flex justify-between py-2 border-b border-slate-100">
-        <span className="text-sm text-slate-500">Username</span>
-        <span className="flex items-center gap-2 text-sm font-medium text-slate-900">
+      <div className="flex justify-between py-2 border-b border-border">
+        <span className="text-sm muted">Username</span>
+        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
           {username}
           <button onClick={() => { setValue(username); setEditing(true); setAvailable(null); }}
-            className="text-xs text-slate-400 hover:text-slate-700 underline underline-offset-2">Edit</button>
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">Edit</button>
         </span>
       </div>
     );
   }
   return (
-    <div className="py-2 border-b border-slate-100">
-      <span className="text-sm text-slate-500 block mb-1">Username</span>
+    <div className="py-2 border-b border-border">
+      <span className="text-sm muted block mb-1">Username</span>
       <div className="flex gap-2 items-center">
         <input
           autoFocus
@@ -130,34 +127,34 @@ function UsernameRow({ username, onUpdate }) {
           maxLength={30}
           onChange={(e) => { setValue(e.target.value.trim()); setErr(null); }}
           onKeyDown={(e) => e.key === "Enter" && save()}
-          className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm"
+          className="input flex-1"
         />
         <button onClick={save} disabled={!value || available === false || saving || checking}
-          className="rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40">
+          className="btn btn-primary px-3 py-1.5 text-xs">
           {saving ? "…" : "Save"}
         </button>
-        <button onClick={() => setEditing(false)} className="text-xs text-slate-500 hover:text-slate-800">Cancel</button>
+        <button onClick={() => setEditing(false)} className="text-xs muted hover:text-foreground">Cancel</button>
       </div>
       {statusText && <p className="mt-1 text-xs" style={{ color: statusColor }}>{statusText}</p>}
-      {err && <p className="mt-1 text-xs text-red-600">{err}</p>}
+      {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
     </div>
   );
 }
 
 function Row({ label, value }) {
   return (
-    <div className="flex justify-between py-2 border-b border-slate-100 last:border-0">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className="text-sm font-medium text-slate-900">{value}</span>
+    <div className="flex justify-between py-2 border-b border-border last:border-0">
+      <span className="text-sm muted">{label}</span>
+      <span className="text-sm font-medium text-foreground">{value}</span>
     </div>
   );
 }
 
 function Stat({ label, value }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
-      <div className="text-xl font-bold text-slate-900">{value}</div>
-      <div className="mt-1 text-xs text-slate-500">{label}</div>
+    <div className="rounded-xl border border-border bg-card p-4 text-center">
+      <div className="mono text-xl leading-none text-foreground">{value}</div>
+      <div className="mt-2 text-xs muted">{label}</div>
     </div>
   );
 }
@@ -191,7 +188,7 @@ function ChangePassword() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="mt-6 text-sm font-medium text-slate-700 underline underline-offset-4"
+        className="mt-6 text-sm font-medium text-foreground underline underline-offset-4"
       >
         Change password
       </button>
@@ -199,8 +196,8 @@ function ChangePassword() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
-      <h2 className="font-semibold text-slate-900">Change password</h2>
+    <form onSubmit={handleSubmit} className="mt-6 rounded-xl border border-border bg-card p-6 space-y-3">
+      <h2 className="font-semibold text-foreground">Change password</h2>
       <input
         type="password"
         placeholder="Current password"
@@ -220,21 +217,13 @@ function ChangePassword() {
         className="input"
         required
       />
-      {err && <p className="text-sm text-red-600">{err}</p>}
-      {msg && <p className="text-sm text-green-600">{msg}</p>}
+      {err && <p className="text-sm text-destructive">{err}</p>}
+      {msg && <p className="text-sm" style={{ color: "var(--green)" }}>{msg}</p>}
       <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:bg-slate-300"
-        >
+        <button type="submit" disabled={busy} className="btn btn-primary">
           {busy ? "Saving…" : "Save"}
         </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600"
-        >
+        <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
           Cancel
         </button>
       </div>
@@ -267,17 +256,18 @@ function ResetData({ onReset }) {
     <>
       <button
         onClick={() => setShowDialog(true)}
-        className="rounded-lg border border-red-300 px-5 py-2.5 text-sm font-medium text-red-600 hover:border-red-500 hover:bg-red-50"
+        className="btn"
+        style={{ borderColor: "color-mix(in oklch, var(--red) 45%, transparent)", color: "var(--red)" }}
       >
         Reset all data
       </button>
 
       {/* Confirmation dialog */}
       {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-slate-900">Reset all practice data?</h2>
-            <p className="mt-2 text-sm text-slate-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <h2 className="text-lg font-bold text-foreground">Reset all practice data?</h2>
+            <p className="mt-2 text-sm muted">
               This will permanently delete all your sessions, attempts, and stats. Your account
               will remain active. This cannot be undone.
             </p>
@@ -285,14 +275,15 @@ function ResetData({ onReset }) {
               <button
                 onClick={handleReset}
                 disabled={busy}
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                className="btn flex-1 text-primary-foreground disabled:opacity-60"
+                style={{ background: "var(--red)" }}
               >
                 {busy ? "Resetting…" : "Yes, reset everything"}
               </button>
               <button
                 onClick={() => setShowDialog(false)}
                 disabled={busy}
-                className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:border-slate-400"
+                className="btn btn-ghost flex-1"
               >
                 Cancel
               </button>
@@ -303,11 +294,10 @@ function ResetData({ onReset }) {
 
       {/* Toast notification */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl px-5 py-3 text-sm font-medium shadow-lg ${
-          toast.type === "success"
-            ? "bg-slate-900 text-white"
-            : "bg-red-600 text-white"
-        }`}>
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl px-5 py-3 text-sm font-medium shadow-lg text-primary-foreground"
+          style={{ background: toast.type === "success" ? "var(--teal)" : "var(--red)" }}
+        >
           {toast.msg}
         </div>
       )}

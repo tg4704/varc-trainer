@@ -82,8 +82,8 @@ export default function Register() {
         <GoogleButton href={GOOGLE_AUTH_URL} />
       </div>
       <p className="mt-[18px] max-w-[360px] text-center text-xs leading-relaxed dim">
-        By continuing you agree to our <a href="#" className="muted">Terms</a> and{" "}
-        <a href="#" className="muted">Privacy Policy</a>.
+        By continuing you agree to our <span className="muted">Terms</span> and{" "}
+        <span className="muted">Privacy Policy</span>.
       </p>
     </AuthShell>
   );

@@ -5,6 +5,7 @@ import StreakWidget from "../components/StreakWidget.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import FeedbackSections, { ScoreDots } from "../components/FeedbackSections.jsx";
+import Icon from "../components/Icon.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -19,11 +20,11 @@ function pct(n) {
   return `${Math.round(n * 100)}%`;
 }
 
-// red < 50%, amber 50–70%, green > 70%
+// red < 50%, amber 50–70%, green > 70% (design palette)
 function accuracyColor(acc) {
-  if (acc < 0.5) return "#ef4444";
-  if (acc <= 0.7) return "#f59e0b";
-  return "#22c55e";
+  if (acc < 0.5) return "var(--red)";
+  if (acc <= 0.7) return "var(--amber)";
+  return "var(--green)";
 }
 
 // `fetcher` defaults to the regular user dashboard fetch. Admin pages can pass
@@ -70,24 +71,24 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6 animate-pulse">
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-xl bg-slate-100 h-24" />
+            <div key={i} className="skel h-24 rounded-xl" />
           ))}
         </div>
-        <div className="rounded-xl bg-slate-100 h-48" />
+        <div className="skel h-48 rounded-xl" />
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="rounded-xl bg-slate-100 h-36" />
-          <div className="rounded-xl bg-slate-100 h-36" />
+          <div className="skel h-36 rounded-xl" />
+          <div className="skel h-36 rounded-xl" />
         </div>
-        <div className="rounded-xl bg-slate-100 h-20" />
+        <div className="skel h-20 rounded-xl" />
       </div>
     );
   }
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-red-600">
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center text-destructive">
         Could not load dashboard: {error}
       </div>
     );
@@ -100,29 +101,29 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   const hasAttempts = Number(data.totalAttempts) > 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-10">
       {headerSlot}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <Link
-          to="/setup"
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-        >
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="display text-[34px] leading-none">Dashboard</h1>
+          <p className="mt-2 muted text-sm">Lifetime stats across all your sessions.</p>
+        </div>
+        <Link to="/setup" className="btn btn-primary flex-none">
           New session
         </Link>
       </div>
 
       {/* Tab switcher */}
-      <div className="mt-4 flex gap-1 border-b border-slate-200">
-        {[["practice", "VARC Practice"], ["coach", "VARC Coach"]].map(([t, label]) => (
+      <div className="mt-6 flex gap-6 border-b border-border">
+        {[["practice", "Practice"], ["coach", "Coach"]].map(([t, label]) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === t
-                ? "border-slate-900 text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-700"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             {label}
@@ -134,32 +135,28 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
         <CoachTab stats={coachStats} loading={coachLoading} />
       ) : (
         <>
-          <p className="mt-4 text-sm text-slate-500">Lifetime stats across all your sessions.</p>
           {!hasAttempts && (
-            <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
-              <p className="text-sm text-slate-600">
+            <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-5 py-4">
+              <p className="text-sm muted">
                 No attempts yet — run a practice session and your breakdown fills in here.
               </p>
-              <Link
-                to="/setup"
-                className="flex-none rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
-              >
+              <Link to="/setup" className="btn btn-primary flex-none">
                 Start a session
               </Link>
             </div>
           )}
           {streakData && (
-            <div className="mt-4">
+            <div className="mt-6">
               <StreakWidget data={streakData} onUpdate={setStreakData} compact />
             </div>
           )}
           <HeaderStats data={data} />
           <AccuracyByTypeChart byType={data.byType} />
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2">
-        <TrapWeakness byTrapType={data.byTrapType} mostDangerousTrap={data.mostDangerousTrap} />
-        <TopicAccuracy byTopic={data.byTopic} />
-      </div>
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            <TrapWeakness byTrapType={data.byTrapType} mostDangerousTrap={data.mostDangerousTrap} />
+            <TopicAccuracy byTopic={data.byTopic} />
+          </div>
 
           <WeakestArea data={data} />
           {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
@@ -175,22 +172,28 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   );
 }
 
+// Small uppercase section heading, shared across rows.
+function SectionTitle({ children }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      {children}
+    </h2>
+  );
+}
+
 // ── Coach tab ──────────────────────────────────────────────────────────────────
 const TYPE_LABELS_COACH = { inference: "Inference", tone: "Tone", title: "Title", detail: "Detail" };
 
 function CoachTab({ stats, loading }) {
   if (loading) return (
-    <div className="mt-8 space-y-4 animate-pulse">
-      {[1,2,3].map(i => <div key={i} className="h-20 rounded-xl bg-slate-100" />)}
+    <div className="mt-8 space-y-4">
+      {[1,2,3].map(i => <div key={i} className="skel h-20 rounded-xl" />)}
     </div>
   );
   if (!stats || Number(stats.totalSessions) === 0) return (
     <div className="mt-12 text-center">
-      <p className="text-slate-500 text-sm">No Coach sessions yet.</p>
-      <Link
-        to="/coach"
-        className="mt-4 inline-flex rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
-      >
+      <p className="muted text-sm">No Coach sessions yet.</p>
+      <Link to="/coach" className="btn btn-primary mt-4 inline-flex">
         Start a session
       </Link>
     </div>
@@ -207,33 +210,32 @@ function CoachTab({ stats, loading }) {
           ["Accuracy", accuracyPct],
           ["Avg exchanges", stats.avgExchanges ?? "—"],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+          <div key={label} className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs muted">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
           </div>
         ))}
       </div>
 
       {/* By question type */}
       {Object.keys(stats.byType || {}).length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-4">Accuracy by question type</h2>
-          <div className="space-y-3">
+        <div className="rounded-xl border border-border bg-card p-5">
+          <SectionTitle>Accuracy by question type</SectionTitle>
+          <div className="mt-4 space-y-3">
             {Object.entries(stats.byType).map(([type, { attempts, correct }]) => {
               const acc = attempts ? correct / attempts : 0;
-              const color = acc < 0.5 ? "#ef4444" : acc <= 0.7 ? "#f59e0b" : "#22c55e";
               return (
                 <div key={type} className="flex items-center gap-3">
-                  <span className="w-20 text-xs text-slate-600">{TYPE_LABELS_COACH[type] || type}</span>
-                  <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: pct(acc), backgroundColor: color }} />
+                  <span className="w-20 text-xs muted">{TYPE_LABELS_COACH[type] || type}</span>
+                  <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: pct(acc), backgroundColor: accuracyColor(acc) }} />
                   </div>
-                  <span className="text-xs tabular-nums text-slate-500 w-10 text-right">{pct(acc)}</span>
+                  <span className="text-xs tabular-nums muted w-10 text-right">{pct(acc)}</span>
                 </div>
               );
             })}
           </div>
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-xs dim">
             Avg exchanges needed: {stats.avgExchanges ?? "—"} (lower = stronger first-pass reasoning)
           </p>
         </div>
@@ -242,22 +244,22 @@ function CoachTab({ stats, loading }) {
       {/* Recent sessions */}
       {stats.recentSessions?.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">Recent articles</h2>
-          <div className="space-y-2">
+          <SectionTitle>Recent articles</SectionTitle>
+          <div className="mt-3 space-y-2">
             {stats.recentSessions.map((s) => (
-              <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+              <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {s.article_title || "Untitled article"}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs muted">
                     {new Date(s.created_at).toLocaleDateString()} ·{" "}
                     {s.attempted ? `${s.correct}/${s.attempted} correct` : "in progress"}
                   </p>
                 </div>
                 <Link
                   to={`/coach/summary?sessionId=${s.id}`}
-                  className="ml-4 flex-none text-xs text-slate-500 hover:text-slate-900 underline"
+                  className="ml-4 flex-none text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
                 >
                   Review
                 </Link>
@@ -275,17 +277,17 @@ function HeaderStats({ data }) {
   const avg =
     data.avgReasoningScore != null ? `${Number(data.avgReasoningScore).toFixed(1)}/5` : "—";
   const cards = [
-    ["Questions Answered", String(data.answeredCount)],
+    ["Questions answered", String(data.answeredCount)],
     ["Accuracy", pct(data.accuracy)],
-    ["Trap Pick Rate", pct(data.trapPickRate)],
-    ["Avg Reasoning Score", avg],
+    ["Trap pick rate", pct(data.trapPickRate)],
+    ["Avg reasoning score", avg],
   ];
   return (
     <div className="mt-6 grid gap-4 grid-cols-2 sm:grid-cols-4">
       {cards.map(([label, value]) => (
-        <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-2xl font-bold text-slate-900">{value}</div>
-          <div className="mt-1 text-sm text-slate-500">{label}</div>
+        <div key={label} className="rounded-xl border border-border bg-card p-5">
+          <div className="mono text-[26px] leading-none text-foreground">{value}</div>
+          <div className="mt-2 text-sm muted">{label}</div>
         </div>
       ))}
     </div>
@@ -307,30 +309,24 @@ function AccuracyByTypeChart({ byType }) {
 
   return (
     <section className="mt-10">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Accuracy by Question Type
-      </h2>
-      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm overflow-x-auto">
+      <SectionTitle>Accuracy by question type</SectionTitle>
+      <div className="mt-3 rounded-xl border border-border bg-card p-4 overflow-x-auto">
         <svg width={width} height={height} role="img" aria-label="Accuracy by question type">
           {entries.map(([type, s], i) => {
             const acc = s.attempts ? s.correct / s.attempts : 0;
             const y = i * (rowH + gap);
             const barW = Math.max(2, acc * barMaxW);
             return (
-              <g
-                key={type}
-                style={{ cursor: "pointer" }}
-                onClick={() => console.log(`Practice ${type} questions (filtered sessions: future)`)}
-              >
-                <text x={0} y={y + rowH / 2 + 4} className="fill-slate-700" fontSize="13" fontWeight="600">
+              <g key={type}>
+                <text x={0} y={y + rowH / 2 + 4} fill="var(--text-2)" fontSize="13" fontWeight="600">
                   {TYPE_LABELS[type] || type}
                 </text>
-                <rect x={labelW} y={y} width={barMaxW} height={rowH} rx="6" fill="#f1f5f9" />
+                <rect x={labelW} y={y} width={barMaxW} height={rowH} rx="6" fill="var(--surface-2)" />
                 <rect x={labelW} y={y} width={barW} height={rowH} rx="6" fill={accuracyColor(acc)} />
-                <text x={labelW + 8} y={y + rowH / 2 + 4} fill="#fff" fontSize="12" fontWeight="700">
+                <text x={labelW + 10} y={y + rowH / 2 + 4} fill="var(--bg)" fontSize="12" fontWeight="700">
                   {pct(acc)}
                 </text>
-                <text x={labelW + barMaxW + 8} y={y + rowH / 2 + 4} className="fill-slate-500" fontSize="12">
+                <text x={labelW + barMaxW + 8} y={y + rowH / 2 + 4} fill="var(--text-muted)" fontSize="12">
                   {s.correct}/{s.attempts}
                 </text>
               </g>
@@ -338,7 +334,6 @@ function AccuracyByTypeChart({ byType }) {
           })}
         </svg>
       </div>
-      <p className="mt-2 text-xs text-slate-400">Click a bar to practise that type (coming soon).</p>
     </section>
   );
 }
@@ -352,10 +347,8 @@ function TrapWeakness({ byTrapType, mostDangerousTrap }) {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Your Trap Weakness
-      </h2>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <SectionTitle>Your trap weakness</SectionTitle>
       <div className="mt-4 space-y-4">
         {entries.map(([type, s]) => {
           const rate = s.encountered ? s.fell_for / s.encountered : 0;
@@ -363,25 +356,25 @@ function TrapWeakness({ byTrapType, mostDangerousTrap }) {
           return (
             <div key={type}>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-800">{trapLabel(type)}</span>
-                <span className="text-xs text-slate-500">
+                <span className="text-sm font-medium text-foreground">{trapLabel(type)}</span>
+                <span className="text-xs muted">
                   fell for {s.fell_for} of {s.encountered}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">{trapDescription(type)}</p>
-              <div className="mt-1 h-2 rounded-full bg-slate-100">
+              <p className="text-xs dim">{trapDescription(type)}</p>
+              <div className="mt-1.5 h-2 rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-2 rounded-full"
-                  style={{ width: `${Math.max(2, rate * 100)}%`, backgroundColor: rate > 0 ? "#ef4444" : "#cbd5e1" }}
+                  style={{ width: `${Math.max(2, rate * 100)}%`, backgroundColor: rate > 0 ? "var(--red)" : "var(--border)" }}
                 />
               </div>
               {worst && (
-                <p className="mt-1 text-xs font-semibold text-red-600">This is your biggest blind spot</p>
+                <p className="mt-1 text-xs font-semibold" style={{ color: "var(--red)" }}>This is your biggest blind spot</p>
               )}
             </div>
           );
         })}
-        {entries.length === 0 && <p className="text-sm text-slate-400">No data yet.</p>}
+        {entries.length === 0 && <p className="text-sm dim">No data yet.</p>}
       </div>
     </div>
   );
@@ -391,10 +384,8 @@ function TrapWeakness({ byTrapType, mostDangerousTrap }) {
 function TopicAccuracy({ byTopic }) {
   const entries = Object.entries(byTopic || {});
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Topic Accuracy
-      </h2>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <SectionTitle>Topic accuracy</SectionTitle>
       <div className="mt-4 space-y-3">
         {entries.map(([topic, s]) => {
           const acc = s.attempts ? s.correct / s.attempts : 0;
@@ -402,12 +393,12 @@ function TopicAccuracy({ byTopic }) {
             <div key={topic} className="flex items-center justify-between">
               <TopicBadge topic={topic} />
               <span className="text-sm font-medium" style={{ color: accuracyColor(acc) }}>
-                {pct(acc)} <span className="text-slate-400 font-normal">({s.correct}/{s.attempts})</span>
+                {pct(acc)} <span className="dim font-normal">({s.correct}/{s.attempts})</span>
               </span>
             </div>
           );
         })}
-        {entries.length === 0 && <p className="text-sm text-slate-400">No data yet.</p>}
+        {entries.length === 0 && <p className="text-sm dim">No data yet.</p>}
       </div>
     </div>
   );
@@ -419,25 +410,25 @@ function WeakestArea({ data }) {
   const t = (data.byType || {})[data.weakestType];
   const avg = t?.avgReasoningScore != null ? `${Number(t.avgReasoningScore).toFixed(1)}/5` : "not yet scored";
   return (
-    <section className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5">
-      <p className="text-sm text-amber-900">
-        Your weakest area is <span className="font-bold">{TYPE_LABELS[data.weakestType] || data.weakestType}</span>{" "}
-        questions. You picked the trap <span className="font-bold">{t?.trapPicked ?? 0}</span> out of{" "}
-        <span className="font-bold">{t?.attempts ?? 0}</span> times, and your average reasoning score here is{" "}
-        <span className="font-bold">{avg}</span>.
+    <section
+      className="mt-8 rounded-xl border-l-[3px] p-5"
+      style={{ borderColor: "var(--amber)", background: "color-mix(in oklch, var(--amber) 7%, var(--surface))" }}
+    >
+      <p className="text-sm leading-relaxed text-foreground">
+        Your weakest area is <span className="font-semibold">{TYPE_LABELS[data.weakestType] || data.weakestType}</span>{" "}
+        questions. You picked the trap <span className="font-semibold">{t?.trapPicked ?? 0}</span> out of{" "}
+        <span className="font-semibold">{t?.attempts ?? 0}</span> times, and your average reasoning score here is{" "}
+        <span className="font-semibold">{avg}</span>.
         {data.mostDangerousTrap && (
           <>
             {" "}Your most dangerous trap type is{" "}
-            <span className="font-bold">{trapLabel(data.mostDangerousTrap)}</span>.
+            <span className="font-semibold">{trapLabel(data.mostDangerousTrap)}</span>.
           </>
         )}
       </p>
-      <button
-        onClick={() => console.log(`Practice ${data.weakestType} questions (filtered sessions: future)`)}
-        className="mt-3 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
-      >
-        Practice {TYPE_LABELS[data.weakestType] || data.weakestType} questions
-      </button>
+      <Link to="/setup" className="btn btn-primary mt-4 inline-flex">
+        Practice more questions
+      </Link>
     </section>
   );
 }
@@ -454,19 +445,17 @@ function IntuitionStats({ stats }) {
       : "—";
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Intuition Mode
-      </h2>
+      <SectionTitle>Intuition mode</SectionTitle>
       <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          ["Total Points", String(stats.totalPoints)],
+          ["Total points", String(stats.totalPoints)],
           ["Questions", String(stats.totalAttempts)],
-          ["Avg Time / Q", avgTime],
-          ["Elimination Accuracy", elimAcc],
+          ["Avg time / Q", avgTime],
+          ["Elimination accuracy", elimAcc],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-xl font-bold text-slate-900">{value}</div>
-            <div className="mt-1 text-xs text-slate-500">{label}</div>
+          <div key={label} className="rounded-xl border border-border bg-card p-4">
+            <div className="mono text-xl leading-none text-foreground">{value}</div>
+            <div className="mt-2 text-xs muted">{label}</div>
           </div>
         ))}
       </div>
@@ -479,9 +468,7 @@ function RecentAttempts({ attempts }) {
   if (!attempts || attempts.length === 0) return null;
   return (
     <section className="mt-10">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Recent Attempts
-      </h2>
+      <SectionTitle>Recent attempts</SectionTitle>
       <div className="mt-3 space-y-2">
         {attempts.map((a, i) => (
           <RecentAttemptCard key={i} attempt={a} />
@@ -494,41 +481,46 @@ function RecentAttempts({ attempts }) {
 function RecentAttemptCard({ attempt }) {
   const [open, setOpen] = useState(false);
   const badge = attempt.skipped
-    ? ["bg-slate-100 text-slate-500", "Skipped"]
+    ? { color: "var(--text-2)", bg: "var(--surface-2)", label: "Skipped" }
     : attempt.isCorrect
-    ? ["bg-green-100 text-green-700", "Correct"]
-    : ["bg-red-100 text-red-700", "Incorrect"];
+    ? { color: "var(--green)", bg: "rgba(74,222,128,0.12)", label: "Correct" }
+    : { color: "var(--red)", bg: "rgba(248,113,113,0.12)", label: "Incorrect" };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="rounded-xl border border-border bg-card">
       <button
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-slate-400 text-xs">{open ? "▾" : "▸"}</span>
-          <span className="truncate text-sm text-slate-700">{attempt.questionSnippet}</span>
+          <span className="text-muted-foreground flex-none">
+            <Icon name={open ? "chevU" : "chevD"} size={15} />
+          </span>
+          <span className="truncate text-sm text-foreground">{attempt.questionSnippet}</span>
         </div>
         <div className="flex items-center gap-2 flex-none">
           <TypeBadge type={attempt.type} />
           {attempt.reasoningScore != null && <ScoreDots score={attempt.reasoningScore} />}
-          <span className="text-xs font-mono text-slate-400">
+          <span className="text-xs mono dim">
             {Math.floor((attempt.timeTakenSeconds || 0) / 60)}:
             {String((attempt.timeTakenSeconds || 0) % 60).padStart(2, "0")}
           </span>
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge[0]}`}>
-            {badge[1]}
+          <span
+            className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+            style={{ color: badge.color, background: badge.bg }}
+          >
+            {badge.label}
           </span>
         </div>
       </button>
       {open && (
-        <div className="border-t border-slate-100 px-4 py-4">
+        <div className="border-t border-border px-4 py-4">
           <div className="mb-3 flex items-center gap-2">
             <TypeBadge type={attempt.type} />
             <TopicBadge topic={attempt.topic} />
           </div>
           {attempt.question && (
-            <p className="mb-3 text-sm font-semibold text-slate-900">{attempt.question}</p>
+            <p className="mb-3 text-sm font-semibold text-foreground">{attempt.question}</p>
           )}
           <FeedbackSections attempt={attempt} />
         </div>
@@ -544,53 +536,48 @@ function SrWidget({ stats }) {
 
   return (
     <section className="mt-10">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Spaced Repetition
-      </h2>
-      <div className="mt-3 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
+      <SectionTitle>Spaced repetition</SectionTitle>
+      <div className="mt-3 rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="grid grid-cols-3 gap-4 flex-1">
             <div className="text-center">
-              <p className="text-2xl font-bold text-slate-900">{totalCards}</p>
-              <p className="mt-0.5 text-xs text-slate-500">Total cards</p>
+              <p className="mono text-2xl leading-none text-foreground">{totalCards}</p>
+              <p className="mt-1.5 text-xs muted">Total cards</p>
             </div>
             <div className="text-center">
-              <p className={`text-2xl font-bold ${dueNow > 0 ? "text-amber-600" : "text-green-600"}`}>
+              <p className="mono text-2xl leading-none" style={{ color: dueNow > 0 ? "var(--amber)" : "var(--green)" }}>
                 {dueNow}
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">Due now</p>
+              <p className="mt-1.5 text-xs muted">Due now</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">{graduated}</p>
-              <p className="mt-0.5 text-xs text-slate-500">Graduated</p>
+              <p className="mono text-2xl leading-none" style={{ color: "var(--green)" }}>{graduated}</p>
+              <p className="mt-1.5 text-xs muted">Graduated</p>
             </div>
           </div>
           {dueNow > 0 && (
-            <Link
-              to="/setup"
-              className="inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors flex-none"
-            >
+            <Link to="/setup" className="btn btn-primary flex-none">
               Review {dueNow} card{dueNow === 1 ? "" : "s"} →
             </Link>
           )}
         </div>
 
         {/* Progress bar */}
-        <div className="mt-4">
-          <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+        <div className="mt-5">
+          <div className="flex items-center justify-between text-xs muted mb-1.5">
             <span>Progress to graduation</span>
-            <span>{progress}%</span>
+            <span className="mono">{progress}%</span>
           </div>
-          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full rounded-full bg-green-500 transition-all"
-              style={{ width: `${progress}%` }}
+              className="h-full rounded-full transition-all"
+              style={{ width: `${progress}%`, background: "var(--green)" }}
             />
           </div>
         </div>
 
         {avgBucket != null && (
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-xs dim">
             Avg. interval bucket: {avgBucket} / 4 &nbsp;·&nbsp; Bucket 4 = 30-day interval (graduated)
           </p>
         )}

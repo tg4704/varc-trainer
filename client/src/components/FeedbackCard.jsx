@@ -2,9 +2,9 @@
 // Phase 3 shows simple inline feedback; this component is a stub for now.
 export default function FeedbackCard({ children }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-card p-6">
       {children || (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm muted">
           Feedback will appear here after you submit.
         </p>
       )}

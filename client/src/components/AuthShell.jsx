@@ -4,7 +4,7 @@ import Icon from "./Icon.jsx";
 
 export function AuthShell({ children }) {
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center p-6">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center px-6 pb-12 pt-16 sm:pt-24">
       <Link to="/" className="mb-7 display text-xl tracking-tight">
         graspr<span style={{ color: "var(--teal)" }}>.</span>
       </Link>

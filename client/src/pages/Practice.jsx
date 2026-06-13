@@ -5,6 +5,7 @@ import TopicBadge from "../components/TopicBadge.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import IntuitionTimer from "../components/IntuitionTimer.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
+import Icon from "../components/Icon.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { Textarea } from "../components/ui/input.jsx";
 import VoiceMicButton from "../components/VoiceMicButton.jsx";
@@ -676,7 +677,7 @@ export default function Practice() {
 
         {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
           onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
-        {flagToast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-900 text-white px-5 py-3 text-sm shadow-lg">{flagToast}</div>}
+        {flagToast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-border bg-card text-foreground px-5 py-3 text-sm shadow-lg">{flagToast}</div>}
         {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
         {showLeaveModal && <LeaveSessionModal busy={leaving} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
       </div>
@@ -694,9 +695,10 @@ export default function Practice() {
     <>
     <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in">
       {session?.sessionType === "review" && (
-        <div className="mb-6 rounded-md bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
-          <span className="text-base">🔁</span>
-          <span><strong>Spaced repetition review</strong> — questions you previously got wrong, due for reinforcement.</span>
+        <div className="mb-6 rounded-md border px-4 py-3 text-sm flex items-center gap-2.5"
+          style={{ background: "color-mix(in oklch, var(--amber) 9%, transparent)", borderColor: "color-mix(in oklch, var(--amber) 28%, transparent)", color: "var(--amber)" }}>
+          <Icon name="clock" size={16} />
+          <span><strong className="font-semibold">Spaced repetition review</strong> — questions you previously got wrong, due for reinforcement.</span>
         </div>
       )}
       <QuestionNavBar
@@ -914,7 +916,7 @@ export default function Practice() {
       onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks for the feedback!"); setTimeout(() => setFlagToast(null), 3500); }} />}
 
     {flagToast && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-900 text-white px-5 py-3 text-sm font-medium shadow-lg">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-border bg-card text-foreground px-5 py-3 text-sm font-medium shadow-lg">
         {flagToast}
       </div>
     )}
