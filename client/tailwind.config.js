@@ -46,7 +46,9 @@ export default {
       },
       fontFamily: {
         sans: ['"Inter"', "ui-sans-serif", "system-ui", "sans-serif"],
-        reading: ['"Lora"', "Georgia", "Cambria", "Times New Roman", "serif"],
+        display: ['"Newsreader"', "Georgia", "serif"],
+        reading: ['"Source Serif 4"', "Georgia", "Cambria", "Times New Roman", "serif"],
+        mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
       },
       keyframes: {
         "fade-in": {

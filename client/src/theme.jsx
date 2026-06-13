@@ -14,12 +14,12 @@ function getSystemTheme() {
 function applyTheme(theme) {
   const root = document.documentElement;
   const resolved = theme === "system" ? getSystemTheme() : theme;
-  if (resolved === "dark") {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
-  root.style.colorScheme = resolved;
+  // Graspr is a dark-only editorial design — always render the dark palette
+  // regardless of the requested/system theme. (The toggle is kept for a
+  // possible future light mode but currently has no visual effect.)
+  void resolved;
+  root.classList.add("dark");
+  root.style.colorScheme = "dark";
 }
 
 export function ThemeProvider({ children }) {

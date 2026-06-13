@@ -1,91 +1,272 @@
 /* ── Fonts ─────────────────────────────────────────────────────────────────
-   Inter for UI; Lora for the passage reading font (serif, closer to print).
+   Graspr design system (dark, editorial, serious study tool).
+   Newsreader = display serif; Source Serif 4 = reading passages;
+   Inter = UI; IBM Plex Mono = numbers / counters.
 */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=IBM+Plex+Mono:wght@400;500&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design tokens (Phase 8.5) ────────────────────────────────────────────
-   CSS variables drive every themable color. Tailwind classes reference them
-   via the config (e.g. bg-background, text-foreground, border-border).
-   --primary is indigo-600 in light, indigo-400 in dark for contrast on dark bg.
+/* ── Design tokens ────────────────────────────────────────────────────────
+   Dark-mode only. Two parallel token systems live here, both pointing at the
+   same palette:
+   1. Tailwind/shadcn HSL tokens (--background, --primary, …) — consumed by the
+      existing `bg-background`, `text-foreground`, `border-border` classes
+      across every page, so remapping these reskins the whole app at once.
+   2. Raw hex design tokens (--bg, --surface, --teal, …) + the component
+      utility classes below — used verbatim by ported screens from the
+      Graspr design (.btn, .opt, .accent-card, badges, animations).
+   The palette is dark-only; the .dark block mirrors :root so the theme
+   toggle can never fall back to a light scheme.
 */
 @layer base {
   :root {
-    /* Surfaces */
-    --background: 210 40% 98%;          /* slate-50 */
-    --foreground: 222 47% 11%;          /* slate-900 */
-    --card: 0 0% 100%;                  /* white */
-    --card-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;               /* slate-100 */
-    --muted-foreground: 215 16% 47%;    /* slate-500 */
+    /* ---- Tailwind/shadcn HSL tokens (remapped to the dark palette) ---- */
+    --background: 225 21% 7%;           /* #0F1117 */
+    --foreground: 220 35% 93%;          /* #E8ECF4 */
+    --card: 224 19% 12%;                /* #181B23 surface */
+    --card-foreground: 220 35% 93%;
+    --muted: 227 23% 15%;               /* #1E2230 surface-2 */
+    --muted-foreground: 223 14% 60%;    /* #8B93A7 text-2 */
 
-    /* Brand */
-    --primary: 239 84% 60%;             /* indigo-600 */
-    --primary-foreground: 0 0% 100%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    --primary: 160 51% 58%;             /* #5DCAA5 teal */
+    --primary-foreground: 155 46% 5%;   /* #07130E */
+    --accent: 227 23% 15%;
+    --accent-foreground: 220 35% 93%;
 
-    /* Semantic */
-    --success: 142 71% 45%;             /* green-500 */
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;              /* amber-500 */
-    --warning-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;           /* red-500 */
+    --success: 142 69% 58%;             /* #4ADE80 */
+    --success-foreground: 155 46% 5%;
+    --warning: 28 82% 67%;              /* #F0A868 amber */
+    --warning-foreground: 155 46% 5%;
+    --destructive: 0 91% 71%;           /* #F87171 */
     --destructive-foreground: 0 0% 100%;
 
-    /* Inputs / borders / focus */
-    --border: 214 32% 91%;              /* slate-200 */
-    --input: 214 32% 91%;
-    --ring: 239 84% 60%;                /* matches --primary */
+    --border: 225 19% 20%;              /* #2A2F3E */
+    --input: 225 19% 20%;
+    --ring: 160 51% 58%;                /* teal */
 
     --radius: 0.5rem;
+
+    /* ---- Raw Graspr design tokens (hex) ---- */
+    /* surfaces */
+    --bg:            #0F1117;
+    --surface:       #181B23;
+    --surface-2:     #1E2230;
+    --border-subtle: #1F2333;
+
+    /* text */
+    --text:      #E8ECF4;
+    --text-2:    #8B93A7;
+    --text-muted:#545C72;
+
+    /* accents */
+    --teal:     #5DCAA5;
+    --teal-dim: #3a8c72;
+    --amber:    #F0A868;
+    --green:    #4ADE80;
+    --red:      #F87171;
+    --trap:     #FBBF24;
+
+    /* topic colors */
+    --topic-economics: #7D90C9;
+    --topic-philosophy:#B492D9;
+    --topic-science:   #5DCAA5;
+    --topic-humanities:#F0A868;
+    --topic-social:    #F08C8C;
+
+    /* type colors (question types) */
+    --type-inference:   #6FA0E8;
+    --type-tone:        #B492D9;
+    --type-title:       #5DCAA5;
+    --type-detail:      #F0A868;
+    --type-application: #F08C8C;
+
+    /* radii */
+    --r-default: 8px;
+    --r-card:    12px;
+    --r-pill:    6px;
+
+    /* shadow */
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.25);
+
+    /* motion */
+    --t: 160ms ease;
+
+    /* fonts */
+    --font-display: "Newsreader", Georgia, serif;
+    --font-read:    "Source Serif 4", Georgia, serif;
+    --font-ui:      "Inter", system-ui, sans-serif;
+    --font-mono:    "IBM Plex Mono", ui-monospace, monospace;
   }
 
-  .dark {
-    --background: 222 47% 11%;          /* slate-900 */
-    --foreground: 210 40% 98%;          /* slate-50 */
-    --card: 217 33% 17%;                /* slate-800 */
-    --card-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;    /* slate-400 */
-
-    --primary: 234 89% 74%;             /* indigo-400 — brighter on dark */
-    --primary-foreground: 222 47% 11%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-
-    --success: 142 70% 50%;
-    --warning: 38 92% 55%;
-    --destructive: 0 75% 60%;
-
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 234 89% 74%;
-  }
+  /* Mirror :root so an accidental light theme can't break the palette. */
+  .dark { color-scheme: dark; }
 }
 
 @layer base {
   * {
     border-color: hsl(var(--border));
+    box-sizing: border-box;
   }
   html {
-    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-family: var(--font-ui);
+    color-scheme: dark;
   }
   body {
     margin: 0;
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
+    background-color: var(--bg);
+    color: var(--text);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection { background: rgba(93,202,165,0.28); color: #fff; }
+
+  /* scrollbars — quiet */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #262b39; border-radius: 8px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: #333a4d; }
+
+  :focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
-/* Legacy escape hatch — kept until all forms migrate to <Input/> */
+/* ── Component utility classes (ported from the Graspr design) ──────────── */
 @layer components {
+  /* legacy escape hatch — kept until all forms migrate to <Input/> */
   .input {
-    @apply w-full rounded-lg border border-input bg-background px-3 py-2 text-sm
-      shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring;
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--r-default); color: var(--text);
+    padding: 11px 13px; font-size: 14px;
+    transition: border-color var(--t), background var(--t);
   }
+  .input::placeholder { color: var(--text-muted); }
+  .input:focus { outline: none; border-color: var(--teal); }
+  textarea.input { resize: vertical; line-height: 1.6; }
+
+  .field-label { font-size: 13px; font-weight: 500; color: var(--text-2); margin-bottom: 7px; display: block; }
+
+  /* buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--font-ui); font-size: 14px; font-weight: 500;
+    padding: 11px 18px; border-radius: var(--r-default);
+    transition: background var(--t), border-color var(--t), color var(--t), transform 80ms ease;
+    border: 1px solid transparent; line-height: 1; white-space: nowrap; cursor: pointer;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--teal); color: #07130E; font-weight: 600; }
+  .btn-primary:hover { background: #6fd6b3; }
+  .btn-primary:disabled { background: #233029; color: #4a5c54; cursor: not-allowed; }
+  .btn-ghost { border-color: var(--border); color: var(--text); background: transparent; }
+  .btn-ghost:hover { border-color: var(--teal); background: var(--surface-2); }
+  .btn-teal-border { border-color: var(--teal-dim); color: var(--teal); background: transparent; }
+  .btn-teal-border:hover { border-color: var(--teal); background: rgba(93,202,165,0.07); }
+  .btn-block { width: 100%; }
+  .btn-lg { padding: 14px 22px; font-size: 15px; }
+
+  /* badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 500; letter-spacing: 0.02em;
+    padding: 4px 9px; border-radius: var(--r-pill);
+    border: 1px solid transparent;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .hairline { height: 1px; background: var(--border-subtle); border: none; margin: 0; }
+
+  /* option cards */
+  .opt {
+    position: relative; display: flex; align-items: flex-start; gap: 14px;
+    width: 100%; text-align: left;
+    min-height: 60px; padding: 16px 18px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    border-radius: var(--r-default);
+    transition: background var(--t), border-color var(--t);
+  }
+  .opt:hover:not(.opt-locked) { border-left-color: var(--teal); background: var(--surface-2); }
+  .opt-sel { border-color: var(--teal); background: var(--surface-2); border-left-color: var(--teal); }
+  .opt-correct { border-color: var(--green); background: rgba(74,222,128,0.07); border-left-color: var(--green); }
+  .opt-wrong   { border-color: var(--red);   background: rgba(248,113,113,0.07); border-left-color: var(--red); }
+  .opt-trap    { border-color: var(--trap);  border-left-color: var(--trap); }
+  .opt-locked  { cursor: default; }
+  .opt-elim .opt-text { text-decoration: line-through; opacity: 0.4; }
+
+  .opt-letter {
+    flex: none; width: 24px; height: 24px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 13px; color: var(--text-2);
+    border: 1px solid var(--border); margin-top: 1px;
+    transition: all var(--t);
+  }
+  .opt-sel .opt-letter, .opt-correct .opt-letter { border-color: currentColor; }
+  .opt-text { font-size: 15px; line-height: 1.5; color: var(--text); flex: 1; }
+
+  /* reasoning score dots */
+  .score-dot { width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--teal-dim); }
+  .score-dot.on { background: var(--teal); border-color: var(--teal); }
+
+  /* accent cards (feedback) */
+  .accent-card { background: var(--surface); border: 1px solid var(--border-subtle); border-left-width: 3px; border-radius: 0 var(--r-default) var(--r-default) 0; padding: 16px 18px; }
+  .accent-teal  { border-left-color: var(--teal); }
+  .accent-amber { border-left-color: var(--amber); }
+  .accent-callout { background: var(--surface-2); }
+
+  .fb-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 8px; }
+  .fb-body  { font-size: 15px; line-height: 1.7; color: var(--text); }
+
+  /* loaders */
+  .think-track { position: relative; height: 2px; background: var(--border-subtle); overflow: hidden; border-radius: 2px; }
+  .think-track::after {
+    content: ""; position: absolute; inset: 0; width: 40%;
+    background: linear-gradient(90deg, transparent, var(--teal), transparent);
+    animation: thinkSweep 1.1s ease-in-out infinite;
+  }
+  .skel { background: var(--surface-2); border-radius: 6px; animation: skelPulse 1.5s ease-in-out infinite; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(7,19,14,0.3); border-top-color: currentColor; border-radius: 50%; animation: spin 0.7s linear infinite; }
+}
+
+/* ── Text / font utilities ──────────────────────────────────────────────── */
+@layer utilities {
+  .mono { font-family: var(--font-mono); }
+  .serif-read { font-family: var(--font-read); }
+  .display { font-family: var(--font-display); }
+  .muted { color: var(--text-2); }
+  .dim { color: var(--text-muted); }
+
+  .anim-reason   { animation: slideUp8 200ms ease-out 1; }
+  .anim-feedback { animation: slideUp12 220ms ease-out 1; }
+  .anim-fade     { animation: fadeIn 180ms ease 1; }
+  .opt-pulse     { animation: correctPulse 600ms ease-out 1; }
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+@keyframes correctPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(74,222,128,0.0); }
+  35%  { box-shadow: 0 0 0 4px rgba(74,222,128,0.35), 0 0 22px 2px rgba(74,222,128,0.45); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.0); }
+}
+@keyframes slideUp8  { from { opacity: 0; transform: translateY(8px); }  to { opacity: 1; transform: none; } }
+@keyframes slideUp12 { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes fadeIn    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes thinkSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@keyframes skelPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }

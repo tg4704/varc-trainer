@@ -127,9 +127,9 @@ export default function SessionSetup() {
   const effectiveMax = reviewReady && dueCount != null ? Math.min(dueCount, 25) : 25;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-foreground">New session</h1>
-      <p className="mt-1 text-muted-foreground">Configure your session, then start.</p>
+    <div className="max-w-2xl mx-auto px-4 py-12">
+      <h1 className="display text-[34px]">Start a session</h1>
+      <p className="mt-2 muted">Set the shape of your practice. You can change this any time.</p>
 
       {/* Session type */}
       <Section title="Session type">

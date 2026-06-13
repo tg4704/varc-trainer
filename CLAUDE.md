@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This App Is
 
-VARC Option Differentiation Trainer — a web app for CAT aspirants to practice distinguishing correct RC answers from trap options. Each question is anchored to a short paragraph (~90–120 words, not a full passage). The user picks an answer, explains their reasoning, and receives AI feedback evaluating the quality of their thinking.
+**Graspr** (formerly "VARC Trainer") — a web app for CAT aspirants to practice distinguishing correct RC answers from trap options. Each question is anchored to a short paragraph (~90–120 words, not a full passage). The user picks an answer, explains their reasoning, and receives AI feedback evaluating the quality of their thinking.
 
 The original phased build spec is in [`varc_trainer_build_prompt.md`](varc_trainer_build_prompt.md). The forward roadmap (Phases 8+) lives in [`ROADMAP.md`](ROADMAP.md); the user-facing feature list lives in [`USER_FEATURES.md`](USER_FEATURES.md). The AI Reading Coach sub-plan (becomes Phase 14) is in [`ai_reading_coach_plan.md`](ai_reading_coach_plan.md).
 
 ## Tech Stack
 
 - **Frontend**: React (Vite) + Tailwind CSS + React Router v6 — lives in `client/`
-- **UI system** (Phase 8.5): shadcn/ui-style primitives in `client/src/components/ui/`, built on Radix Slot + `class-variance-authority` + `tailwind-merge`. Design tokens via CSS variables in `client/src/index.css` (light + dark). Icons from `lucide-react`. UI font Inter, reading font Lora.
+- **UI system**: shadcn/ui-style primitives in `client/src/components/ui/`, built on Radix Slot + `class-variance-authority` + `tailwind-merge`. **Graspr design (2026-06)**: dark-only editorial theme. `client/src/index.css` holds two parallel token systems pointing at the same dark palette — (1) the shadcn HSL tokens (`--background`, `--primary`…) remapped to dark so every page reskins at once, and (2) raw hex tokens (`--bg`, `--teal`, `--surface`…) + utility classes (`.btn`, `.opt`, `.accent-card`, `.badge`, `.card`, animations) ported from the design. `theme.jsx` forces dark always. Fonts: Newsreader (display, `font-display`/`.display`), Source Serif 4 (reading passages, `font-reading`/`.serif-read`), Inter (UI), IBM Plex Mono (`.mono`). Accent teal `#5DCAA5`. Shared `components/Icon.jsx` = line-art icon set; `components/AuthShell.jsx` = auth card shell. `OptionCard` and `FeedbackSections` use the signature `.opt` / layered accent-card styling. Ported screens: Home (landing), Login/Register, SessionSetup, Coach landing/practice; Practice + others inherit via tokens. Design handoff bundle in `design_dump/`.
 - **Backend**: Node.js + Express — lives in `server/`
 - **Database**: PostgreSQL via `pg` (node-postgres) — `DATABASE_URL` env var; Railway Postgres in production; local Postgres in dev
 - **Auth**: bcryptjs (password hashing) + JSON Web Tokens (`jsonwebtoken`)

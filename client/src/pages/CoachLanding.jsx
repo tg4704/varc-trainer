@@ -79,10 +79,10 @@ export default function CoachLanding() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">VARC Coach</h1>
-        <p className="mt-1 text-muted-foreground">
-          Paste any dense article. VARC Coach generates 4 CAT-style questions, then guides you
-          through a structured debrief — like a tutor sitting next to you.
+        <h1 className="display text-[34px]">Coach me on an article</h1>
+        <p className="mt-2 muted leading-relaxed">
+          Paste anything dense and long-form. VARC Coach builds CAT-style questions, then
+          questions you back until your reasoning holds — like a tutor sitting next to you.
         </p>
       </div>
 

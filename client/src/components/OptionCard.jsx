@@ -1,60 +1,65 @@
 import { cn } from "../lib/utils.js";
+import Icon from "./Icon.jsx";
 
-// status: null (pre-submit) | "correct" | "wrong" | "correct-unselected"
+// status: null (pre-submit) | "correct" | "wrong" | "correct-unselected" | "trap"
+// Renders the Graspr signature option card: outlined letter chip + left accent
+// border, green pulse on the correct answer.
 export default function OptionCard({
   letter,
   text,
   selected,
   status = null,
   disabled = false,
+  eliminated = false,
+  trapBadge = false,
   onClick,
 }) {
-  let stateClasses;
+  const cls = ["opt"];
+  let letterColor;
   if (status === "correct") {
-    stateClasses = "border-success bg-success/10";
-  } else if (status === "wrong") {
-    stateClasses = "border-destructive bg-destructive/10";
+    cls.push("opt-correct", "opt-pulse");
+    letterColor = "var(--green)";
   } else if (status === "correct-unselected") {
-    stateClasses = "border-success bg-card";
-  } else if (selected) {
-    stateClasses = "border-primary bg-primary/5";
-  } else {
-    stateClasses = "border-border bg-card hover:border-foreground/40";
-  }
-
-  let letterClasses;
-  if (status === "correct" || status === "correct-unselected") {
-    letterClasses = "bg-success text-success-foreground";
+    cls.push("opt-correct");
+    letterColor = "var(--green)";
   } else if (status === "wrong") {
-    letterClasses = "bg-destructive text-destructive-foreground";
+    cls.push("opt-wrong");
+    letterColor = "var(--red)";
+  } else if (status === "trap") {
+    cls.push("opt-trap");
+    letterColor = "var(--trap)";
   } else if (selected) {
-    letterClasses = "bg-primary text-primary-foreground";
-  } else {
-    letterClasses = "bg-muted text-muted-foreground";
+    cls.push("opt-sel");
+    letterColor = "var(--teal)";
   }
+  if (eliminated) cls.push("opt-elim");
+  if (disabled) cls.push("opt-locked");
 
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={cn(
-        "w-full flex items-start gap-3 rounded-lg border p-4 text-left transition-colors",
-        stateClasses,
-        disabled ? "cursor-default" : "cursor-pointer"
-      )}
+      className={cn(cls.join(" "))}
+      style={{ cursor: disabled ? "default" : "pointer" }}
     >
-      <span
-        className={cn(
-          "flex h-7 w-7 flex-none items-center justify-center rounded-full text-sm font-bold transition-colors",
-          letterClasses
-        )}
-      >
+      <span className="opt-letter" style={letterColor ? { color: letterColor } : undefined}>
         {letter}
       </span>
-      <span className="text-sm leading-relaxed text-foreground pt-0.5">
-        {text}
-      </span>
+      <span className="opt-text">{text}</span>
+      {trapBadge && (
+        <span
+          className="badge"
+          style={{ flex: "none", marginLeft: "auto", color: "#0F1117", background: "var(--trap)", fontSize: 10, letterSpacing: "0.08em" }}
+        >
+          TRAP
+        </span>
+      )}
+      {status === "correct" && !trapBadge && (
+        <span style={{ flex: "none", marginLeft: "auto", color: "var(--green)" }}>
+          <Icon name="check" size={16} stroke={2.2} />
+        </span>
+      )}
     </button>
   );
 }

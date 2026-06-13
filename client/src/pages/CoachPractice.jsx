@@ -289,7 +289,7 @@ export default function CoachPractice() {
         <div className="lg:w-[45%]">
           <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border border-border bg-card p-5">
             {coachSession.articleTitle && (
-              <h2 className="mb-3 font-bold text-foreground text-base leading-snug">
+              <h2 className="mb-3 display text-[22px] leading-tight">
                 {coachSession.articleTitle}
               </h2>
             )}

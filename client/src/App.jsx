@@ -83,8 +83,12 @@ function NavBar() {
   return (
     <header className="border-b border-border bg-card">
       <nav className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to="/" onClick={guarded("/")} className="font-bold text-foreground tracking-tight">
-          VARC Trainer
+        <Link
+          to="/"
+          onClick={guarded("/")}
+          className="font-display text-xl tracking-tight text-foreground inline-flex items-baseline"
+        >
+          graspr<span className="text-primary">.</span>
         </Link>
         <div className="flex items-center gap-1">
           {user ? (
