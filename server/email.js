@@ -7,7 +7,7 @@ const { Resend } = require("resend");
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM   = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-const APP    = "VARC Trainer";
+const APP    = "Graspr";
 
 async function sendEmail(to, subject, html) {
   if (!resend) {
@@ -24,7 +24,7 @@ async function sendEmail(to, subject, html) {
 }
 
 async function sendOtpEmail(to, otp, purpose) {
-  const boldOtp = `<div style="font-size:38px;font-weight:700;letter-spacing:10px;color:#4f46e5;padding:20px 0">${otp}</div>`;
+  const boldOtp = `<div style="font-size:38px;font-weight:700;letter-spacing:10px;color:#0f766e;padding:20px 0">${otp}</div>`;
 
   if (purpose === "email_verification") {
     return sendEmail(
