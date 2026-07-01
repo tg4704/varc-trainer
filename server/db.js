@@ -69,10 +69,30 @@ async function createTables() {
       id SERIAL PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
+      password_hash TEXT,
+      google_id TEXT,
       role TEXT NOT NULL DEFAULT 'user',
+      tier TEXT NOT NULL DEFAULT 'free',
       daily_goal INTEGER NOT NULL DEFAULT 10,
       email_verified INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ② Coach — full-RC passages with the reading key baked in (created before
+  // `questions` because questions.passage_id references it).
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS passages (
+      id SERIAL PRIMARY KEY,
+      topic TEXT NOT NULL,
+      genre TEXT,
+      title TEXT,
+      body TEXT NOT NULL,
+      word_count INTEGER NOT NULL,
+      reading_key_json TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'ai_generated',
+      author_user_id INTEGER REFERENCES users(id),
+      is_active INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
@@ -91,6 +111,7 @@ async function createTables() {
       source_lines TEXT NOT NULL,
       source TEXT NOT NULL DEFAULT 'seed',
       author_user_id INTEGER REFERENCES users(id),
+      passage_id INTEGER REFERENCES passages(id),
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
@@ -136,6 +157,7 @@ async function createTables() {
       status TEXT NOT NULL DEFAULT 'active',
       feedback_mode TEXT NOT NULL DEFAULT 'instant',
       session_type TEXT NOT NULL DEFAULT 'practice',
+      question_ids TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       completed_at TIMESTAMPTZ
     )
@@ -165,6 +187,7 @@ async function createTables() {
       time_taken_seconds INTEGER,
       eliminated_indices TEXT,
       intuition_points INTEGER,
+      error_category TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
@@ -198,15 +221,15 @@ async function createTables() {
     )
   `);
 
+  // ② Coach — one run over one passage. The reading-map grade (b2) is the
+  // defining mechanic: it's stored at the session level, submitted BEFORE questions.
   await db.exec(`
     CREATE TABLE IF NOT EXISTS coach_sessions (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id),
-      article_text TEXT NOT NULL,
-      article_source TEXT,
-      article_title TEXT,
-      word_count INTEGER NOT NULL,
-      questions_json TEXT NOT NULL,
+      passage_id INTEGER NOT NULL REFERENCES passages(id),
+      reading_map_json TEXT,
+      reading_grade_json TEXT,
       status TEXT NOT NULL DEFAULT 'active',
       created_at TIMESTAMPTZ DEFAULT NOW(),
       completed_at TIMESTAMPTZ
@@ -217,18 +240,42 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS coach_attempts (
       id SERIAL PRIMARY KEY,
       coach_session_id INTEGER NOT NULL REFERENCES coach_sessions(id),
+      question_id TEXT NOT NULL,
       question_index INTEGER NOT NULL,
       question_type TEXT NOT NULL,
-      selected_option_index INTEGER NOT NULL,
+      selected_option_index INTEGER,
       correct_option_index INTEGER NOT NULL,
       is_correct INTEGER NOT NULL,
-      selected_trap INTEGER NOT NULL,
       trap_type TEXT,
-      exchange_count INTEGER NOT NULL DEFAULT 0,
-      conversation_json TEXT NOT NULL DEFAULT '[]',
-      final_verdict TEXT,
+      selected_trap INTEGER NOT NULL DEFAULT 0,
+      reasoning_text TEXT,
+      reasoning_score INTEGER,
+      reasoning_feedback TEXT,
+      trap_explanation TEXT,
+      correct_explanation TEXT,
       key_takeaway TEXT,
-      is_complete INTEGER NOT NULL DEFAULT 0,
+      discuss_conversation_json TEXT NOT NULL DEFAULT '[]',
+      exchange_count INTEGER NOT NULL DEFAULT 0,
+      error_category TEXT,
+      time_taken_seconds INTEGER,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ① Reading Lounge — curated real CC-licensed articles.
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS articles (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      author TEXT,
+      source_name TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      license TEXT NOT NULL,
+      genre TEXT NOT NULL,
+      body TEXT NOT NULL,
+      word_count INTEGER NOT NULL,
+      difficulty TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
@@ -292,24 +339,51 @@ async function bootstrapAdmins() {
   }
 }
 
+// ── One-time destructive reset (fresh rebuild), guarded by DB_RESET=true ──────
+// Drops all app tables so createTables() rebuilds the schema from scratch.
+// DEV ONLY — NEVER set DB_RESET=true against a production database.
+async function resetTables() {
+  console.warn("[db] DB_RESET=true — dropping all tables for a fresh rebuild.");
+  await db.exec(`
+    DROP TABLE IF EXISTS
+      coach_attempts, coach_sessions, articles, sr_cards, otp_tokens,
+      attempts, sessions, question_flags, api_calls, questions, passages, users
+    CASCADE
+  `);
+}
+
+// Returns true ONLY if the pre-restructure schema is detected. This makes DB_RESET
+// self-limiting: a lingering DB_RESET=true env var can wipe at most once, because
+// after the rebuild the schema is no longer "stale" and this returns false.
+async function schemaIsStale() {
+  const usersExists = await db.get(
+    "SELECT 1 FROM information_schema.tables WHERE table_name = 'users'"
+  );
+  if (!usersExists) return false; // brand-new empty DB — nothing to drop
+
+  const passagesExists = await db.get(
+    "SELECT 1 FROM information_schema.tables WHERE table_name = 'passages'"
+  );
+  const oldCoachColumn = await db.get(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'coach_sessions' AND column_name = 'article_text'`
+  );
+  // Stale if the new passages table is missing OR the old coach schema is still present.
+  return !passagesExists || !!oldCoachColumn;
+}
+
 // ── Initialise everything ─────────────────────────────────────────────────────
 (async () => {
   try {
+    if (process.env.DB_RESET === "true" && (await schemaIsStale())) {
+      await resetTables();
+    }
     await createTables();
-    // Ensure additive columns that may be missing on pre-existing DBs
-    await ensureColumn("users", "role", "TEXT NOT NULL DEFAULT 'user'");
-    await ensureColumn("users", "daily_goal", "INTEGER NOT NULL DEFAULT 10");
-    await ensureColumn("users", "email_verified", "INTEGER NOT NULL DEFAULT 1");
-    await ensureColumn("users", "google_id", "TEXT");
-    // Make password_hash nullable so Google-only accounts can exist
-    await db.exec("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL");
-    // Unique partial index on google_id (allows multiple NULLs)
+    // Unique partial index on google_id (allows multiple NULLs for non-Google users).
+    // The `ensureColumn` helper above is retained for future additive migrations.
     await db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL"
     );
-    await ensureColumn("sessions", "feedback_mode", "TEXT NOT NULL DEFAULT 'instant'");
-    await ensureColumn("sessions", "session_type", "TEXT NOT NULL DEFAULT 'practice'");
-    await ensureColumn("sessions", "question_ids", "TEXT"); // JSON array of question IDs in session order
     await seedQuestions();
     await bootstrapAdmins();
     console.log("[db] Database initialised.");
