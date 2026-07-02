@@ -1,5 +1,10 @@
 # Generation Kit — run these in Claude chat (Opus 4.8)
 
+> **Using a Claude Project?** Use [`PROJECT_INSTRUCTIONS.md`](PROJECT_INSTRUCTIONS.md) instead —
+> it's this kit condensed into always-on custom instructions, so each chat is a one-liner and the
+> PYQ corpus is wired in. This file is the **standalone / reference** version: self-contained
+> prompts for a plain chat (no Project), and the fuller explanation of what each prompt does.
+
 You generate content manually in Claude chat, then paste the JSON into the admin importer
 (`/admin/import`). These prompts are **self-contained** — the chat doesn't have our repo, so
 everything it needs is embedded. Use **Opus 4.8**.

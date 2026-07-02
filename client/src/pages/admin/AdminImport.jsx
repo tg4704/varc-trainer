@@ -19,8 +19,10 @@ export default function AdminImport() {
       setError("Invalid JSON — check for a stray comma or unquoted value. " + e.message);
       return;
     }
-    if (!payload || (payload.kind !== "passage_set" && payload.kind !== "drills")) {
-      setError('JSON must have "kind": "passage_set" or "drills".');
+    const items = Array.isArray(payload) ? payload : [payload];
+    const badItem = items.find((it) => !it || (it.kind !== "passage_set" && it.kind !== "drills"));
+    if (!items.length || badItem) {
+      setError('Each item must have "kind": "passage_set" or "drills". You can paste a single object or an array of them.');
       return;
     }
     setBusy(true);
@@ -44,7 +46,8 @@ export default function AdminImport() {
           <code className="text-xs">content-pipeline/GENERATION_KIT.md</code>. Items are imported{" "}
           <strong>inactive</strong> — review them under{" "}
           <a href="/admin/questions?active=0" className="text-primary underline">Questions (inactive)</a>{" "}
-          and activate the good ones.
+          and activate the good ones. You can paste a single object or a JSON array of several
+          (e.g. multiple <code>passage_set</code>s generated together).
         </p>
       </div>
 
