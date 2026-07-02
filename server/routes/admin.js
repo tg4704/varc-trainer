@@ -205,11 +205,11 @@ router.get("/users/:id/dashboard", async (req, res, next) => {
 });
 
 // ── GET /api/admin/questions ───────────────────────────────────────────────
-// List with filters: ?q=search&type=&topic=&source=&active=
+// List with filters: ?q=search&type=&topic=&source=&active=&product=drills|coach
 router.get("/questions", async (req, res, next) => {
   try {
     const q = (req.query.q || "").trim();
-    const { type, topic, source, active } = req.query;
+    const { type, topic, source, active, product } = req.query;
 
     const where = [];
     const params = [];
@@ -222,10 +222,14 @@ router.get("/questions", async (req, res, next) => {
     if (source) { where.push(`source = $${params.length + 1}`); params.push(source); }
     if (active === "1") where.push("is_active = 1");
     else if (active === "0") where.push("is_active = 0");
+    // Product boundary: passage_id NULL = ③ Drills, set = ② Coach (see questionsRepo.js).
+    if (product === "drills") where.push("passage_id IS NULL");
+    else if (product === "coach") where.push("passage_id IS NOT NULL");
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const rows = await db.all(
-      `SELECT id, topic, type, source, is_active, created_at,
+      `SELECT id, topic, type, source, is_active, created_at, passage_id AS "passageId",
+              (SELECT title FROM passages WHERE id = questions.passage_id) AS "passageTitle",
               substr(question, 1, 100) AS question_snippet,
               (SELECT COUNT(*) FROM attempts WHERE question_id = questions.id) AS attempts,
               (SELECT COUNT(*) FROM question_flags WHERE question_id = questions.id AND status = 'open') AS "openFlags"
