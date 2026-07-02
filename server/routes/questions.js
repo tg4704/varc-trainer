@@ -98,7 +98,13 @@ router.post("/:id/flag", authenticate, async (req, res, next) => {
       return res.status(400).json({ error: "reason must be one of: " + VALID_REASONS.join(", ") });
     }
 
-    const q = await db.get("SELECT id FROM questions WHERE id = $1 AND is_active = 1", [req.params.id]);
+    // Ownership guard: a user may flag global content or their own question, but not
+    // probe/flag another user's private question by guessing its id.
+    const q = await db.get(
+      `SELECT id FROM questions
+       WHERE id = $1 AND is_active = 1 AND (source != 'user' OR author_user_id = $2)`,
+      [req.params.id, req.userId]
+    );
     if (!q) return res.status(404).json({ error: "Question not found" });
 
     const reasonText = note.trim() ? `${reason}: ${note.trim().slice(0, 300)}` : reason;

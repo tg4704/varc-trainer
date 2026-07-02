@@ -55,6 +55,30 @@ zoning out / fatigue     can't map the argument   gut not evidence         error
   of ~150–200** first as the quality bar and few-shot anchor. Never ship straight from generator
   to users.
 
+## Data isolation — user-submitted questions (My Questions, Phase 10)
+
+**Guarantee:** a question a user writes in My Questions is visible and attemptable **only by
+that user** (and admins, for oversight). It is never surfaced to other users' Drills sessions,
+practice pools, or listings.
+
+**Status: already correctly implemented — no schema change, no Phase 0 repeat needed.**
+User questions live in the same shared `questions` table (`source='user'`,
+`author_user_id=<creator>`), not a separate per-user table — isolation is enforced by
+row-level ownership filtering on every read/write path, which is the correct pattern (a
+physical per-user table would not scale and is not how this is normally done):
+- `questionsRepo.listForUser(userId)` — the pool every Drills session draws from — only
+  includes `source IN ('seed','ai_generated')` OR `author_user_id = <that user>`. Another
+  user's private question matches neither condition and is excluded.
+- `GET/PATCH/DELETE /api/my-questions/:id` all scope by `author_user_id = req.userId`; a
+  question owned by someone else simply doesn't match, even if the ID is guessed.
+- The admin panel can see all questions — intentional oversight, gated by `requireAdmin`.
+
+**Known minor gap (low priority, not yet fixed):** `POST /api/questions/:id/flag` checks
+`is_active = 1` but not ownership, so a user could flag (not view/read) another user's private
+question if they guessed its ID (`user_{userId}_{timestamp}` — not fully random). No content
+leaks, only a flag record gets created. Fix: add `AND (source != 'user' OR author_user_id =
+$userId)` to the flag route's lookup. Low priority; do opportunistically.
+
 ---
 
 ## Phases
