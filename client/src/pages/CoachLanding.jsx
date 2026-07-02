@@ -1,184 +1,121 @@
-// Phase 14 — AI Reading Coach: Article input screen
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+// ② Coach — passage picker. Replaces the old paste-your-own-article flow:
+// Coach now runs on admin-curated passages (with a canonical reading_key) so the
+// reading-map grade (the differentiator) has something authoritative to grade against.
+import { useEffect, useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { coach } from "../api.js";
 import { Button } from "../components/ui/button.jsx";
+import { Badge } from "../components/ui/badge.jsx";
 import { cn } from "../lib/utils.js";
 
-const MIN_WORDS = 0;
-const MAX_WORDS = 600;
-
-const LOADING_MESSAGES = [
-  "Reading your article…",
-  "Identifying key arguments…",
-  "Designing CAT-style questions…",
-  "Building answer choices…",
-  "Almost ready…",
-];
-
-const SOURCES = [
-  { label: "The Economist", url: "economist.com" },
-  { label: "Aeon", url: "aeon.co" },
-  { label: "The Atlantic", url: "theatlantic.com" },
-  { label: "Nautilus", url: "nautil.us" },
-  { label: "Project Syndicate", url: "project-syndicate.org" },
-];
-
-function countWords(text) {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
+const TOPICS = ["", "economics", "humanities", "philosophy", "science", "social"];
 
 export default function CoachLanding() {
   const navigate = useNavigate();
-  const [articleText, setArticleText] = useState("");
-  const [articleTitle, setArticleTitle] = useState("");
-  const [articleSource, setArticleSource] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState(LOADING_MESSAGES[0]);
+  const [topic, setTopic] = useState("");
+  const [passages, setPassages] = useState(null);
   const [error, setError] = useState(null);
+  const [startingId, setStartingId] = useState(null);
 
-  const wordCount = countWords(articleText);
-  const wordOk = wordCount > 0 && wordCount <= MAX_WORDS;
+  useEffect(() => {
+    setPassages(null);
+    coach.listPassages(topic)
+      .then((r) => setPassages(r.passages))
+      .catch((e) => setError(e.message));
+  }, [topic]);
 
-  async function handleGenerate() {
-    if (!wordOk || busy) return;
-    setBusy(true);
+  async function start(passageId, activeSessionId) {
+    setStartingId(passageId);
     setError(null);
-
-    // Cycle through loading messages while waiting
-    let msgIdx = 0;
-    const msgInterval = setInterval(() => {
-      msgIdx = (msgIdx + 1) % LOADING_MESSAGES.length;
-      setLoadingMsg(LOADING_MESSAGES[msgIdx]);
-    }, 1800);
-
     try {
-      const { coachSession } = await coach.createSession({
-        articleText,
-        articleTitle: articleTitle.trim(),
-        articleSource: articleSource.trim(),
-      });
-      clearInterval(msgInterval);
-      navigate(`/coach/practice?sessionId=${coachSession.id}`, {
-        state: { coachSession },
-      });
+      if (activeSessionId) {
+        navigate(`/coach/practice?sessionId=${activeSessionId}`);
+        return;
+      }
+      const { coachSession } = await coach.createSession(passageId);
+      navigate(`/coach/practice?sessionId=${coachSession.id}`, { state: { coachSession } });
     } catch (e) {
-      clearInterval(msgInterval);
       setError(e.message || "Something went wrong. Try again.");
-      setBusy(false);
+    } finally {
+      setStartingId(null);
     }
   }
 
-  const wordColor =
-    wordCount === 0
-      ? "text-muted-foreground"
-      : wordCount > MAX_WORDS
-      ? "text-destructive"
-      : "text-success";
-
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
-      <div className="mb-8">
-        <h1 className="display text-[34px]">Coach me on an article</h1>
-        <p className="mt-2 muted leading-relaxed">
-          Paste anything dense and long-form. VARC Coach builds CAT-style questions, then
-          questions you back until your reasoning holds — like a tutor sitting next to you.
-        </p>
+    <div className="max-w-4xl mx-auto px-4 py-10">
+      <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="display text-[34px]">Coach</h1>
+          <p className="mt-2 muted leading-relaxed max-w-xl">
+            Full CAT-style passages. Map the argument before you see any question — the AI
+            grades how you read, not just what you answer. Stuck on a question? Discuss it
+            after you see the verdict.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <Link to="/coach/history">History</Link>
+        </Button>
       </div>
 
-      {/* Article textarea */}
-      <section>
-        <div className="flex items-baseline justify-between mb-2">
-          <label className="text-sm font-semibold text-foreground">Article text</label>
-          <span className={cn("text-xs tabular-nums", wordColor)}>
-            {wordCount} / {MAX_WORDS} words
-          </span>
-        </div>
-        <textarea
-          value={articleText}
-          onChange={(e) => setArticleText(e.target.value)}
-          disabled={busy}
-          rows={14}
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-reading leading-relaxed disabled:opacity-60"
-          placeholder="Paste your article here. Up to 600 words. Good sources: The Economist, Aeon, The Atlantic, Nautilus…"
-        />
-      </section>
-
-      {/* Optional fields */}
-      <div className="mt-4 grid sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">
-            Article title <span className="font-normal">(optional)</span>
-          </label>
-          <input
-            type="text"
-            value={articleTitle}
-            onChange={(e) => setArticleTitle(e.target.value)}
-            disabled={busy}
-            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
-            placeholder="e.g. The End of the Office"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">
-            Source <span className="font-normal">(optional)</span>
-          </label>
-          <input
-            type="text"
-            value={articleSource}
-            onChange={(e) => setArticleSource(e.target.value)}
-            disabled={busy}
-            className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
-            placeholder="e.g. The Economist, June 2025"
-          />
-        </div>
+      {/* Topic filter */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {TOPICS.map((t) => (
+          <button
+            key={t}
+            onClick={() => setTopic(t)}
+            className={cn(
+              "rounded-full px-3.5 py-1.5 text-sm font-medium border transition-colors capitalize",
+              topic === t
+                ? "bg-foreground text-background border-foreground"
+                : "border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t || "All topics"}
+          </button>
+        ))}
       </div>
 
       {error && (
-        <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
       )}
 
-      <Button
-        className="mt-6 w-full"
-        size="lg"
-        disabled={!wordOk || busy}
-        onClick={handleGenerate}
-      >
-        {busy ? (
-          <span className="flex items-center gap-2">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-            {loadingMsg}
-          </span>
-        ) : wordCount === 0 ? (
-          "Paste an article to begin"
-        ) : !wordOk ? (
-          `Too long — trim to ${MAX_WORDS} words (${wordCount} words)`
-        ) : (
-          "Generate Questions →"
-        )}
-      </Button>
+      {passages === null && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}
+        </div>
+      )}
 
-      {/* Source guide */}
-      <div className="mt-10 rounded-xl border border-border bg-card p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-          Recommended sources for CAT-level practice
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {SOURCES.map((s) => (
-            <span
-              key={s.url}
-              className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground"
-            >
-              {s.label}
-            </span>
+      {passages?.length === 0 && (
+        <div className="py-16 text-center text-muted-foreground">
+          No passages available{topic ? ` for "${topic}"` : ""} yet. Check back soon.
+        </div>
+      )}
+
+      {passages?.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          {passages.map((p) => (
+            <div key={p.id} className="rounded-xl border border-border bg-card p-5 flex flex-col">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <Badge variant="outline" className="capitalize">{p.topic}</Badge>
+                {p.genre && <span className="text-xs text-muted-foreground">{p.genre}</span>}
+                {p.completed && <Badge variant="success">Completed</Badge>}
+                {p.activeSessionId && !p.completed && <Badge variant="secondary">In progress</Badge>}
+              </div>
+              <h2 className="font-bold text-foreground mb-1 leading-snug">{p.title || "Untitled passage"}</h2>
+              <p className="text-xs text-muted-foreground mb-4">
+                {p.wordCount?.toLocaleString()} words · {p.questionCount} question{p.questionCount === 1 ? "" : "s"}
+              </p>
+              <Button
+                className="mt-auto"
+                disabled={startingId === p.id}
+                onClick={() => start(p.id, p.activeSessionId)}
+              >
+                {startingId === p.id ? "Starting…" : p.activeSessionId ? "Resume →" : "Start →"}
+              </Button>
+            </div>
           ))}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Avoid news articles (too factual) and Wikipedia (no argument structure). Dense,
-          opinion-forward writing works best — like what appears in CAT passages. Aim for
-          150–600 words for best results.
-        </p>
-      </div>
+      )}
     </div>
   );
 }

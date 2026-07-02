@@ -1,580 +1,480 @@
-// Phase 14 — AI Reading Coach
-// Routes:
-//   POST /api/coach/sessions      — validate article, generate questions, create session
-//   POST /api/coach/exchange      — one Socratic exchange turn
-//   GET  /api/coach/sessions/:id  — full session (with revealed answers for completed attempts)
-//   GET  /api/coach/history       — user's past sessions with stats
+// Phase 2 (restructure) — ② Coach.
+// Full passage → reading-map grade (BEFORE questions) → questions with reasoning
+// verdict → optional "Stuck? Discuss" chat. See content-pipeline/READING_GRADER.md
+// and PHASE0_ARCHITECTURE.md for the design this implements.
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
+const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
+const { clearCache: clearDashCache } = require("./dashboard");
 
 const LETTERS = ["A", "B", "C", "D"];
-const MIN_WORDS = 1;   // any non-empty article is acceptable
-const MAX_WORDS = 600;
+const MAX_DISCUSS_EXCHANGES = 4;
+const MAX_MSG_LENGTH = 300;
+
+router.use(authenticate);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function countWords(text) {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-// Strip sensitive fields before sending questions to the client.
-// correctIndex / trapIndex / trapType / sourceLines are kept server-side
-// until the debrief for that question is complete.
-function stripQuestion(q) {
+function hydrateQuestion(row) {
   return {
-    type: q.type,
-    question: q.question,
-    options: q.options.map((o) => ({ text: o.text })),
+    id: row.id,
+    type: row.type,
+    question: row.question,
+    options: JSON.parse(row.options_json),
+    correctIndex: row.correct_index,
+    trapIndex: row.trap_index,
+    trapType: row.trap_type,
+    sourceLines: row.source_lines,
   };
 }
 
-// Validate the AI-generated questions array.
-function validateQuestions(questions) {
-  if (!Array.isArray(questions) || questions.length !== 4) return "Expected 4 questions";
-  const validTypes = ["inference", "tone", "detail", "title"];
-  const validTrapTypes = ["too_extreme", "out_of_scope", "real_but_unstated", "partially_correct"];
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    if (!validTypes.includes(q.type)) return `Question ${i}: invalid type "${q.type}"`;
-    if (!q.question || typeof q.question !== "string") return `Question ${i}: missing question text`;
-    if (!Array.isArray(q.options) || q.options.length !== 4) return `Question ${i}: need exactly 4 options`;
-    if (q.correctIndex == null || q.correctIndex < 0 || q.correctIndex > 3) return `Question ${i}: invalid correctIndex`;
-    if (q.trapIndex == null || q.trapIndex < 0 || q.trapIndex > 3) return `Question ${i}: invalid trapIndex`;
-    if (!validTrapTypes.includes(q.trapType)) return `Question ${i}: invalid trapType "${q.trapType}"`;
-    if (!q.sourceLines) return `Question ${i}: missing sourceLines`;
-    const correctCount = q.options.filter((o) => o.isCorrect).length;
-    if (correctCount !== 1) return `Question ${i}: need exactly 1 correct option`;
-  }
-  return null; // valid
+// Strip answer-revealing fields until this question has a completed attempt.
+function stripQuestion(q) {
+  return { id: q.id, type: q.type, question: q.question, options: q.options.map((o) => ({ text: o.text })) };
 }
 
-// ── Prompts ───────────────────────────────────────────────────────────────────
+async function getPassageQuestions(passageId) {
+  const rows = await db.all(
+    "SELECT * FROM questions WHERE passage_id = $1 AND is_active = 1 ORDER BY id ASC",
+    [passageId]
+  );
+  return rows.map(hydrateQuestion);
+}
 
-const GENERATION_SYSTEM = `You are an expert CAT (Common Admission Test) RC question designer. You will be given an article. Your job is to generate 4 high-quality CAT-style questions on it.
+// ── GET /api/coach/passages — picker list ──────────────────────────────────────
+router.get("/passages", async (req, res, next) => {
+  try {
+    const topic = (req.query.topic || "").trim();
+    const where = ["p.is_active = 1"];
+    const params = [];
+    if (topic) { params.push(topic); where.push(`p.topic = $${params.length}`); }
 
-Rules for questions:
-- Each question must require inference or judgment — no pure factual recall
-- One question per type: inference, tone, title, detail
-- Every question must have exactly 4 options
-- Options: 1 correct, 1 trap (tempting but wrong), 2 distractors (clearly wrong)
-- Correct option: 12–25 words, no absolute language (never/always/only/completely)
-- Trap option: plausible, either too extreme, out of scope, real-but-unstated, or partially correct
-- Distractor options: wrong but not obviously so
+    const rows = await db.all(
+      `SELECT p.id, p.topic, p.genre, p.title, p.word_count AS "wordCount",
+              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id AND is_active = 1) AS "questionCount",
+              EXISTS(
+                SELECT 1 FROM coach_sessions cs
+                WHERE cs.passage_id = p.id AND cs.user_id = $${params.length + 1} AND cs.status = 'completed'
+              ) AS "completed",
+              (
+                SELECT cs2.id FROM coach_sessions cs2
+                WHERE cs2.passage_id = p.id AND cs2.user_id = $${params.length + 1} AND cs2.status = 'active'
+                ORDER BY cs2.id DESC LIMIT 1
+              ) AS "activeSessionId"
+       FROM passages p
+       WHERE ${where.join(" AND ")}
+       ORDER BY p.id DESC`,
+      [...params, req.userId]
+    );
+    res.json({ passages: rows });
+  } catch (e) { next(e); }
+});
 
-For each question also identify:
-- sourceLines: the 2–4 sentences from the article that directly contain or imply the answer
-- trapType: one of "too_extreme" | "out_of_scope" | "real_but_unstated" | "partially_correct"
-- correctIndex: 0–3 (which option is correct)
-- trapIndex: 0–3 (which option is the trap)
+// ── POST /api/coach/sessions — start (or resume) a session on a passage ───────
+router.post("/sessions", async (req, res, next) => {
+  try {
+    const { passageId } = req.body || {};
+    if (!passageId) return res.status(400).json({ error: "passageId is required" });
 
-Respond ONLY with a valid JSON array. No preamble, no markdown fences, no text outside the JSON.
-[
-  {
-    "type": "inference",
-    "question": "...",
-    "options": [
-      { "text": "...", "isCorrect": false, "isTrap": true, "trapType": "too_extreme" },
-      { "text": "...", "isCorrect": true, "isTrap": false, "trapType": null },
-      { "text": "...", "isCorrect": false, "isTrap": false, "trapType": null },
-      { "text": "...", "isCorrect": false, "isTrap": false, "trapType": null }
-    ],
-    "correctIndex": 1,
-    "trapIndex": 0,
-    "trapType": "too_extreme",
-    "sourceLines": "The specific 2–4 sentence excerpt from the article."
-  }
-]`;
+    const passage = await db.get("SELECT * FROM passages WHERE id = $1 AND is_active = 1", [passageId]);
+    if (!passage) return res.status(404).json({ error: "Passage not found" });
 
-const SOCRATIC_SYSTEM = `You are a VARC Coach conducting a structured debrief. A student has answered an RC question and shared their reasoning. You know the correct answer. Your job is NOT to reveal it — your job is to guide the student to figure it out themselves through targeted questions.
+    // Resume an existing active session for this user+passage rather than duplicating.
+    let session = await db.get(
+      "SELECT * FROM coach_sessions WHERE passage_id = $1 AND user_id = $2 AND status = 'active'",
+      [passageId, req.userId]
+    );
+    if (!session) {
+      const r = await db.run(
+        "INSERT INTO coach_sessions (user_id, passage_id, status) VALUES ($1, $2, 'active') RETURNING id",
+        [req.userId, passageId]
+      );
+      session = await db.get("SELECT * FROM coach_sessions WHERE id = $1", [r.lastId]);
+    }
 
-Your response rules:
-- Keep your response under 100 words. This is a conversation, not a lecture.
-- Never state the correct answer directly (unless exchange_number is 4)
-- Never say "good job" or "you're wrong" — guide through questions
-- Each response must end with a question that moves the student closer to the answer
-- Target the specific gap in the student's reasoning — don't give generic advice
-- Reference specific words or lines from the article when pushing back
-- If the student's reasoning is essentially correct (even if they picked the wrong option), acknowledge the sound logic before redirecting
+    const questions = await getPassageQuestions(passageId);
+    const attempts = await db.all(
+      "SELECT * FROM coach_attempts WHERE coach_session_id = $1", [session.id]
+    );
+    const attemptedIds = new Set(attempts.map((a) => a.question_id));
 
-Exchange number rules:
-- Exchange 1: The student has shared their reasoning. Challenge or probe it — ask them to show their evidence from the article more specifically, or push back on a weak assumption.
-- Exchange 2: Validate or challenge their follow-up; if still off-track, push them toward the relevant section of the article.
-- Exchange 3: If still wrong, give a strong redirect with a direct reference to the key sentence(s).
-- Exchange 4: Reveal the correct answer with full explanation (150–200 words).
+    res.json({
+      coachSession: {
+        id: session.id,
+        status: session.status,
+        readingMap: session.reading_map_json ? JSON.parse(session.reading_map_json) : null,
+        readingGrade: session.reading_grade_json ? JSON.parse(session.reading_grade_json) : null,
+        passage: {
+          id: passage.id,
+          title: passage.title,
+          topic: passage.topic,
+          genre: passage.genre,
+          body: passage.body,
+          wordCount: passage.word_count,
+        },
+        questions: questions.map((q) => (attemptedIds.has(q.id) ? q : stripQuestion(q))),
+      },
+    });
+  } catch (e) { next(e); }
+});
 
-Tone: direct, intellectually honest, no false praise, patient but not soft.
+// ── POST /api/coach/sessions/:id/reading-map — the b2 differentiator ──────────
+// Grades the student's reading BEFORE they see any question. Any language is
+// accepted (mother-tongue verbalization) — grading is on understanding, not grammar.
+router.post("/sessions/:id/reading-map", async (req, res, next) => {
+  try {
+    const session = await db.get(
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]
+    );
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
 
-Respond ONLY with your conversational message. No JSON, no labels, no preamble.`;
+    const passage = await db.get("SELECT * FROM passages WHERE id = $1", [session.passage_id]);
+    const readingKey = JSON.parse(passage.reading_key_json);
 
-function buildSocraticUserMessage(article, q, selectedIndex, conversation, exchangeNumber, studentMessage, giveUp) {
-  const trapTypeMeanings = {
-    too_extreme: "uses absolute language the article doesn't support",
-    out_of_scope: "introduces a concept not present in the article",
-    real_but_unstated: "may be true but the article doesn't say or imply it",
-    partially_correct: "captures part of the point but misses a key nuance",
-  };
+    const { mode, crux, mainPoint, tone, structure, theTurn } = req.body || {};
+    if (mode !== "quick" && mode !== "full") return res.status(400).json({ error: 'mode must be "quick" or "full"' });
+    if (mode === "quick" && (!Array.isArray(crux) || crux.filter((c) => c && c.trim()).length === 0)) {
+      return res.status(400).json({ error: "crux[] (one entry per paragraph) is required for quick mode" });
+    }
+    if (mode === "full" && !mainPoint) {
+      return res.status(400).json({ error: "mainPoint is required for full mode" });
+    }
 
-  const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
-  const historyLines = conversation.length
-    ? "\nCONVERSATION SO FAR:\n" +
-      conversation.map((m) => `${m.role === "tutor" ? "TUTOR" : "STUDENT"}: ${m.text}`).join("\n")
-    : "";
+    const readingMap = { mode, crux: crux || null, mainPoint: mainPoint || null, tone: tone || null, structure: structure || null, theTurn: theTurn || null };
 
-  const effectiveExchange = giveUp ? 4 : exchangeNumber;
+    const studentMapText = mode === "quick"
+      ? `Paragraph crux words (one entry per paragraph, in the student's own words — may be in any language):\n${(crux || []).map((c, i) => `¶${i + 1}: ${c || "(blank)"}`).join("\n")}`
+      : `Main point: ${mainPoint || "(blank)"}\nTone: ${tone || "(blank)"}\nStructure (one line per paragraph): ${(structure || []).map((s, i) => `\n¶${i + 1}: ${s || "(blank)"}`).join("")}\nThe turn: ${theTurn || "(not given)"}`;
 
-  return `ARTICLE:
-${article}
+    const SYSTEM = `You are a CAT VARC reading coach. You are given a passage's canonical reading key and a student's reading map, submitted BEFORE they saw any questions. Grade their READING PROCESS.
+
+RULES:
+- Do NOT be generic or encouraging-by-default. If the reading is shallow, say so plainly.
+- Diagnose the READING MODE: is the student argument-mapping (tracking claims, evidence, turns) or information-gathering (cataloguing topics/facts)? Name it explicitly.
+- Grade UNDERSTANDING and LOGIC, never grammar or language — the student may write in their mother tongue, Hinglish, or ungrammatical English (this is an encouraged technique). Judge only whether they grasped the argument.
+- Be specific: quote/paraphrase what they wrote and contrast it with the passage's actual architecture.
+- End with ONE concrete technique they should apply on the very next passage.
+
+Respond ONLY with valid JSON, no markdown fences:
+{
+  "reading_mode": "argument-mapping" | "mixed" | "information-gathering",
+  "thesis": "strong" | "partial" | "weak",
+  "structure": "strong" | "partial" | "weak",
+  "caught_the_turn": true | false,
+  "what_you_missed": "string",
+  "one_technique": "string",
+  "verdict_line": "string"
+}`;
+
+    const userMsg = `CANONICAL READING KEY:
+Thesis: ${readingKey.thesis}
+Tone: ${readingKey.tone}
+Paragraph functions:
+${(readingKey.paragraph_functions || []).join("\n")}
+Key turn: ${readingKey.key_turn}
+
+STUDENT'S READING MAP (${mode} mode):
+${studentMapText}`;
+
+    let grade;
+    try {
+      const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 600 });
+      await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+      grade = JSON.parse(response.text);
+    } catch (err) {
+      await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+      return res.status(502).json({ error: "Could not grade your reading right now. Try again." });
+    }
+
+    await db.run(
+      "UPDATE coach_sessions SET reading_map_json = $1, reading_grade_json = $2 WHERE id = $3",
+      [JSON.stringify(readingMap), JSON.stringify(grade), session.id]
+    );
+
+    res.json({ readingMap, readingGrade: grade });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/coach/sessions/:id — full session state ───────────────────────────
+router.get("/sessions/:id", async (req, res, next) => {
+  try {
+    const session = await db.get(
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]
+    );
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
+
+    const passage = await db.get("SELECT * FROM passages WHERE id = $1", [session.passage_id]);
+    const questions = await getPassageQuestions(session.passage_id);
+    const attempts = await db.all(
+      "SELECT * FROM coach_attempts WHERE coach_session_id = $1 ORDER BY question_index ASC", [session.id]
+    );
+    const attemptByQ = new Map(attempts.map((a) => [a.question_id, a]));
+
+    res.json({
+      coachSession: {
+        id: session.id,
+        status: session.status,
+        readingMap: session.reading_map_json ? JSON.parse(session.reading_map_json) : null,
+        readingGrade: session.reading_grade_json ? JSON.parse(session.reading_grade_json) : null,
+        passage: { id: passage.id, title: passage.title, topic: passage.topic, genre: passage.genre, body: passage.body, wordCount: passage.word_count },
+        questions: questions.map((q) => (attemptByQ.has(q.id) ? q : stripQuestion(q))),
+      },
+      attempts: attempts.map((a) => ({
+        ...a,
+        discussConversation: JSON.parse(a.discuss_conversation_json || "[]"),
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/coach/attempts — reasoning verdict for one question ─────────────
+// Mirrors attempts/evaluate.js but writes to coach_attempts. Response shape
+// matches FeedbackSections' expected `attempt` prop so the client can reuse it.
+router.post("/attempts", async (req, res, next) => {
+  try {
+    const { coachSessionId, questionId, questionIndex, selectedOptionIndex, reasoningText } = req.body || {};
+    if (coachSessionId == null || !questionId || selectedOptionIndex == null) {
+      return res.status(400).json({ error: "coachSessionId, questionId, and selectedOptionIndex are required" });
+    }
+    if (reasoningText && reasoningText.trim().length > 800) {
+      return res.status(400).json({ error: "reasoningText must be 800 characters or fewer" });
+    }
+
+    const session = await db.get(
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [coachSessionId, req.userId]
+    );
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
+
+    const qRow = await db.get("SELECT * FROM questions WHERE id = $1 AND passage_id = $2", [questionId, session.passage_id]);
+    if (!qRow) return res.status(404).json({ error: "Question not found on this passage" });
+    const q = hydrateQuestion(qRow);
+
+    let attempt = await db.get(
+      "SELECT * FROM coach_attempts WHERE coach_session_id = $1 AND question_id = $2", [coachSessionId, questionId]
+    );
+    if (attempt) return res.status(400).json({ error: "This question has already been attempted" });
+
+    const isCorrect = selectedOptionIndex === q.correctIndex ? 1 : 0;
+    const selectedTrap = q.trapIndex != null && selectedOptionIndex === q.trapIndex ? 1 : 0;
+
+    const ins = await db.run(
+      `INSERT INTO coach_attempts
+         (coach_session_id, question_id, question_index, question_type,
+          selected_option_index, correct_option_index, is_correct, trap_type, selected_trap)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [coachSessionId, questionId, questionIndex ?? 0, q.type, selectedOptionIndex, q.correctIndex, isCorrect, q.trapType, selectedTrap]
+    );
+    const attemptId = ins.lastId;
+
+    const base = {
+      options: q.options.map((o) => ({ text: o.text })),
+      correctOptionIndex: q.correctIndex,
+      selectedOptionIndex,
+      trapOptionIndex: q.trapIndex,
+      trapType: q.trapType,
+      sourceLines: q.sourceLines,
+      isCorrect: isCorrect === 1,
+      skipped: false,
+    };
+
+    clearDashCache(req.userId);
+
+    if (!reasoningText || !reasoningText.trim()) {
+      return res.json({ ...base, attemptId });
+    }
+
+    const presentTrapTypes = [...new Set(q.options.map((o) => o.trapType).filter(Boolean))];
+    const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
+    const SYSTEM = `You are a CAT (Common Admission Test) Reading Comprehension coach. A student has answered a full-passage RC question and explained their reasoning. You already know the correct answer. Evaluate the QUALITY of their reasoning, explain the correct answer precisely, and deconstruct the trap.
+
+Respond ONLY with valid JSON, no markdown fences:
+{ "reasoningScore": integer 1-5, "reasoningFeedback": string, "correctExplanation": string, "trapExplanation": string, "keyTakeaway": string }
+
+Reasoning score rubric: 1=no real reasoning/circular, 2=paraphrased but didn't connect to option logic, 3=found the right part of the passage but erred connecting it, 4=sound but missed a nuance, 5=identified authorial intent, eliminated the trap with a specific reason, reached the answer through logic.
+Rules: reasoningFeedback (2-3 sentences on HOW they thought), correctExplanation (2-3 sentences, cite specific lines), trapExplanation (2-3 sentences naming the exact flaw using the trap type meaning below), keyTakeaway (one generalizable sentence). Always reference specific words from the options or passage.`;
+    const userMsg = `PASSAGE:
+${qRow.paragraph}
+
+SOURCE LINES: ${q.sourceLines}
 
 QUESTION: ${q.question}
+QUESTION TYPE: ${q.type}
 
 OPTIONS:
 ${optionLines}
 
 CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
-TRAP OPTION: Option ${LETTERS[q.trapIndex]} — "${q.options[q.trapIndex].text}" (trap type: ${q.trapType} — ${trapTypeMeanings[q.trapType] || ""})
-STUDENT SELECTED: Option ${LETTERS[selectedIndex]} — "${q.options[selectedIndex].text}"
-IS STUDENT CORRECT: ${selectedIndex === q.correctIndex}
-${historyLines}
+${q.trapIndex != null ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} — "${q.options[q.trapIndex].text}"\nTRAP TYPE: ${q.trapType}\nTRAP TYPE MEANINGS:\n${buildTrapMeaningsBlock(presentTrapTypes)}` : ""}
 
-CURRENT EXCHANGE NUMBER: ${effectiveExchange}
-STUDENT'S LATEST MESSAGE: ${studentMessage || "(none — this is the opening probe)"}
-${giveUp ? "\nNOTE: The student has given up. Reveal the correct answer with full explanation now." : ""}
-Now respond as the tutor.`;
-}
+STUDENT SELECTED: Option ${LETTERS[selectedOptionIndex]}
+STUDENT'S REASONING:
+${reasoningText.trim()}`;
 
-// ── POST /api/coach/sessions — create session + generate questions ─────────────
-
-router.post("/sessions", authenticate, async (req, res) => {
-  const { articleText, articleTitle = "", articleSource = "" } = req.body || {};
-
-  if (!articleText || typeof articleText !== "string") {
-    return res.status(400).json({ error: "articleText is required" });
-  }
-
-  const wordCount = countWords(articleText);
-  if (wordCount < MIN_WORDS) {
-    return res.status(400).json({ error: `Article too short (${wordCount} words). Minimum is ${MIN_WORDS}.` });
-  }
-  if (wordCount > MAX_WORDS) {
-    return res.status(400).json({ error: `Article too long (${wordCount} words). Maximum is ${MAX_WORDS}.` });
-  }
-
-  // Generate questions (with one retry on failure)
-  let questions = null;
-  let lastError = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await callModel({
-        maxTokens: 2000,
-        system: GENERATION_SYSTEM,
-        messages: [{
-          role: "user",
-          content: `ARTICLE:\n${articleText}\n\nGenerate 4 CAT-style questions on this article following the rules above. Ensure the questions collectively cover: inference, tone, title, and detail.`,
-        }],
-      });
+      const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }] });
+      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+      const evalResult = JSON.parse(response.text);
 
-      await logApiCall({
-        userId: req.userId,
-        route: "/api/coach/sessions",
-        provider: "openrouter",
-        model: DEFAULT_MODEL,
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        status: "ok",
-      });
-
-      const parsed = JSON.parse(response.text);
-      const validationError = validateQuestions(parsed);
-      if (validationError) {
-        lastError = `Validation failed: ${validationError}`;
-        continue;
-      }
-      questions = parsed;
-      break;
-    } catch (err) {
-      lastError = err.message;
-      await logApiCall({
-        userId: req.userId,
-        route: "/api/coach/sessions",
-        provider: "openrouter",
-        model: DEFAULT_MODEL,
-        status: "error",
-      });
-    }
-  }
-
-  if (!questions) {
-    return res.status(502).json({
-      error: "Couldn't generate good questions for this article. Try a different article or shorten it.",
-      detail: lastError,
-    });
-  }
-
-  const result = await db.run(
-    `INSERT INTO coach_sessions (user_id, article_text, article_source, article_title, word_count, questions_json)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [req.userId, articleText.trim(), articleSource.trim(), articleTitle.trim(), wordCount, JSON.stringify(questions)]
-  );
-
-  const coachSessionId = result.lastId;
-
-  res.json({
-    coachSession: {
-      id: coachSessionId,
-      articleTitle: articleTitle.trim() || null,
-      articleSource: articleSource.trim() || null,
-      articleText: articleText.trim(),   // needed by the practice page to display the article
-      wordCount,
-      // Questions with sensitive fields stripped — correctIndex etc. revealed after debrief
-      questions: questions.map(stripQuestion),
-    },
-  });
-});
-
-// ── POST /api/coach/exchange — one Socratic turn ───────────────────────────────
-
-router.post("/exchange", authenticate, async (req, res) => {
-  const { coachSessionId, questionIndex, selectedOptionIndex, message = "", giveUp = false } = req.body || {};
-
-  if (coachSessionId == null || questionIndex == null || selectedOptionIndex == null) {
-    return res.status(400).json({ error: "coachSessionId, questionIndex, and selectedOptionIndex are required" });
-  }
-  if (questionIndex < 0 || questionIndex > 3) {
-    return res.status(400).json({ error: "questionIndex must be 0–3" });
-  }
-
-  const session = await db.get(
-    "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2",
-    [coachSessionId, req.userId]
-  );
-  if (!session) return res.status(404).json({ error: "Coach session not found" });
-
-  const questions = JSON.parse(session.questions_json);
-  const q = questions[questionIndex];
-
-  // Find or create the attempt for this question
-  let attempt = await db.get(
-    "SELECT * FROM coach_attempts WHERE coach_session_id = $1 AND question_index = $2",
-    [coachSessionId, questionIndex]
-  );
-
-  if (!attempt) {
-    const isCorrect = selectedOptionIndex === q.correctIndex ? 1 : 0;
-    const selectedTrap = selectedOptionIndex === q.trapIndex ? 1 : 0;
-    const r = await db.run(
-      `INSERT INTO coach_attempts
-         (coach_session_id, question_index, question_type, selected_option_index,
-          correct_option_index, is_correct, selected_trap, trap_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [coachSessionId, questionIndex, q.type, selectedOptionIndex,
-       q.correctIndex, isCorrect, selectedTrap, q.trapType]
-    );
-    attempt = await db.get("SELECT * FROM coach_attempts WHERE id = $1", [r.lastId]);
-  }
-
-  if (attempt.is_complete) {
-    return res.status(400).json({ error: "Debrief for this question is already complete" });
-  }
-
-  const conversation = JSON.parse(attempt.conversation_json || "[]");
-  // exchange_number = how many student messages have been sent + 1 (for this one).
-  // The student now opens — so exchange 1 is the first student message → first tutor reply.
-  const studentMessagesSent = conversation.filter((m) => m.role === "student").length;
-  const exchangeNumber = studentMessagesSent + 1;
-
-  // Always add the student's message to the conversation.
-  if (message.trim()) {
-    conversation.push({ role: "student", text: message.trim() });
-  }
-
-  const isReveal = giveUp || exchangeNumber >= 4;
-
-  try {
-    const aiResponse = await callModel({
-      maxTokens: isReveal ? 512 : 256,
-      system: SOCRATIC_SYSTEM,
-      messages: [{
-        role: "user",
-        content: buildSocraticUserMessage(
-          session.article_text, q, selectedOptionIndex,
-          conversation, exchangeNumber, message, giveUp
-        ),
-      }],
-    });
-
-    await logApiCall({
-      userId: req.userId,
-      route: "/api/coach/exchange",
-      provider: "openrouter",
-      model: DEFAULT_MODEL,
-      inputTokens: aiResponse.usage.input_tokens,
-      outputTokens: aiResponse.usage.output_tokens,
-      status: "ok",
-    });
-
-    const tutorMessage = aiResponse.text.trim();
-    conversation.push({ role: "tutor", text: tutorMessage });
-
-    const newExchangeCount = attempt.exchange_count + 1;
-
-    if (isReveal) {
-      // Debrief complete — save verdict and mark attempt done
       await db.run(
-        `UPDATE coach_attempts
-           SET conversation_json = $1, exchange_count = $2, final_verdict = $3, is_complete = 1
-         WHERE id = $4`,
-        [JSON.stringify(conversation), newExchangeCount, tutorMessage, attempt.id]
+        `UPDATE coach_attempts SET reasoning_text=$1, reasoning_score=$2, reasoning_feedback=$3,
+           correct_explanation=$4, trap_explanation=$5, key_takeaway=$6 WHERE id=$7`,
+        [reasoningText.trim(), evalResult.reasoningScore, evalResult.reasoningFeedback, evalResult.correctExplanation, evalResult.trapExplanation, evalResult.keyTakeaway, attemptId]
       );
-
-      // Check if all 4 questions are now complete; if so, mark session complete
-      const completedRow = await db.get(
-        "SELECT COUNT(*) as n FROM coach_attempts WHERE coach_session_id = $1 AND is_complete = 1",
-        [coachSessionId]
-      );
-      if (parseInt(completedRow.n, 10) >= 4) {
-        await db.run(
-          "UPDATE coach_sessions SET status = 'completed', completed_at = NOW() WHERE id = $1",
-          [coachSessionId]
-        );
-      }
 
       return res.json({
-        tutorMessage,
-        exchangeNumber: newExchangeCount,
-        isComplete: true,
-        // Reveal sensitive fields now that the debrief is over
-        correctIndex: q.correctIndex,
-        trapIndex: q.trapIndex,
-        trapType: q.trapType,
-        sourceLines: q.sourceLines,
-        isCorrect: selectedOptionIndex === q.correctIndex,
+        ...base, attemptId,
+        reasoningScore: evalResult.reasoningScore,
+        reasoningFeedback: evalResult.reasoningFeedback,
+        correctExplanation: evalResult.correctExplanation,
+        trapExplanation: evalResult.trapExplanation,
+        keyTakeaway: evalResult.keyTakeaway,
       });
+    } catch (err) {
+      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+      await db.run("UPDATE coach_attempts SET reasoning_text = $1 WHERE id = $2", [reasoningText.trim(), attemptId]);
+      return res.json({ ...base, attemptId, aiError: true, aiErrorMessage: "AI feedback unavailable — your attempt was saved." });
     }
-
-    await db.run(
-      "UPDATE coach_attempts SET conversation_json = $1, exchange_count = $2 WHERE id = $3",
-      [JSON.stringify(conversation), newExchangeCount, attempt.id]
-    );
-
-    return res.json({
-      tutorMessage,
-      exchangeNumber: newExchangeCount,
-      isComplete: false,
-    });
-
-  } catch (err) {
-    console.error("Coach exchange error:", err.message);
-    await logApiCall({
-      userId: req.userId,
-      route: "/api/coach/exchange",
-      provider: "openrouter",
-      model: DEFAULT_MODEL,
-      status: "error",
-    });
-    return res.status(502).json({ error: "AI tutor unavailable. Please try again." });
-  }
-});
-
-// ── GET /api/coach/sessions/:id — full session data ───────────────────────────
-
-router.get("/sessions/:id", authenticate, async (req, res, next) => {
-  try {
-  const session = await db.get(
-    "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2",
-    [req.params.id, req.userId]
-  );
-  if (!session) return res.status(404).json({ error: "Coach session not found" });
-
-  const questions = JSON.parse(session.questions_json);
-  const attempts = await db.all(
-    "SELECT * FROM coach_attempts WHERE coach_session_id = $1 ORDER BY question_index",
-    [session.id]
-  );
-
-  // For completed attempts, expose answer data; for active ones, strip it
-  const enrichedAttempts = attempts.map((a) => ({
-    ...a,
-    conversation: JSON.parse(a.conversation_json || "[]"),
-    // Only reveal correctIndex etc. for complete attempts
-    ...(a.is_complete
-      ? {
-          correctIndex: questions[a.question_index]?.correctIndex,
-          sourceLines: questions[a.question_index]?.sourceLines,
-        }
-      : {}),
-  }));
-
-  res.json({
-    coachSession: {
-      id: session.id,
-      articleTitle: session.article_title,
-      articleSource: session.article_source,
-      articleText: session.article_text,
-      wordCount: session.word_count,
-      status: session.status,
-      createdAt: session.created_at,
-      questions: questions.map((q, i) => {
-        const attempt = attempts.find((a) => a.question_index === i);
-        // Strip sensitive fields unless this question's debrief is complete
-        return attempt?.is_complete
-          ? { ...stripQuestion(q), correctIndex: q.correctIndex, trapIndex: q.trapIndex, trapType: q.trapType, sourceLines: q.sourceLines }
-          : stripQuestion(q);
-      }),
-    },
-    attempts: enrichedAttempts,
-  });
   } catch (e) { next(e); }
 });
 
-// ── GET /api/coach/history — past sessions with aggregate stats ───────────────
+// ── POST /api/coach/exchange — optional "Stuck? Discuss" chat ─────────────────
+// Only usable AFTER a question's attempt/verdict exists — this is supplementary
+// discussion, not a gate to revealing the answer (that's the point of the redesign).
+router.post("/exchange", async (req, res, next) => {
+  try {
+    const { coachSessionId, questionId, message } = req.body || {};
+    if (!coachSessionId || !questionId || !message || !message.trim()) {
+      return res.status(400).json({ error: "coachSessionId, questionId, and message are required" });
+    }
+    if (message.trim().length > MAX_MSG_LENGTH) return res.status(400).json({ error: `message must be ${MAX_MSG_LENGTH} characters or fewer` });
 
-router.get("/history", authenticate, async (req, res, next) => {
+    const session = await db.get("SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [coachSessionId, req.userId]);
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
+
+    const attempt = await db.get("SELECT * FROM coach_attempts WHERE coach_session_id = $1 AND question_id = $2", [coachSessionId, questionId]);
+    if (!attempt) return res.status(400).json({ error: "Answer this question before discussing it" });
+    if (attempt.exchange_count >= MAX_DISCUSS_EXCHANGES) return res.status(400).json({ error: "Discussion limit reached for this question" });
+
+    const qRow = await db.get("SELECT * FROM questions WHERE id = $1", [questionId]);
+    const q = hydrateQuestion(qRow);
+    const conversation = JSON.parse(attempt.discuss_conversation_json || "[]");
+    conversation.push({ role: "student", text: message.trim() });
+
+    const presentTrapTypes = [...new Set(q.options.map((o) => o.trapType).filter(Boolean))];
+    const SYSTEM = `You are a VARC coach discussing an already-revealed answer with a student who wants to understand it better. They already know the correct answer and your explanation — this is a follow-up clarification chat, not a Socratic reveal. Answer their specific question directly and helpfully. Reference the passage's actual text. Keep responses under 120 words. Respond ONLY with your message, no JSON, no labels.`;
+    const historyLines = conversation.map((m) => `${m.role === "student" ? "STUDENT" : "COACH"}: ${m.text}`).join("\n");
+    const userMsg = `PASSAGE:
+${qRow.paragraph}
+
+QUESTION: ${q.question}
+CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
+${q.trapType ? `TRAP TYPE: ${q.trapType} (${buildTrapMeaningsBlock([q.trapType])})` : ""}
+STUDENT'S ORIGINAL REASONING: ${attempt.reasoning_text || "(none given)"}
+PRIOR AI FEEDBACK: ${attempt.correct_explanation || ""} ${attempt.trap_explanation || ""}
+
+CONVERSATION SO FAR:
+${historyLines}
+
+Respond as the coach to the student's latest message.`;
+
+    try {
+      const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 300 });
+      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+      const reply = response.text.trim();
+      conversation.push({ role: "coach", text: reply });
+      const newCount = attempt.exchange_count + 1;
+      await db.run("UPDATE coach_attempts SET discuss_conversation_json = $1, exchange_count = $2 WHERE id = $3", [JSON.stringify(conversation), newCount, attempt.id]);
+      res.json({ reply, exchangeCount: newCount, limitReached: newCount >= MAX_DISCUSS_EXCHANGES });
+    } catch (err) {
+      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+      res.status(502).json({ error: "Coach unavailable right now. Try again." });
+    }
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/coach/sessions/:id/complete ───────────────────────────────────────
+router.post("/sessions/:id/complete", async (req, res, next) => {
+  try {
+    const session = await db.get("SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]);
+    if (!session) return res.status(404).json({ error: "Coach session not found" });
+    await db.run("UPDATE coach_sessions SET status = 'completed', completed_at = NOW() WHERE id = $1", [session.id]);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/coach/history ─────────────────────────────────────────────────────
+router.get("/history", async (req, res, next) => {
   try {
     const sessions = await db.all(
-      `SELECT cs.id, cs.article_title, cs.article_source, cs.word_count, cs.status,
-              cs.created_at, cs.completed_at,
-              COUNT(ca.id) as attempted,
-              SUM(ca.is_correct) as correct,
-              AVG(ca.exchange_count) as avg_exchanges
+      `SELECT cs.id, p.title AS article_title, p.topic, cs.status, cs.created_at, cs.completed_at,
+              COUNT(ca.id) AS attempted,
+              COALESCE(SUM(ca.is_correct), 0) AS correct,
+              AVG(ca.reasoning_score) AS avg_reasoning_score
        FROM coach_sessions cs
-       LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id AND ca.is_complete = 1
+       JOIN passages p ON p.id = cs.passage_id
+       LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id
        WHERE cs.user_id = $1
-       GROUP BY cs.id
+       GROUP BY cs.id, p.title, p.topic
        ORDER BY cs.created_at DESC`,
       [req.userId]
     );
-
     res.json({ sessions });
   } catch (e) { next(e); }
 });
 
-// ── GET /api/coach/stats — aggregate stats for Dashboard Coach tab ─────────────
-
-router.get("/stats", authenticate, async (req, res, next) => {
+// ── GET /api/coach/stats — Dashboard Coach tab ─────────────────────────────────
+router.get("/stats", async (req, res, next) => {
   try {
     const row = await db.get(
-      `SELECT
-         COUNT(DISTINCT cs.id) as total_sessions,
-         COUNT(ca.id) as total_questions,
-         SUM(ca.is_correct) as total_correct,
-         AVG(ca.exchange_count) as avg_exchanges
+      `SELECT COUNT(DISTINCT cs.id) AS total_sessions, COUNT(ca.id) AS total_questions,
+              COALESCE(SUM(ca.is_correct), 0) AS total_correct, AVG(ca.reasoning_score) AS "avgReasoningScore"
        FROM coach_sessions cs
-       LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id AND ca.is_complete = 1
+       LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id
        WHERE cs.user_id = $1`,
       [req.userId]
     );
-
     const byType = await db.all(
-      `SELECT question_type, COUNT(*) as attempts, SUM(is_correct) as correct
+      `SELECT question_type, COUNT(*) AS attempts, SUM(is_correct) AS correct
        FROM coach_attempts
        WHERE coach_session_id IN (SELECT id FROM coach_sessions WHERE user_id = $1)
-         AND is_complete = 1
        GROUP BY question_type`,
       [req.userId]
     );
-
     const recentSessions = await db.all(
-      `SELECT cs.id, cs.article_title, cs.article_source, cs.created_at,
-              COUNT(ca.id) as attempted, SUM(ca.is_correct) as correct,
-              AVG(ca.exchange_count) as avg_exchanges
+      `SELECT cs.id, p.title AS article_title, cs.created_at,
+              COUNT(ca.id) AS attempted, COALESCE(SUM(ca.is_correct), 0) AS correct,
+              AVG(ca.reasoning_score) AS avg_reasoning_score
        FROM coach_sessions cs
-       LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id AND ca.is_complete = 1
+       JOIN passages p ON p.id = cs.passage_id
+       LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id
        WHERE cs.user_id = $1
-       GROUP BY cs.id
+       GROUP BY cs.id, p.title
        ORDER BY cs.created_at DESC
        LIMIT 10`,
       [req.userId]
     );
-
     res.json({
       totalSessions: parseInt(row.total_sessions, 10) || 0,
       totalQuestions: parseInt(row.total_questions, 10) || 0,
       totalCorrect: parseInt(row.total_correct, 10) || 0,
-      avgExchanges: row.avg_exchanges ? Math.round(row.avg_exchanges * 10) / 10 : null,
+      avgReasoningScore: row.avgReasoningScore ? Math.round(row.avgReasoningScore * 10) / 10 : null,
       accuracy: row.total_questions ? row.total_correct / row.total_questions : null,
-      byType: byType.reduce((acc, r) => {
-        acc[r.question_type] = { attempts: r.attempts, correct: r.correct };
-        return acc;
-      }, {}),
+      byType: byType.reduce((acc, r) => { acc[r.question_type] = { attempts: r.attempts, correct: r.correct }; return acc; }, {}),
       recentSessions,
     });
   } catch (e) { next(e); }
 });
 
-// ── POST /api/coach/sessions/:id/save-to-bank ────────────────────────────────
-// Copies all 4 questions from a Coach session into the user's personal question
-// bank (same `questions` table as user-authored questions).  Idempotent — safe
-// to call multiple times; already-saved questions are skipped via INSERT ON CONFLICT DO NOTHING.
-router.post("/sessions/:id/save-to-bank", authenticate, async (req, res, next) => {
-  try {
-    const coachSessionId = parseInt(req.params.id, 10);
-    if (!coachSessionId) return res.status(400).json({ error: "invalid session id" });
-
-    const session = await db.get(
-      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2",
-      [coachSessionId, req.userId]
-    );
-    if (!session) return res.status(404).json({ error: "Coach session not found" });
-
-    const questions = JSON.parse(session.questions_json);
-    const now = new Date().toISOString();
-    const saved = [];
-    const skipped = [];
-
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      const id = `coach_${coachSessionId}_${i}`;
-      const result = await db.run(
-        `INSERT INTO questions
-           (id, topic, paragraph, question, type, options_json,
-            correct_index, trap_index, trap_type, source_lines,
-            source, author_user_id, is_active, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'coach', $11, 1, $12)
-         ON CONFLICT (id) DO NOTHING`,
-        [
-          id,
-          "humanities",           // default topic — user can edit in /my-questions
-          session.article_text,
-          q.question,
-          q.type,
-          JSON.stringify(q.options),
-          q.correctIndex,
-          q.trapIndex,
-          q.trapType,
-          q.sourceLines,
-          req.userId,
-          now,
-        ]
-      );
-      if (result.rowCount > 0) saved.push(id);
-      else skipped.push(id);
-    }
-
-    res.json({
-      saved: saved.length,
-      skipped: skipped.length,
-      message:
-        saved.length > 0
-          ? `${saved.length} question${saved.length > 1 ? "s" : ""} saved to your question bank.`
-          : "Questions were already in your bank.",
-    });
-  } catch (e) { next(e); }
-});
-
-// ── DELETE /api/coach/sessions/:id ───────────────────────────────────────────
-// Discard a coach session entirely (the user chose "Discard" on leave).
-router.delete("/sessions/:id", authenticate, async (req, res, next) => {
+// ── DELETE /api/coach/sessions/:id ─────────────────────────────────────────────
+router.delete("/sessions/:id", async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: "invalid session id" });
-    const session = await db.get(
-      "SELECT id FROM coach_sessions WHERE id = $1 AND user_id = $2",
-      [id, req.userId]
-    );
+    const session = await db.get("SELECT id FROM coach_sessions WHERE id = $1 AND user_id = $2", [id, req.userId]);
     if (!session) return res.status(404).json({ error: "Coach session not found" });
     await db.run("DELETE FROM coach_attempts WHERE coach_session_id = $1", [id]);
     await db.run("DELETE FROM coach_sessions WHERE id = $1 AND user_id = $2", [id, req.userId]);

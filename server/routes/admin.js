@@ -134,9 +134,11 @@ router.get("/users/:id", async (req, res, next) => {
         [userId]
       );
       const coachRecent = await db.all(
-        `SELECT id, article_title, created_at,
+        `SELECT cs.id, p.title AS article_title, cs.created_at,
                 (SELECT COUNT(*) FROM coach_attempts WHERE coach_session_id = cs.id) AS questions
-         FROM coach_sessions cs WHERE user_id = $1 ORDER BY id DESC LIMIT 5`,
+         FROM coach_sessions cs
+         JOIN passages p ON p.id = cs.passage_id
+         WHERE cs.user_id = $1 ORDER BY cs.id DESC LIMIT 5`,
         [userId]
       );
       coachStats = { total: parseInt(coachTotal.n, 10), recentSessions: coachRecent };

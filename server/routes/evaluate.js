@@ -7,6 +7,7 @@ const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 const { updateCard } = require("../sr");
 const { clearCache: clearDashCache } = require("./dashboard");
+const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -38,24 +39,18 @@ Rules for your response:
 - Never be vague. Always reference specific words from the options or paragraph.`;
 
 function buildUserMessage(q, selectedIndex, reasoningText, quotedLines) {
-  const trapTypeMeanings = {
-    too_extreme: "the option uses absolute language (always/never/only/completely) that the paragraph does not support",
-    out_of_scope: "introduces a concept or claim not present in the paragraph",
-    real_but_unstated: "may be true in the world but the paragraph does not say or imply it",
-    partially_correct: "captures part of the author's point but misses a key qualification or nuance",
-  };
-
   const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
+
+  // Reference meanings for every archetype present among this question's options,
+  // not just the primary trap — imported AI questions tag every wrong option.
+  const presentTrapTypes = [...new Set(q.options.map((o) => o.trapType).filter(Boolean))];
 
   const trapSection =
     q.trapIndex != null
       ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} — "${q.options[q.trapIndex].text}"
 TRAP TYPE: ${q.trapType}
 TRAP TYPE MEANINGS:
-- too_extreme: ${trapTypeMeanings.too_extreme}
-- out_of_scope: ${trapTypeMeanings.out_of_scope}
-- real_but_unstated: ${trapTypeMeanings.real_but_unstated}
-- partially_correct: ${trapTypeMeanings.partially_correct}`
+${buildTrapMeaningsBlock(presentTrapTypes)}`
       : "";
 
   const quotedSection =

@@ -133,17 +133,23 @@ export const myQuestions = {
     }),
 };
 
-// ── Reading Coach (Phase 14) ──────────────────────────
+// ── Coach (② — restructure) ────────────────────────────
 export const coach = {
-  createSession: (body) =>
-    request("/api/coach/sessions", { method: "POST", body: JSON.stringify(body) }),
+  listPassages: (topic = "") =>
+    request(`/api/coach/passages${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
+  createSession: (passageId) =>
+    request("/api/coach/sessions", { method: "POST", body: JSON.stringify({ passageId }) }),
+  getSession: (id) => request(`/api/coach/sessions/${id}`),
+  submitReadingMap: (sessionId, body) =>
+    request(`/api/coach/sessions/${sessionId}/reading-map`, { method: "POST", body: JSON.stringify(body) }),
+  submitAttempt: (body) =>
+    request("/api/coach/attempts", { method: "POST", body: JSON.stringify(body) }),
   exchange: (body) =>
     request("/api/coach/exchange", { method: "POST", body: JSON.stringify(body) }),
-  getSession: (id) => request(`/api/coach/sessions/${id}`),
+  completeSession: (id) =>
+    request(`/api/coach/sessions/${id}/complete`, { method: "POST" }),
   history: () => request("/api/coach/history"),
   stats: () => request("/api/coach/stats"),
-  saveToBank: (id) =>
-    request(`/api/coach/sessions/${id}/save-to-bank`, { method: "POST" }),
   deleteSession: (id) =>
     request(`/api/coach/sessions/${id}`, { method: "DELETE" }),
 };

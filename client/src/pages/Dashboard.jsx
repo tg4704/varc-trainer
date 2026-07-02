@@ -182,7 +182,11 @@ function SectionTitle({ children }) {
 }
 
 // ── Coach tab ──────────────────────────────────────────────────────────────────
-const TYPE_LABELS_COACH = { inference: "Inference", tone: "Tone", title: "Title", detail: "Detail" };
+const TYPE_LABELS_COACH = {
+  inference: "Inference", tone: "Tone", title: "Title", detail: "Detail",
+  main_idea: "Main idea", function: "Function", application: "Application",
+  concept_set: "Concept set", vocab_in_context: "Vocab", weaken_strengthen: "Weaken/Strengthen",
+};
 
 function CoachTab({ stats, loading }) {
   if (loading) return (
@@ -205,10 +209,10 @@ function CoachTab({ stats, loading }) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          ["Articles practiced", stats.totalSessions],
+          ["Passages practiced", stats.totalSessions],
           ["Questions answered", stats.totalQuestions],
           ["Accuracy", accuracyPct],
-          ["Avg exchanges", stats.avgExchanges ?? "—"],
+          ["Avg reasoning", stats.avgReasoningScore != null ? `${stats.avgReasoningScore}/5` : "—"],
         ].map(([label, value]) => (
           <div key={label} className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs muted">{label}</p>
@@ -236,7 +240,7 @@ function CoachTab({ stats, loading }) {
             })}
           </div>
           <p className="mt-3 text-xs dim">
-            Avg exchanges needed: {stats.avgExchanges ?? "—"} (lower = stronger first-pass reasoning)
+            Avg reasoning score: {stats.avgReasoningScore != null ? `${stats.avgReasoningScore}/5` : "—"} (higher = stronger first-pass reasoning)
           </p>
         </div>
       )}

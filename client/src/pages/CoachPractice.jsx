@@ -1,51 +1,22 @@
-// Phase 14 — VARC Coach: 3-panel practice screen
-// Left: article (with source-line highlight after debrief)
-// Right top: question + options
-// Right bottom: VARC Coach chat (appears after option selected)
+// ② Coach — practice screen. Flow per session:
+//   1. Reading phase: full passage shown; student submits a reading map (crux words
+//      per paragraph, or a fuller summary) BEFORE seeing any question. AI grades the
+//      reading process — this is the differentiator (see content-pipeline/READING_GRADER.md).
+//   2. Questions phase: passage stays visible; each question is answered with reasoning,
+//      graded by AI (reused FeedbackSections component), with an optional "Stuck? Discuss"
+//      follow-up chat once the verdict is shown.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { saveActiveCoachSession, clearActiveCoachSession } from "../coachSession.js";
-import { useNavGuard } from "../navGuard.jsx";
 import OptionCard from "../components/OptionCard.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
-import VoiceMicButton from "../components/VoiceMicButton.jsx";
+import FeedbackSections from "../components/FeedbackSections.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 import { coach } from "../api.js";
-import { useVoiceInput } from "../hooks/useVoiceInput.js";
 
 const LETTERS = ["A", "B", "C", "D"];
-const MAX_EXCHANGE = 4;
-const MAX_MSG_LENGTH = 300;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function ArticleWithHighlight({ text, sourceLines }) {
-  // Guard: render plain text if no highlight needed, or if text is missing.
-  if (!sourceLines || !text) return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: "15px", lineHeight: 1.9 }}>
-      {text || ""}
-    </p>
-  );
-  const idx = text.indexOf(sourceLines.slice(0, 40));
-  if (idx === -1) return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: "15px", lineHeight: 1.9 }}>
-      {text}
-    </p>
-  );
-  const before = text.slice(0, idx);
-  const match = text.slice(idx, idx + sourceLines.length);
-  const after = text.slice(idx + sourceLines.length);
-  return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: "15px", lineHeight: 1.9 }}>
-      {before}
-      <mark className="bg-amber-200 dark:bg-amber-900/60 rounded px-0.5">{match}</mark>
-      {after}
-    </p>
-  );
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
+const MAX_DISCUSS = 4;
 
 export default function CoachPractice() {
   const [params] = useSearchParams();
@@ -54,65 +25,46 @@ export default function CoachPractice() {
   const sessionId = params.get("sessionId");
 
   const [coachSession, setCoachSession] = useState(location.state?.coachSession || null);
+  const [attempts, setAttempts] = useState({}); // questionId -> attempt/verdict
   const [loading, setLoading] = useState(!location.state?.coachSession);
   const [error, setError] = useState(null);
 
-  // Per-question state
+  // Reading-map form state
+  const [mapMode, setMapMode] = useState("quick");
+  const [cruxRows, setCruxRows] = useState(["", "", "", ""]);
+  const [mainPoint, setMainPoint] = useState("");
+  const [tone, setTone] = useState("");
+  const [structureRows, setStructureRows] = useState(["", "", "", ""]);
+  const [theTurn, setTheTurn] = useState("");
+  const [gradingMap, setGradingMap] = useState(false);
+
+  // Question phase state
   const [qIdx, setQIdx] = useState(0);
   const [selected, setSelected] = useState(null);
+  const [reasoningText, setReasoningText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  // Debrief state
-  const [debriefPhase, setDebriefPhase] = useState("idle"); // idle | active | complete
-  const [conversation, setConversation] = useState([]); // [{ role, text }]
-  const [exchangeCount, setExchangeCount] = useState(0);
-  const [verdict, setVerdict] = useState(null); // { correctIndex, trapIndex, trapType, sourceLines, isCorrect }
-
-  // Chat input
-  const [inputText, setInputText] = useState("");
-  const [sending, setSending] = useState(false);
-
+  // Discuss chat state (per current question)
+  const [discussOpen, setDiscussOpen] = useState(false);
+  const [discussInput, setDiscussInput] = useState("");
+  const [discussSending, setDiscussSending] = useState(false);
   const chatEndRef = useRef(null);
 
-  // Voice input for Socratic chat
-  const [voiceInterim, setVoiceInterim] = useState("");
-  const { isRecording: voiceRecording, isSupported: voiceSupported, toggle: voiceToggle, stop: voiceStop } =
-    useVoiceInput({
-      onFinalTranscript: (text) => {
-        setInputText((prev) => (prev ? prev + " " + text : text));
-      },
-      onInterimTranscript: (text) => setVoiceInterim(text),
-    });
-
-  // Persist active coach session to localStorage so user can resume if they navigate away
   useEffect(() => {
     if (sessionId) saveActiveCoachSession(sessionId);
-    return () => { /* don't clear on unmount — clear only on explicit completion */ };
   }, [sessionId]);
 
-  // Load session if navigated directly (not from landing)
   useEffect(() => {
     if (coachSession || !sessionId) return;
     (async () => {
       try {
-        const { coachSession: s, attempts } = await coach.getSession(sessionId);
+        const { coachSession: s, attempts: a } = await coach.getSession(sessionId);
         setCoachSession(s);
-        // Restore in-progress debrief state from DB if any question has a partial conversation
-        if (attempts && attempts.length > 0) {
-          const inProgress = attempts.find((a) => !a.is_complete && a.conversation && a.conversation.length > 0);
-          if (inProgress) {
-            setQIdx(inProgress.question_index);
-            setSelected(inProgress.selected_option_index);
-            setConversation(inProgress.conversation);
-            setExchangeCount(inProgress.exchange_count);
-            setDebriefPhase("active");
-          } else {
-            // Jump to first unanswered question
-            const firstUnanswered = [0,1,2,3].find(
-              (i) => !attempts.find((a) => a.question_index === i && a.is_complete)
-            );
-            if (firstUnanswered != null) setQIdx(firstUnanswered);
-          }
-        }
+        const byQ = {};
+        (a || []).forEach((att) => { byQ[att.question_id] = attemptToVerdict(att); });
+        setAttempts(byQ);
+        const firstUnanswered = s.questions.findIndex((q) => !byQ[q.id]);
+        if (firstUnanswered >= 0) setQIdx(firstUnanswered);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -121,137 +73,125 @@ export default function CoachPractice() {
     })();
   }, [sessionId, coachSession]);
 
-  // Leave-confirmation state
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const pendingNavRef = useRef(null);
-
-  // Warn on browser tab close/reload when a debrief is active
-  useEffect(() => {
-    const handler = (e) => {
-      if (debriefPhase === "active") {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [debriefPhase]);
-
-  // Scroll chat to bottom when new messages arrive
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [conversation]);
+  }, [attempts, discussOpen]);
+
+  // Reset per-question transient state when moving between questions
+  useEffect(() => {
+    setSelected(null);
+    setReasoningText("");
+    setDiscussOpen(false);
+    setDiscussInput("");
+    setError(null);
+  }, [qIdx]);
+
+  // Note: trapOptionIndex is intentionally NOT set here — the server already reveals
+  // question.trapIndex for any attempted question (see GET /coach/sessions/:id), so
+  // the render below reads it from `question.trapIndex` directly instead.
+  function attemptToVerdict(a) {
+    return {
+      correctOptionIndex: a.correct_option_index,
+      selectedOptionIndex: a.selected_option_index,
+      trapType: a.trap_type,
+      isCorrect: !!a.is_correct,
+      skipped: false,
+      reasoningScore: a.reasoning_score,
+      reasoningFeedback: a.reasoning_feedback,
+      correctExplanation: a.correct_explanation,
+      trapExplanation: a.trap_explanation,
+      keyTakeaway: a.key_takeaway,
+      discussConversation: a.discussConversation || [],
+      exchangeCount: a.exchange_count || 0,
+    };
+  }
+
+  async function submitReadingMap() {
+    setGradingMap(true);
+    setError(null);
+    try {
+      const body = mapMode === "quick"
+        ? { mode: "quick", crux: cruxRows }
+        : { mode: "full", mainPoint, tone, structure: structureRows, theTurn };
+      const { readingMap, readingGrade } = await coach.submitReadingMap(coachSession.id, body);
+      setCoachSession((s) => ({ ...s, readingMap, readingGrade }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGradingMap(false);
+    }
+  }
 
   const question = coachSession?.questions?.[qIdx];
 
-  // ── Start debrief — user types reasoning first, no AI call yet ───────────────
-  const startDebrief = useCallback(() => {
-    if (selected === null || !coachSession) return;
-    setDebriefPhase("active");
-    // Show a static opening prompt; the AI is called on the student's first message.
-    setConversation([{
-      role: "tutor",
-      text: "Explain why you chose this option. What in the article led you to this choice?",
-    }]);
-    setExchangeCount(0);
-  }, [selected, coachSession]);
-
-  // ── Send a student message ────────────────────────────────────────────────────
-  const sendMessage = useCallback(async (giveUp = false) => {
-    if (!coachSession || sending) return;
-    if (!giveUp && (!inputText.trim() || inputText.trim().length > MAX_MSG_LENGTH)) return;
-    setSending(true);
-    const msgToSend = giveUp ? "" : inputText.trim();
-    const newConv = giveUp
-      ? [...conversation, { role: "student", text: "I give up — show me the answer." }]
-      : [...conversation, { role: "student", text: msgToSend }];
-    setConversation(newConv);
-    setInputText("");
+  async function submitAnswer() {
+    if (selected === null || !question || submitting) return;
+    setSubmitting(true);
+    setError(null);
     try {
-      const data = await coach.exchange({
+      const verdict = await coach.submitAttempt({
         coachSessionId: coachSession.id,
+        questionId: question.id,
         questionIndex: qIdx,
         selectedOptionIndex: selected,
-        message: msgToSend,
-        giveUp,
+        reasoningText: reasoningText.trim() || undefined,
       });
-      setConversation([...newConv, { role: "tutor", text: data.tutorMessage }]);
-      setExchangeCount(data.exchangeNumber);
-      if (data.isComplete) {
-        setVerdict(data);
-        setDebriefPhase("complete");
-      }
+      setAttempts((prev) => ({ ...prev, [question.id]: { ...verdict, discussConversation: [], exchangeCount: 0 } }));
+      // Reveal the answer key on the question object too (type badge etc.)
+      setCoachSession((s) => ({
+        ...s,
+        questions: s.questions.map((q, i) => i === qIdx
+          ? { ...q, correctIndex: verdict.correctOptionIndex, trapIndex: verdict.trapOptionIndex, trapType: verdict.trapType, sourceLines: verdict.sourceLines }
+          : q),
+      }));
     } catch (e) {
       setError(e.message);
-      // Remove the optimistically-added student message
-      setConversation(conversation);
-      setInputText(msgToSend);
     } finally {
-      setSending(false);
+      setSubmitting(false);
     }
-  }, [coachSession, sending, inputText, conversation, qIdx, selected]);
+  }
 
-  // ── Move to next question ─────────────────────────────────────────────────────
-  function nextQuestion() {
-    voiceStop();
-    setVoiceInterim("");
-    if (qIdx >= 3) {
+  const sendDiscussMessage = useCallback(async () => {
+    if (!discussInput.trim() || discussSending || !question) return;
+    setDiscussSending(true);
+    const msg = discussInput.trim();
+    const current = attempts[question.id];
+    const optimistic = { ...current, discussConversation: [...(current.discussConversation || []), { role: "student", text: msg }] };
+    setAttempts((prev) => ({ ...prev, [question.id]: optimistic }));
+    setDiscussInput("");
+    try {
+      const { reply, exchangeCount } = await coach.exchange({ coachSessionId: coachSession.id, questionId: question.id, message: msg });
+      setAttempts((prev) => ({
+        ...prev,
+        [question.id]: { ...prev[question.id], discussConversation: [...optimistic.discussConversation, { role: "coach", text: reply }], exchangeCount },
+      }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDiscussSending(false);
+    }
+  }, [discussInput, discussSending, question, attempts, coachSession]);
+
+  async function nextQuestion() {
+    if (qIdx >= coachSession.questions.length - 1) {
+      try { await coach.completeSession(coachSession.id); } catch { /* non-fatal */ }
       clearActiveCoachSession();
       navigate(`/coach/summary?sessionId=${coachSession.id}`);
       return;
     }
     setQIdx((i) => i + 1);
-    setSelected(null);
-    setDebriefPhase("idle");
-    setConversation([]);
-    setExchangeCount(0);
-    setVerdict(null);
-    setInputText("");
-    setError(null);
   }
 
-  // ── Nav guard: intercept NavBar clicks while a coach session is in progress ──
-  const { registerGuard, clearGuard } = useNavGuard();
-  const inProgressRef = useRef(false);
-  useEffect(() => { inProgressRef.current = !!coachSession; }, [coachSession]);
-  useEffect(() => {
-    registerGuard((to) => {
-      if (inProgressRef.current) {
-        pendingNavRef.current = to;
-        setShowLeaveModal(true);
-        return false; // intercept — modal will navigate on confirm
-      }
-      return true;
-    });
-    return () => clearGuard();
-  }, [registerGuard, clearGuard]);
-
-  // Save & leave: the session already persists in the DB; keep the active
-  // pointer so it can be resumed later from VARC Coach → History.
-  function saveAndLeave() {
-    setShowLeaveModal(false);
-    const to = pendingNavRef.current || "/coach";
-    pendingNavRef.current = null;
-    navigate(to);
+  function setCruxRow(i, val) {
+    setCruxRows((rows) => rows.map((r, idx) => (idx === i ? val : r)));
+  }
+  function setStructureRow(i, val) {
+    setStructureRows((rows) => rows.map((r, idx) => (idx === i ? val : r)));
   }
 
-  // Discard: delete the coach session entirely so it never happened.
-  async function discardAndLeave() {
-    setShowLeaveModal(false);
-    const to = pendingNavRef.current || "/coach";
-    pendingNavRef.current = null;
-    inProgressRef.current = false;
-    const id = coachSession?.id || sessionId;
-    try { if (id) await coach.deleteSession(id); } catch {}
-    clearActiveCoachSession();
-    navigate(to);
-  }
-
-  // ── Render guards ──────────────────────────────────────────────────────────────
+  // ── Render guards ──────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">
-      Loading session…
-    </div>
+    <div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted-foreground">Loading session…</div>
   );
   if (error && !coachSession) return (
     <div className="max-w-2xl mx-auto px-4 py-16 text-center">
@@ -259,75 +199,156 @@ export default function CoachPractice() {
       <Button className="mt-4" onClick={() => navigate("/coach")}>Back to Coach</Button>
     </div>
   );
-  if (!coachSession || !question) return null;
+  if (!coachSession) return null;
 
-  const isLastQuestion = qIdx === 3;
-  const studentMessagesSent = conversation.filter((m) => m.role === "student").length;
-  const canGiveUp = debriefPhase === "active" && studentMessagesSent > 0 && exchangeCount < MAX_EXCHANGE && !sending;
+  const { passage, questions, readingGrade } = coachSession;
+  const inReadingPhase = !readingGrade;
 
-  // ── Layout ────────────────────────────────────────────────────────────────────
+  // ── Reading phase ────────────────────────────────────────────────────────
+  if (inReadingPhase) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="lg:w-[55%]">
+            <div className="rounded-xl border border-border bg-card p-5">
+              {passage.title && <h2 className="mb-3 display text-[22px] leading-tight">{passage.title}</h2>}
+              <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>
+                {passage.body}
+              </p>
+            </div>
+          </div>
+
+          <div className="lg:w-[45%]">
+            <div className="rounded-xl border border-border bg-card p-5 sticky top-4">
+              <h3 className="font-bold text-foreground mb-1">Map the argument first</h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                Before you see any question — what is each paragraph doing? Write in any
+                language, including your own words or mother tongue. Grammar doesn't matter;
+                understanding does.
+              </p>
+
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setMapMode("quick")}
+                  className={cn("rounded-full px-3 py-1 text-xs font-medium border", mapMode === "quick" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground")}
+                >Quick (crux words)</button>
+                <button
+                  onClick={() => setMapMode("full")}
+                  className={cn("rounded-full px-3 py-1 text-xs font-medium border", mapMode === "full" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground")}
+                >Full summary</button>
+              </div>
+
+              {mapMode === "quick" ? (
+                <div className="space-y-2">
+                  {cruxRows.map((val, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-6 flex-none">¶{i + 1}</span>
+                      <input
+                        value={val}
+                        onChange={(e) => setCruxRow(i, e.target.value)}
+                        placeholder="4-5 words — this paragraph's crux"
+                        className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setCruxRows((r) => [...r, ""])}
+                    className="text-xs text-primary underline underline-offset-2"
+                  >+ add another paragraph</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Main point</label>
+                    <textarea value={mainPoint} onChange={(e) => setMainPoint(e.target.value)} rows={2}
+                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tone</label>
+                    <input value={tone} onChange={(e) => setTone(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Structure (what each paragraph does)</label>
+                    <div className="space-y-2">
+                      {structureRows.map((val, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-6 flex-none">¶{i + 1}</span>
+                          <input value={val} onChange={(e) => setStructureRow(i, e.target.value)}
+                            className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                        </div>
+                      ))}
+                      <button onClick={() => setStructureRows((r) => [...r, ""])} className="text-xs text-primary underline underline-offset-2">+ add another paragraph</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">The turn <span className="font-normal">(optional)</span></label>
+                    <input value={theTurn} onChange={(e) => setTheTurn(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                  </div>
+                </div>
+              )}
+
+              {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+
+              <Button className="mt-4 w-full" size="lg" disabled={gradingMap} onClick={submitReadingMap}>
+                {gradingMap ? "Grading your reading…" : "Grade my reading →"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Questions phase ──────────────────────────────────────────────────────
+  const attempt = question ? attempts[question.id] : null;
+  const verdictShown = !!attempt;
+  const isLastQuestion = qIdx === questions.length - 1;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Progress bar */}
+      {/* Reading grade banner — shown once, above the questions */}
+      {qIdx === 0 && !verdictShown && (
+        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-semibold uppercase tracking-wide text-primary">Your reading: {readingGrade.reading_mode?.replace(/-/g, " ")}</span>
+          </div>
+          <p className="text-sm text-foreground mb-1">{readingGrade.verdict_line}</p>
+          <p className="text-xs text-muted-foreground">{readingGrade.what_you_missed}</p>
+          <p className="text-xs text-muted-foreground mt-1"><strong>Try this next:</strong> {readingGrade.one_technique}</p>
+        </div>
+      )}
+
       <div className="mb-4 flex items-center gap-3">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={cn(
-              "h-1.5 flex-1 rounded-full transition-colors",
-              i < qIdx ? "bg-primary" : i === qIdx ? "bg-primary/40" : "bg-border"
-            )}
-          />
+        {questions.map((_, i) => (
+          <div key={i} className={cn("h-1.5 flex-1 rounded-full transition-colors", i < qIdx || attempts[questions[i].id] ? "bg-primary" : i === qIdx ? "bg-primary/40" : "bg-border")} />
         ))}
-        <span className="text-xs text-muted-foreground flex-none">
-          Q{qIdx + 1} / 4
-        </span>
+        <span className="text-xs text-muted-foreground flex-none">Q{qIdx + 1} / {questions.length}</span>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* ── Left: Article ────────────────────────────────────────────── */}
+        {/* Passage */}
         <div className="lg:w-[45%]">
           <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border border-border bg-card p-5">
-            {coachSession.articleTitle && (
-              <h2 className="mb-3 display text-[22px] leading-tight">
-                {coachSession.articleTitle}
-              </h2>
-            )}
-            {coachSession.articleSource && (
-              <p className="mb-4 text-xs text-muted-foreground">{coachSession.articleSource}</p>
-            )}
-            <ArticleWithHighlight
-              text={coachSession.articleText}
-              sourceLines={verdict?.sourceLines || null}
-            />
+            {passage.title && <h2 className="mb-3 display text-[22px] leading-tight">{passage.title}</h2>}
+            <ArticleWithHighlight text={passage.body} sourceLines={question?.sourceLines || null} />
           </div>
         </div>
 
-        {/* ── Right: Question + Options + Chat ─────────────────────────── */}
+        {/* Question + verdict + discuss */}
         <div className="lg:w-[55%] flex flex-col gap-5">
-          {/* Question card */}
           <div className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-3">
-              {/* Type badge hidden until debrief complete — reveals with answer */}
-              {verdict
-                ? <TypeBadge type={question.type} />
-                : <span className="text-xs text-transparent select-none">·</span>
-              }
-              {debriefPhase === "active" && (
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  Exchange {exchangeCount} / {MAX_EXCHANGE}
-                </span>
-              )}
+              {verdictShown ? <TypeBadge type={question.type} /> : <span className="text-xs text-transparent select-none">·</span>}
             </div>
-            <h2 className="font-bold text-foreground mb-4" style={{ fontSize: "16px" }}>
-              {question.question}
-            </h2>
+            <h2 className="font-bold text-foreground mb-4" style={{ fontSize: 16 }}>{question.question}</h2>
             <div className="space-y-2">
               {question.options.map((opt, i) => {
                 let status = null;
-                if (verdict) {
-                  if (i === verdict.correctIndex) status = selected === i ? "correct" : "correct-unselected";
-                  else if (i === selected) status = "wrong";
+                if (verdictShown) {
+                  if (i === attempt.correctOptionIndex) status = selected === i || attempt.selectedOptionIndex === i ? "correct" : "correct-unselected";
+                  else if (i === attempt.selectedOptionIndex) status = "wrong";
                 }
                 return (
                   <OptionCard
@@ -336,192 +357,113 @@ export default function CoachPractice() {
                     text={opt.text}
                     selected={selected === i}
                     status={status}
-                    disabled={debriefPhase !== "idle" || selected !== null}
-                    onClick={() => { if (debriefPhase === "idle") setSelected(i); }}
+                    disabled={verdictShown}
+                    onClick={() => { if (!verdictShown) setSelected(i); }}
                   />
                 );
               })}
             </div>
 
-            {selected !== null && debriefPhase === "idle" && (
-              <>
-                {error && (
-                  <p className="mt-3 text-sm text-destructive">{error}</p>
-                )}
-                <Button
-                  className="mt-3 w-full"
-                  size="lg"
-                  onClick={startDebrief}
-                >
-                  Explain My Reasoning →
+            {selected !== null && !verdictShown && (
+              <div className="mt-4">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Your reasoning (optional)</label>
+                <textarea
+                  value={reasoningText}
+                  onChange={(e) => setReasoningText(e.target.value)}
+                  rows={3}
+                  maxLength={800}
+                  placeholder="Why this option? What in the passage supports it?"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+                <Button className="mt-3 w-full" size="lg" disabled={submitting} onClick={submitAnswer}>
+                  {submitting ? "Checking…" : reasoningText.trim() ? "Submit Answer →" : "Submit (No AI Feedback) →"}
                 </Button>
-              </>
+              </div>
             )}
           </div>
 
-          {/* Verdict card — shown after debrief completes */}
-          {verdict && debriefPhase === "complete" && (
-            <div className={cn(
-              "rounded-xl border p-4",
-              verdict.isCorrect ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5"
-            )}>
-              <div className="flex items-center justify-between mb-2">
-                <span className={cn("font-bold text-sm", verdict.isCorrect ? "text-success" : "text-destructive")}>
-                  {verdict.isCorrect ? "✓ Correct" : "✗ Incorrect"}
-                </span>
-                {verdict.trapType && (
-                  <span className="text-xs text-muted-foreground">
-                    Trap: {verdict.trapType.replace(/_/g, " ")}
-                  </span>
-                )}
+          {/* Verdict */}
+          {verdictShown && (
+            <div className="rounded-xl border border-border bg-card p-5">
+              <FeedbackSections
+                attempt={{ ...attempt, options: question.options.map((o) => ({ text: o.text })), trapOptionIndex: question.trapIndex }}
+              />
+
+              <div className="mt-5 flex flex-col sm:flex-row gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setDiscussOpen((o) => !o)}>
+                  {discussOpen ? "Hide discussion" : "Stuck? Discuss →"}
+                </Button>
+                <Button className="flex-1" onClick={nextQuestion}>
+                  {isLastQuestion ? "View Summary →" : "Next Question →"}
+                </Button>
               </div>
-              {verdict.sourceLines && (
-                <p className="text-xs text-muted-foreground italic">
-                  ↑ Answer region highlighted in the article
-                </p>
-              )}
-              <Button className="mt-3 w-full" size="lg" onClick={nextQuestion}>
-                {isLastQuestion ? "View Session Summary →" : "Next Question →"}
-              </Button>
             </div>
           )}
 
-          {/* Socratic chat */}
-          {debriefPhase !== "idle" && (
+          {/* Stuck? Discuss chat */}
+          {verdictShown && discussOpen && (
             <div className="rounded-xl border border-border bg-card flex flex-col overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center justify-between">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  VARC Coach
-                </span>
-                {canGiveUp && (
-                  <button
-                    type="button"
-                    onClick={() => sendMessage(true)}
-                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  >
-                    I give up — show me the answer
-                  </button>
-                )}
+              <div className="px-4 py-2.5 border-b border-border bg-muted/30">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Discuss with Coach</span>
               </div>
-
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 max-h-80">
-                {conversation.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={cn("flex", msg.role === "student" ? "justify-end" : "justify-start")}
-                  >
-                    <div
-                      className={cn(
-                        "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
-                        msg.role === "tutor"
-                          ? "bg-muted text-foreground rounded-tl-sm"
-                          : "bg-primary text-primary-foreground rounded-tr-sm"
-                      )}
-                    >
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 max-h-72">
+                {(attempt.discussConversation || []).length === 0 && (
+                  <p className="text-sm text-muted-foreground">Ask anything about this question — why an option is wrong, how to read the passage, whatever's unclear.</p>
+                )}
+                {(attempt.discussConversation || []).map((msg, i) => (
+                  <div key={i} className={cn("flex", msg.role === "student" ? "justify-end" : "justify-start")}>
+                    <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed", msg.role === "coach" ? "bg-muted text-foreground rounded-tl-sm" : "bg-primary text-primary-foreground rounded-tr-sm")}>
                       {msg.text}
                     </div>
                   </div>
                 ))}
-                {sending && conversation.length > 0 && conversation[conversation.length - 1].role === "student" && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-2.5 flex gap-1 items-center">
-                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]" />
-                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]" />
-                      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]" />
-                    </div>
-                  </div>
-                )}
                 <div ref={chatEndRef} />
               </div>
-
-              {/* Input */}
-              {debriefPhase === "active" && (
+              {(attempt.exchangeCount || 0) < MAX_DISCUSS ? (
                 <div className="border-t border-border p-3">
                   <div className="flex gap-2 items-end">
-                    <div className="flex-1 relative">
-                      <textarea
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            sendMessage();
-                          }
-                        }}
-                        disabled={sending}
-                        rows={2}
-                        maxLength={MAX_MSG_LENGTH}
-                        className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
-                        placeholder="Explain your reasoning… (Enter to send, Shift+Enter for newline)"
-                      />
-                      {/* Live voice preview overlay */}
-                      {voiceRecording && voiceInterim && (
-                        <div className="absolute bottom-1 left-1 right-1 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground italic pointer-events-none border border-primary/20">
-                          {voiceInterim}…
-                        </div>
-                      )}
-                      <div className={cn(
-                        "mt-0.5 text-right text-xs",
-                        inputText.length > MAX_MSG_LENGTH * 0.9 ? "text-amber-500" : "text-muted-foreground"
-                      )}>
-                        {inputText.length} / {MAX_MSG_LENGTH}
-                      </div>
-                    </div>
-                    {voiceSupported && (
-                      <VoiceMicButton
-                        isRecording={voiceRecording}
-                        onClick={voiceToggle}
-                        className="mb-5"
-                      />
-                    )}
-                    <Button
-                      size="sm"
-                      disabled={!inputText.trim() || inputText.trim().length > MAX_MSG_LENGTH || sending}
-                      onClick={() => {
-                        if (voiceRecording) voiceStop();
-                        sendMessage();
-                      }}
-                      className="mb-5"
-                    >
-                      Send
-                    </Button>
+                    <textarea
+                      value={discussInput}
+                      onChange={(e) => setDiscussInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendDiscussMessage(); } }}
+                      disabled={discussSending}
+                      rows={2}
+                      maxLength={300}
+                      placeholder="Ask a follow-up…"
+                      className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
+                    />
+                    <Button size="sm" disabled={!discussInput.trim() || discussSending} onClick={sendDiscussMessage}>Send</Button>
                   </div>
                   {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
                 </div>
+              ) : (
+                <p className="px-4 py-3 text-xs text-muted-foreground border-t border-border">Discussion limit reached for this question.</p>
               )}
             </div>
           )}
         </div>
       </div>
-
-      {/* Leave confirmation modal */}
-      {showLeaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-card border border-border p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-foreground">Leave this Coach session?</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              <strong>Save</strong> keeps it so you can resume any time from VARC Coach → History.
-              <strong> Discard</strong> deletes it permanently.
-            </p>
-            <div className="mt-6 flex flex-col gap-2">
-              <Button className="w-full" onClick={saveAndLeave}>
-                Save &amp; leave
-              </Button>
-              <Button variant="destructive" className="w-full" onClick={discardAndLeave}>
-                Discard session
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => { setShowLeaveModal(false); pendingNavRef.current = null; }}
-              >
-                Stay
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
+  );
+}
+
+function ArticleWithHighlight({ text, sourceLines }) {
+  if (!sourceLines || !text) return (
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>{text || ""}</p>
+  );
+  const idx = text.indexOf(sourceLines.slice(0, 40));
+  if (idx === -1) return (
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>{text}</p>
+  );
+  const before = text.slice(0, idx);
+  const match = text.slice(idx, idx + sourceLines.length);
+  const after = text.slice(idx + sourceLines.length);
+  return (
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>
+      {before}
+      <mark className="bg-amber-200 dark:bg-amber-900/60 rounded px-0.5">{match}</mark>
+      {after}
+    </p>
   );
 }
