@@ -38,22 +38,26 @@ async function findById(id) {
   return hydrate(row);
 }
 
-// All active questions visible to a given user:
-//   - all seed questions
-//   - that user's own user-created questions (Phase 10)
+// ③ Drills question pool for a given user:
+//   - seed questions, curated AI-generated drills, or the user's own questions (Phase 10)
+//   - passage_id IS NULL only — passage-linked questions belong to ② Coach, never to Drills
 async function listForUser(userId) {
   const rows = await db.all(
     `SELECT * FROM questions
      WHERE is_active = 1
-       AND (source = 'seed' OR author_user_id = $1)`,
+       AND passage_id IS NULL
+       AND (source IN ('seed', 'ai_generated') OR author_user_id = $1)`,
     [userId]
   );
   return rows.map(hydrate);
 }
 
-// All active questions (admin/global view; used by dashboard recent-attempts).
+// All active, standalone (non-passage) questions — admin/global view used by the
+// dashboard's recent-attempts lookup. Excludes passage-linked (② Coach) questions.
 async function listAllActive() {
-  const rows = await db.all("SELECT * FROM questions WHERE is_active = 1");
+  const rows = await db.all(
+    "SELECT * FROM questions WHERE is_active = 1 AND passage_id IS NULL"
+  );
   return rows.map(hydrate);
 }
 
