@@ -44,10 +44,14 @@ export default function AdminImport() {
         <p className="text-sm text-muted-foreground mt-1">
           Paste JSON generated in Claude chat (Opus 4.8) using the prompts in{" "}
           <code className="text-xs">content-pipeline/GENERATION_KIT.md</code>. Items are imported{" "}
-          <strong>inactive</strong> — review them under{" "}
-          <a href="/admin/questions?active=0" className="text-primary underline">Questions (inactive)</a>{" "}
-          and activate the good ones. You can paste a single object or a JSON array of several
-          (e.g. multiple <code>passage_set</code>s generated together).
+          <strong>inactive</strong> — review drills under{" "}
+          <a href="/admin/questions?active=0" className="text-primary underline">Questions (inactive)</a>.
+          For <code>passage_set</code> imports, activating the questions is not enough — the{" "}
+          <strong>passage itself</strong> also gates whether it shows up in Coach; activate it
+          separately under{" "}
+          <a href="/admin/passages?active=0" className="text-primary underline">Passages (inactive)</a>.
+          You can paste a single object or a JSON array of several (e.g. multiple{" "}
+          <code>passage_set</code>s generated together).
         </p>
       </div>
 

@@ -198,6 +198,11 @@ export const admin = {
 
   importContent: (payload) =>
     request("/api/admin/import", { method: "POST", body: JSON.stringify(payload) }),
+
+  listPassages: (active = "") =>
+    request(`/api/admin/passages${active !== "" ? `?active=${active}` : ""}`),
+  setPassageActive: (id, isActive) =>
+    request(`/api/admin/passages/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
 };
 
 // ── Spaced Repetition (Phase 15) ─────────────────────────────────────────────

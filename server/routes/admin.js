@@ -408,6 +408,46 @@ router.patch("/flags/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── GET /api/admin/passages ────────────────────────────────────────────────
+// List passages (② Coach) with question counts, for review + activation.
+// A passage's questions can be individually activated in Admin → Questions,
+// but the passage itself gates whether it shows up in the Coach picker at all —
+// activate it here once you've reviewed its questions.
+router.get("/passages", async (req, res, next) => {
+  try {
+    const active = req.query.active;
+    const where = [];
+    if (active === "1") where.push("p.is_active = 1");
+    else if (active === "0") where.push("p.is_active = 0");
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const rows = await db.all(
+      `SELECT p.id, p.topic, p.genre, p.title, p.word_count AS "wordCount",
+              p.source, p.is_active, p.created_at,
+              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id) AS "questionCount",
+              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id AND is_active = 1) AS "activeQuestionCount"
+       FROM passages p
+       ${whereSql}
+       ORDER BY p.id DESC`
+    );
+    res.json({ passages: rows, total: rows.length });
+  } catch (e) { next(e); }
+});
+
+// ── PATCH /api/admin/passages/:id ──────────────────────────────────────────
+// Toggle a passage's is_active. Body: { isActive: boolean }
+router.patch("/passages/:id", async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id || typeof req.body?.isActive !== "boolean") {
+      return res.status(400).json({ error: "id and isActive (boolean) are required" });
+    }
+    const info = await db.run("UPDATE passages SET is_active = $1 WHERE id = $2", [req.body.isActive ? 1 : 0, id]);
+    if (info.rowCount === 0) return res.status(404).json({ error: "not found" });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 // ── POST /api/admin/import ─────────────────────────────────────────────────
 // Bulk-import content generated in Claude chat (see content-pipeline/GENERATION_KIT.md).
 // Accepts { kind: "passage_set", passage, questions } OR { kind: "drills", items }.
