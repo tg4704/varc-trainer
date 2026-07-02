@@ -2,8 +2,15 @@
 // Used by both admin (routes/admin.js) and user (routes/myQuestions.js).
 
 const VALID_TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
-const VALID_TYPES  = ["inference", "tone", "title", "detail", "application"];
-const VALID_TRAPS  = ["too_extreme", "out_of_scope", "real_but_unstated", "partially_correct"];
+const VALID_TYPES  = [
+  "inference", "tone", "title", "detail", "application",
+  "main_idea", "function", "concept_set", "vocab_in_context", "weaken_strengthen",
+];
+const VALID_TRAPS  = [
+  "too_extreme", "out_of_scope", "real_but_unstated", "partially_correct",
+  "too_broad", "distortion", "wrong_question", "wrong_location", "mislabelled",
+  "wordplay", "tone_mismatch",
+];
 
 function validateQuestionPayload(body) {
   const required = ["topic", "paragraph", "question", "type", "options", "correctIndex", "sourceLines"];

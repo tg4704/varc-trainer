@@ -1,0 +1,197 @@
+# Generation Kit — run these in Claude chat (Opus 4.8)
+
+You generate content manually in Claude chat, then paste the JSON into the admin importer
+(`/admin/import`). These prompts are **self-contained** — the chat doesn't have our repo, so
+everything it needs is embedded. Use **Opus 4.8**.
+
+## Workflow
+
+1. Open Claude chat → select **Opus 4.8**.
+2. Paste **Prompt A** (full passage → ② Coach) or **Prompt B** (short drills → ③ Drills),
+   filling in the `TOPIC`/`GENRE`/`COUNT` at the top.
+3. It returns JSON. In the **same chat**, paste **Prompt C (validator)**.
+4. Keep only items the validator marks `pass`. Regenerate or drop the rest.
+5. Paste the final JSON into `/admin/import`. Items land **inactive** for your review, then you
+   activate them.
+6. Repeat for variety. **Target mix: inference ~50%**, then main_idea / application / function /
+   tone; minimal pure detail. Spread topics: economics, philosophy, science, humanities, social.
+
+Legal: never paste real CAT/GMAT/Aeon/news passage text into the prompt. Topics only. The output
+must be original expression.
+
+---
+
+## Shared reference (embedded in the prompts below — here for your understanding)
+
+**Distractor archetypes** (correct option = no tag; every wrong option carries exactly one):
+
+| tag | what it is | BEAST |
+|---|---|---|
+| `too_extreme` | absolute modifiers (always/never/all/only) | **E**xtreme |
+| `out_of_scope` | concept never in the passage | **A**lien |
+| `too_broad` | true but too general to answer *this* stem | **B**road |
+| `partially_correct` | a true detail offered as the main point | **S**ide-track |
+| `tone_mismatch` | facts fit but tone/stance clashes with author | **T**one |
+| `real_but_unstated` | true in general, passage never claims it | — |
+| `distortion` | reverses a relationship the passage states | — |
+| `wrong_question` | accurate but answers a different stem | — |
+| `wrong_location` | true, but stated in a different part of the passage | — |
+| `mislabelled` | right content, wrong label attached | — |
+| `wordplay` | puns on the term's surface form | — |
+
+**Rule:** if a wrong option needs no tag to explain why it's wrong, it's too obviously wrong —
+regenerate it. At most ONE distractor per question may use absolute words.
+
+---
+
+## PROMPT A — Full passage for ② Coach (paste, edit the top line)
+
+```
+TOPIC = philosophy   |   GENRE = aesthetics   |   QUESTIONS = 4
+
+You are a CAT VARC item-setter. Produce ONE reading passage and its questions in the exact
+register and difficulty of CAT Reading Comprehension. Output ONLY valid JSON (schema at the end).
+
+PASSAGE (350–500 words):
+- On the TOPIC/GENRE above. Original text only — do not reproduce any real article.
+- Imply the thesis; do NOT announce it ("This essay argues…" is banned).
+- Include a counterposition, then a qualification that partially concedes.
+- Measured authorial stance (e.g. skeptical-but-fair), not cheerleading or dismissive.
+- Embed one in-context academic term and one non-linear move (aside / concession / reversal).
+- Dense but grammatical. No lists, no headings.
+
+READING KEY (this is graded against the student's reading map later):
+- thesis: the author's actual argument in one sentence
+- tone: a short phrase
+- paragraph_functions: one line per paragraph stating what it DOES (sets up / concedes /
+  reverses / illustrates), not what it's about
+- key_turn: the single pivotal shift/tension
+
+QUESTIONS (produce {QUESTIONS}, spread across types; bias toward inference):
+- Types allowed: inference, main_idea, function, tone, application, concept_set,
+  vocab_in_context, weaken_strengthen, detail. Include at least ONE `application` question
+  (transfer the argument to a novel concrete scenario) — CAT's signature hard type.
+- Stems must be inferential/structural, NOT fact-retrieval.
+- Each question: exactly ONE defensible correct option + THREE distractors.
+- Tag EACH distractor with exactly one archetype:
+  too_extreme | out_of_scope | too_broad | partially_correct | tone_mismatch |
+  real_but_unstated | distortion | wrong_question | wrong_location | mislabelled | wordplay
+- Distractors must be TEMPTING (defensible until the precise archetype is applied). At most ONE
+  distractor per question may use absolute words. Summary/main_idea distractors should be long
+  and multi-claim with exactly one buried error.
+- Mark the single most-dangerous distractor as the "primary trap" (isTrap:true); it sets
+  trapIndex/trapType. Other wrong options have isTrap:false but still carry a trapType tag.
+- correctIndex points to the correct option; give sourceLines that justify it.
+
+OUTPUT JSON (exactly this shape):
+{
+  "kind": "passage_set",
+  "passage": {
+    "topic": "<economics|philosophy|science|humanities|social>",
+    "genre": "<free text>",
+    "title": "<short>",
+    "body": "<the passage>",
+    "reading_key": {
+      "thesis": "...", "tone": "...",
+      "paragraph_functions": ["¶1: ...", "¶2: ...", "..."],
+      "key_turn": "..."
+    }
+  },
+  "questions": [
+    {
+      "type": "inference",
+      "question": "...",
+      "options": [
+        {"text":"...","isCorrect":true,"isTrap":false,"trapType":null},
+        {"text":"...","isCorrect":false,"isTrap":true,"trapType":"distortion"},
+        {"text":"...","isCorrect":false,"isTrap":false,"trapType":"too_extreme"},
+        {"text":"...","isCorrect":false,"isTrap":false,"trapType":"out_of_scope"}
+      ],
+      "correctIndex": 0,
+      "trapIndex": 1,
+      "trapType": "distortion",
+      "sourceLines": "...",
+      "rationaleCorrect": "...",
+      "rationaleEachWrong": ["...","...","..."]
+    }
+  ]
+}
+```
+
+---
+
+## PROMPT B — Short drills for ③ Drills (paste, edit the top line)
+
+```
+TOPIC = economics   |   COUNT = 5
+
+You are a CAT VARC item-setter. Produce {COUNT} standalone single-question RC drills, each a
+SHORT paragraph (90–120 words) with ONE question. CAT register and difficulty. Output ONLY valid
+JSON (schema at the end). Original text only — never reproduce real articles.
+
+Each paragraph: a self-contained argument with an implied point and a measured tone.
+Each question: inferential/structural (bias toward `inference`), exactly ONE defensible correct
+option + THREE tagged distractors. Same archetype list and rules as CAT (at most one absolute-word
+distractor; distractors tempting, each with a nameable reason). Mark the most-dangerous distractor
+isTrap:true (sets trapIndex/trapType); other wrong options isTrap:false but still trapType-tagged.
+
+Vary topics/subtopics across the {COUNT} items and skew the type mix toward inference.
+
+OUTPUT JSON:
+{
+  "kind": "drills",
+  "items": [
+    {
+      "topic": "<economics|philosophy|science|humanities|social>",
+      "paragraph": "<90–120 words>",
+      "type": "inference",
+      "question": "...",
+      "options": [
+        {"text":"...","isCorrect":true,"isTrap":false,"trapType":null},
+        {"text":"...","isCorrect":false,"isTrap":true,"trapType":"partially_correct"},
+        {"text":"...","isCorrect":false,"isTrap":false,"trapType":"too_extreme"},
+        {"text":"...","isCorrect":false,"isTrap":false,"trapType":"out_of_scope"}
+      ],
+      "correctIndex": 0,
+      "trapIndex": 1,
+      "trapType": "partially_correct",
+      "sourceLines": "...",
+      "rationaleCorrect": "...",
+      "rationaleEachWrong": ["...","...","..."]
+    }
+  ]
+}
+```
+
+---
+
+## PROMPT C — Validator (paste AFTER A or B, in the same chat)
+
+```
+Now switch roles: you are a RUTHLESS CAT answer-key auditor. Audit every question you just
+produced against these gates. Be adversarial — assume it's wrong until proven otherwise.
+
+1. ONE-ANSWER GATE (most important): is there EXACTLY ONE defensible answer? If a smart,
+   evidence-driven test-taker could justify any other option from the text → FAIL.
+2. SUPPORT GATE: is the keyed-correct option fully supported by the sourceLines? If it needs
+   outside knowledge or an unsupported leap → FAIL.
+3. RETRIEVAL GATE: is it answerable by keyword-matching rather than inference/structure → FAIL.
+4. DISTRACTOR GATE: does every wrong option have a concrete reason matching its tag, AND is none
+   of them secretly also-correct? Over-reliance on absolute words → FAIL.
+5. READING-KEY GATE (passage_set only): do paragraph_functions describe FUNCTION (not topic),
+   and does thesis capture the argument (not the subject)?
+
+For each question return: { index, verdict: "pass"|"fail", failed_gates:[...], reason,
+fixed_question? }  — if fixable, include the corrected question in the SAME output JSON shape so
+I can use it directly. Then output the FULL corrected JSON of only the passing/fixed items.
+```
+
+---
+
+## Notes for import
+
+- The importer sets `source='ai_generated'`, `is_active=0` (inactive), assigns question IDs, and
+  for `passage_set` links every question to the new passage via `passage_id` and copies the
+  passage body into each question's `paragraph`.
+- Review inactive items in `/admin/questions` (and the passages view) → activate the good ones.
+- `word_count` is computed at import; you don't need to supply it.

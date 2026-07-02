@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   FileText,
+  Upload,
   CircleDollarSign,
   Flag,
 } from "lucide-react";
@@ -12,6 +13,7 @@ const NAV = [
   { to: "/admin",           label: "Overview",  icon: LayoutDashboard, end: true },
   { to: "/admin/users",     label: "Users",     icon: Users },
   { to: "/admin/questions", label: "Questions", icon: FileText },
+  { to: "/admin/import",    label: "Import",    icon: Upload },
   { to: "/admin/costs",     label: "AI Costs",  icon: CircleDollarSign },
   { to: "/admin/flags",     label: "Flags",     icon: Flag },
 ];

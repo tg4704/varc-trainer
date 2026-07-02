@@ -189,6 +189,9 @@ export const admin = {
     }),
 
   costs: () => request("/api/admin/costs"),
+
+  importContent: (payload) =>
+    request("/api/admin/import", { method: "POST", body: JSON.stringify(payload) }),
 };
 
 // ── Spaced Repetition (Phase 15) ─────────────────────────────────────────────

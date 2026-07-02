@@ -402,6 +402,132 @@ router.patch("/flags/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── POST /api/admin/import ─────────────────────────────────────────────────
+// Bulk-import content generated in Claude chat (see content-pipeline/GENERATION_KIT.md).
+// Accepts { kind: "passage_set", passage, questions } OR { kind: "drills", items }.
+// Everything is inserted INACTIVE (is_active=0), source='ai_generated', for review.
+const IMPORT_TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const IMPORT_TYPES = [
+  "inference", "main_idea", "function", "tone", "detail", "application",
+  "concept_set", "vocab_in_context", "weaken_strengthen", "title",
+];
+const IMPORT_TRAPS = [
+  "too_extreme", "out_of_scope", "too_broad", "partially_correct", "real_but_unstated",
+  "distortion", "wrong_question", "wrong_location", "mislabelled", "wordplay", "tone_mismatch",
+];
+
+// Validate one question object; returns an error string or null.
+function validateImportQuestion(q, label) {
+  if (!q || typeof q !== "object") return `${label}: not an object`;
+  if (!q.question || !String(q.question).trim()) return `${label}: missing question`;
+  if (!IMPORT_TYPES.includes(q.type)) return `${label}: type "${q.type}" not allowed`;
+  if (!Array.isArray(q.options) || q.options.length !== 4) return `${label}: needs exactly 4 options`;
+  for (let i = 0; i < 4; i++) {
+    if (!q.options[i] || !String(q.options[i].text || "").trim()) return `${label}: option ${i} needs text`;
+    const tt = q.options[i].trapType;
+    if (tt && !IMPORT_TRAPS.includes(tt)) return `${label}: option ${i} trapType "${tt}" not allowed`;
+  }
+  if (![0, 1, 2, 3].includes(q.correctIndex)) return `${label}: correctIndex must be 0–3`;
+  if (q.trapIndex != null) {
+    if (![0, 1, 2, 3].includes(q.trapIndex)) return `${label}: trapIndex must be 0–3 or null`;
+    if (q.trapIndex === q.correctIndex) return `${label}: trapIndex equals correctIndex`;
+  }
+  if (!q.sourceLines || !String(q.sourceLines).trim()) return `${label}: missing sourceLines`;
+  return null;
+}
+
+// Build options_json preserving EACH option's archetype tag (unlike normalizeOptions,
+// which only keeps the primary trap's tag).
+function buildImportOptions(q) {
+  return q.options.map((o, i) => ({
+    text: String(o.text).trim(),
+    isCorrect: i === q.correctIndex,
+    isTrap: q.trapIndex != null && i === q.trapIndex,
+    trapType: i === q.correctIndex ? null : (o.trapType ?? null),
+  }));
+}
+
+let importSeq = 0;
+function newQuestionId() {
+  importSeq = (importSeq + 1) % 1000;
+  return `ai${Date.now().toString(36)}${importSeq.toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+}
+
+async function insertImportQuestion(client, q, { topic, paragraph, passageId }) {
+  await client.query(
+    `INSERT INTO questions
+       (id, topic, paragraph, question, type, options_json,
+        correct_index, trap_index, trap_type, source_lines, source, passage_id, is_active)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ai_generated',$11,0)`,
+    [
+      newQuestionId(), topic, paragraph.trim(), String(q.question).trim(), q.type,
+      JSON.stringify(buildImportOptions(q)),
+      q.correctIndex,
+      q.trapIndex ?? null,
+      q.trapIndex != null ? (q.trapType || null) : null,
+      String(q.sourceLines).trim(),
+      passageId,
+    ]
+  );
+}
+
+router.post("/import", async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    const errors = [];
+    let passagesInserted = 0, questionsInserted = 0;
+
+    if (payload.kind === "passage_set") {
+      const p = payload.passage;
+      if (!p || !String(p.body || "").trim()) return res.status(400).json({ error: "passage.body required" });
+      if (!IMPORT_TOPICS.includes(p.topic)) return res.status(400).json({ error: `passage.topic must be one of: ${IMPORT_TOPICS.join(", ")}` });
+      if (!p.reading_key || typeof p.reading_key !== "object") return res.status(400).json({ error: "passage.reading_key required" });
+      const questions = Array.isArray(payload.questions) ? payload.questions : [];
+      if (!questions.length) return res.status(400).json({ error: "questions[] required" });
+      for (let i = 0; i < questions.length; i++) {
+        const err = validateImportQuestion(questions[i], `Q${i + 1}`);
+        if (err) return res.status(400).json({ error: err }); // whole set is atomic — reject on any bad Q
+      }
+      const wordCount = String(p.body).trim().split(/\s+/).length;
+      await db.transaction(async (client) => {
+        const row = await client.query(
+          `INSERT INTO passages (topic, genre, title, body, word_count, reading_key_json, source, is_active)
+           VALUES ($1,$2,$3,$4,$5,$6,'ai_generated',0) RETURNING id`,
+          [p.topic, p.genre || null, p.title || null, String(p.body).trim(), wordCount, JSON.stringify(p.reading_key)]
+        );
+        const passageId = row.rows[0].id;
+        for (const q of questions) {
+          await insertImportQuestion(client, q, { topic: p.topic, paragraph: String(p.body).trim(), passageId });
+        }
+        passagesInserted = 1;
+        questionsInserted = questions.length;
+      });
+    } else if (payload.kind === "drills") {
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      if (!items.length) return res.status(400).json({ error: "items[] required" });
+      // Drills are independent — insert the good ones, collect errors for the rest.
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const label = `Item ${i + 1}`;
+        if (!IMPORT_TOPICS.includes(it.topic)) { errors.push(`${label}: topic "${it.topic}" not allowed`); continue; }
+        if (!String(it.paragraph || "").trim()) { errors.push(`${label}: missing paragraph`); continue; }
+        const err = validateImportQuestion(it, label);
+        if (err) { errors.push(err); continue; }
+        try {
+          await db.transaction(async (client) => {
+            await insertImportQuestion(client, it, { topic: it.topic, paragraph: String(it.paragraph).trim(), passageId: null });
+          });
+          questionsInserted++;
+        } catch (e) { errors.push(`${label}: ${e.message}`); }
+      }
+    } else {
+      return res.status(400).json({ error: 'kind must be "passage_set" or "drills"' });
+    }
+
+    res.json({ ok: true, passagesInserted, questionsInserted, errors });
+  } catch (e) { next(e); }
+});
+
 // ── GET /api/admin/costs ───────────────────────────────────────────────────
 // Aggregates for the costs page: by day, by model, by user, with running total.
 router.get("/costs", async (req, res, next) => {
