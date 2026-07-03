@@ -72,6 +72,23 @@ Every generated passage MUST have:
 - length: ~90–120 words for ③ Trap Drills (single question); ~350–500 words for ②
   Comprehension (4–6 questions).
 
+**Paragraph structure (② Comprehension — mandatory, not optional):**
+- The passage body MUST be split into **3–5 distinct paragraphs**, separated by a blank line
+  (`\n\n`) in the JSON string. A single unbroken block of text is a hard fail — CAT passages are
+  always visibly paragraphed, and paragraph-level structure is exactly what the reading-map
+  exercise grades.
+- **Each paragraph must play a distinct rhetorical role relative to the thesis** — this is the
+  actual skill CAT tests: can the student track whether the argument is being built up or pushed
+  back on as they read? Assign each paragraph one function from: **sets up** the claim, **supports**
+  it with evidence, **complicates/qualifies** it, **reverses/counters** it, **synthesizes** or
+  resolves the tension. No two adjacent paragraphs may have the same function. At least one
+  paragraph must clearly work *against* the surface direction of the previous one (a concession,
+  a counterexample, a reversal) — the positive/negative alternation is what makes the argument
+  hard to summarize on a single read.
+- `reading_key.paragraph_functions` must have **exactly one entry per paragraph**, in order, and
+  each entry must name that paragraph's rhetorical role (not just its topic) — e.g. "¶2: concedes
+  a real cost of the author's position before rebutting it," not "¶2: discusses costs."
+
 Calibrate density/obliqueness against a real CAT PYQ passage held side-by-side (register only).
 
 ## 4. Generation prompt (offline, best model)

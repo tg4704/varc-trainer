@@ -19,6 +19,18 @@ router.use(authenticate);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Models occasionally wrap JSON in ```json fences despite instructions not to.
+// Strip fences and grab the first {...} block before parsing.
+function extractJSON(text) {
+  let t = text.trim();
+  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) t = fenced[1].trim();
+  const start = t.indexOf("{");
+  const end = t.lastIndexOf("}");
+  if (start !== -1 && end !== -1 && end > start) t = t.slice(start, end + 1);
+  return JSON.parse(t);
+}
+
 function hydrateQuestion(row) {
   return {
     id: row.id,
@@ -180,14 +192,34 @@ Key turn: ${readingKey.key_turn}
 STUDENT'S READING MAP (${mode} mode):
 ${studentMapText}`;
 
-    let grade;
-    try {
-      const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 600 });
-      await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
-      grade = JSON.parse(response.text);
-    } catch (err) {
-      await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
-      return res.status(502).json({ error: "Could not grade your reading right now. Try again." });
+    // Retry once on a transient/parse failure before falling back — grading the
+    // reading is the differentiator, but it must never hard-block the student
+    // from reaching the questions if the AI call has a bad moment.
+    let grade = null;
+    for (let attempt = 0; attempt < 2 && !grade; attempt++) {
+      try {
+        const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 600 });
+        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+        grade = extractJSON(response.text);
+      } catch (err) {
+        console.error(`Reading-map grade attempt ${attempt + 1} failed:`, err.message);
+        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+      }
+    }
+
+    if (!grade) {
+      // Fallback: don't block the session — record that grading failed and let
+      // the student proceed. They can still be graded manually via Discuss later.
+      grade = {
+        reading_mode: "mixed",
+        thesis: "partial",
+        structure: "partial",
+        caught_the_turn: false,
+        what_you_missed: "We couldn't grade your reading this time — the AI feedback service had a hiccup. Your notes were saved; continue to the questions.",
+        one_technique: "Re-check your notes against the passage before answering — did you capture what each paragraph is doing, not just what it's about?",
+        verdict_line: "Reading feedback unavailable this time.",
+        ungraded: true,
+      };
     }
 
     await db.run(
@@ -317,7 +349,7 @@ ${reasoningText.trim()}`;
     try {
       const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }] });
       await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
-      const evalResult = JSON.parse(response.text);
+      const evalResult = extractJSON(response.text);
 
       await db.run(
         `UPDATE coach_attempts SET reasoning_text=$1, reasoning_score=$2, reasoning_feedback=$3,

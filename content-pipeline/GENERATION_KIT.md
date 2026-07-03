@@ -64,6 +64,12 @@ PASSAGE (350–500 words):
 - Measured authorial stance (e.g. skeptical-but-fair), not cheerleading or dismissive.
 - Embed one in-context academic term and one non-linear move (aside / concession / reversal).
 - Dense but grammatical. No lists, no headings.
+- MUST be 3–5 distinct paragraphs separated by a blank line (\n\n in the JSON string) — never
+  one unbroken block. Each paragraph plays a DIFFERENT rhetorical role relative to the thesis:
+  sets up / supports / complicates-qualifies / reverses-counters / synthesizes. No two adjacent
+  paragraphs share a role, and at least one paragraph must push AGAINST the direction of the
+  previous one (concession, counterexample, reversal) — this positive/negative tracking across
+  paragraphs is the actual CAT skill being tested.
 
 READING KEY (this is graded against the student's reading map later):
 - thesis: the author's actual argument in one sentence

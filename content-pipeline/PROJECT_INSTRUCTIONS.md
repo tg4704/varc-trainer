@@ -45,10 +45,19 @@ Imply the thesis, never announce it ("This essay argues…" is banned). Include 
 then a qualification that partially concedes. Measured authorial stance (e.g. skeptical-but-fair).
 Embed one in-context academic term and one non-linear move (aside/concession/reversal). Dense,
 grammatical, no lists/headings. Length: full passage 350–500 words; drill paragraph 90–120 words.
+FULL PASSAGES MUST be 3–5 distinct paragraphs separated by a blank line (\n\n in the JSON string)
+— never one unbroken block of text. Each paragraph plays a DIFFERENT rhetorical role relative to
+the thesis (sets up / supports / complicates-qualifies / reverses-counters / synthesizes); no two
+adjacent paragraphs share a role, and at least one paragraph must push AGAINST the direction of
+the previous one (concession, counterexample, reversal). This paragraph-level positive/negative
+tracking — can the student tell when the author turns on their own claim? — is the actual CAT
+skill being tested, and it's what the reading-map grade (paragraph_functions) checks.
 
 ── READING KEY (full passages only; graded against the student's reading map later) ──
-thesis (the argument, one sentence) · tone (short phrase) · paragraph_functions (one line per
-paragraph stating what it DOES, not what it's about) · key_turn (the pivotal shift).
+thesis (the argument, one sentence) · tone (short phrase) · paragraph_functions (EXACTLY one
+entry per paragraph in the passage, in order, each naming that paragraph's rhetorical ROLE —
+sets up / supports / complicates / reverses / synthesizes — not its topic) · key_turn (the
+pivotal shift).
 
 ── VALIDATOR (on "Validate") ──────────────────────────────────────────────────────
 Be adversarial; assume wrong until proven right. Gates:

@@ -29,12 +29,14 @@ export default function CoachPractice() {
   const [loading, setLoading] = useState(!location.state?.coachSession);
   const [error, setError] = useState(null);
 
-  // Reading-map form state
+  // Reading-map form state — row counts are derived from the passage's actual
+  // paragraph count (split on blank lines) so the student maps exactly as many
+  // paragraphs as the passage has, no more, no fewer.
   const [mapMode, setMapMode] = useState("quick");
-  const [cruxRows, setCruxRows] = useState(["", "", "", ""]);
+  const [cruxRows, setCruxRows] = useState([]);
   const [mainPoint, setMainPoint] = useState("");
   const [tone, setTone] = useState("");
-  const [structureRows, setStructureRows] = useState(["", "", "", ""]);
+  const [structureRows, setStructureRows] = useState([]);
   const [theTurn, setTheTurn] = useState("");
   const [gradingMap, setGradingMap] = useState(false);
 
@@ -76,6 +78,16 @@ export default function CoachPractice() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [attempts, discussOpen]);
+
+  // Size the reading-map rows to the passage's actual paragraph count (split on
+  // blank lines) — the student maps exactly as many paragraphs as exist, no more.
+  useEffect(() => {
+    const body = coachSession?.passage?.body;
+    if (!body) return;
+    const paraCount = Math.max(1, body.split(/\n\s*\n+/).map((p) => p.trim()).filter(Boolean).length);
+    setCruxRows(Array(paraCount).fill(""));
+    setStructureRows(Array(paraCount).fill(""));
+  }, [coachSession?.passage?.body]);
 
   // Reset per-question transient state when moving between questions
   useEffect(() => {
@@ -251,10 +263,6 @@ export default function CoachPractice() {
                       />
                     </div>
                   ))}
-                  <button
-                    onClick={() => setCruxRows((r) => [...r, ""])}
-                    className="text-xs text-primary underline underline-offset-2"
-                  >+ add another paragraph</button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -278,7 +286,6 @@ export default function CoachPractice() {
                             className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
                         </div>
                       ))}
-                      <button onClick={() => setStructureRows((r) => [...r, ""])} className="text-xs text-primary underline underline-offset-2">+ add another paragraph</button>
                     </div>
                   </div>
                   <div>
@@ -310,13 +317,23 @@ export default function CoachPractice() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Reading grade banner — shown once, above the questions */}
       {qIdx === 0 && !verdictShown && (
-        <div className="mb-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
+        <div className={cn(
+          "mb-4 rounded-xl border p-4",
+          readingGrade.ungraded ? "border-amber-500/30 bg-amber-500/5" : "border-primary/30 bg-primary/5"
+        )}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-primary">Your reading: {readingGrade.reading_mode?.replace(/-/g, " ")}</span>
+            <span className={cn(
+              "text-xs font-semibold uppercase tracking-wide",
+              readingGrade.ungraded ? "text-amber-600 dark:text-amber-400" : "text-primary"
+            )}>
+              {readingGrade.ungraded ? "Reading feedback unavailable" : `Your reading: ${readingGrade.reading_mode?.replace(/-/g, " ")}`}
+            </span>
           </div>
           <p className="text-sm text-foreground mb-1">{readingGrade.verdict_line}</p>
           <p className="text-xs text-muted-foreground">{readingGrade.what_you_missed}</p>
-          <p className="text-xs text-muted-foreground mt-1"><strong>Try this next:</strong> {readingGrade.one_technique}</p>
+          {!readingGrade.ungraded && (
+            <p className="text-xs text-muted-foreground mt-1"><strong>Try this next:</strong> {readingGrade.one_technique}</p>
+          )}
         </div>
       )}
 
