@@ -62,6 +62,7 @@ export default function SessionSetup() {
   const [sessionType, setSessionType] = useState("practice");
   const [dueCount, setDueCount] = useState(_cachedDueCount); // seed from cache to avoid flicker
   const [practiceMode, setPracticeMode] = useState("analysis");
+  const [inferenceOnly, setInferenceOnly] = useState(false);
   const [numQuestions, setNumQuestions] = useState(10);
   const [timerMode, setTimerMode] = useState("untimed");
   const [timerScope, setTimerScope] = useState("per_question");
@@ -101,6 +102,9 @@ export default function SessionSetup() {
     }
 
     const config = { numQuestions, timerMode, sessionType };
+    if (sessionType === "practice" && inferenceOnly) {
+      config.typeFilter = "inference";
+    }
     if (timerMode !== "untimed") {
       config.timerScope = timerScope;
       if (timerMode === "countdown") {
@@ -176,6 +180,20 @@ export default function SessionSetup() {
               />
             ))}
           </div>
+        </Section>
+      )}
+
+      {/* Focus — inference-only drilling. Inference is ~50% of real CAT RC and the
+          single highest-leverage skill, so it gets a dedicated mode rather than
+          being diluted into the general shuffle. */}
+      {!reviewReady && (
+        <Section title="Focus">
+          <RadioCard
+            active={inferenceOnly}
+            title="Inference-focused drills"
+            desc="Every question in this session is an inference question — CAT's single most-tested RC skill (~50% of all RC questions). Turn off for a mixed shuffle across all types."
+            onClick={() => setInferenceOnly((v) => !v)}
+          />
         </Section>
       )}
 
@@ -315,7 +333,7 @@ export default function SessionSetup() {
           ? "Starting…"
           : reviewReady
           ? `Start review · ${Math.min(dueCount ?? 0, 25)} questions`
-          : `Start ${numQuestions}-question session`}
+          : `Start ${numQuestions}-question${inferenceOnly ? " inference" : ""} session`}
       </Button>
     </div>
   );

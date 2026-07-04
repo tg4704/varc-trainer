@@ -6,6 +6,7 @@ const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
 const { getDueCards } = require("../sr");
+const { VALID_TYPES } = require("../lib/validateQuestion");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
@@ -41,7 +42,7 @@ async function getOwnedSession(id, userId) {
 // POST /api/sessions — create a configured session
 router.post("/", authenticate, async (req, res, next) => {
   try {
-    let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice" } = req.body || {};
+    let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice", typeFilter } = req.body || {};
 
     numQuestions = parseInt(numQuestions, 10);
     if (!numQuestions || numQuestions < 1 || numQuestions > MAX_QUESTIONS) {
@@ -55,6 +56,9 @@ router.post("/", authenticate, async (req, res, next) => {
     }
     if (!VALID_SESSION_TYPES.includes(sessionType)) {
       return res.status(400).json({ error: "Invalid sessionType" });
+    }
+    if (typeFilter != null && !VALID_TYPES.includes(typeFilter)) {
+      return res.status(400).json({ error: "Invalid typeFilter" });
     }
 
     if (timerMode === "untimed") {
@@ -83,11 +87,20 @@ router.post("/", authenticate, async (req, res, next) => {
       questionIds = dueCards.slice(0, numQuestions).map((c) => c.question_id);
     } else {
       const allQuestions = await questionsRepo.listForUser(req.userId);
-      const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
+      // Inference-focused (or any type-focused) drill mode: restrict the pool to a
+      // single question type. Data: inference is ~50% of real CAT RC — the single
+      // highest-leverage skill, worth a dedicated drill mode rather than diluting it
+      // into the general shuffle.
+      const pool = typeFilter ? allQuestions.filter((q) => q.type === typeFilter) : allQuestions;
+      if (typeFilter && pool.length === 0) {
+        return res.status(400).json({ error: `No ${typeFilter} questions available yet. Try again once more are added, or start a general session.` });
+      }
+      const shuffled = [...pool].sort(() => Math.random() - 0.5);
       questionIds = shuffled.slice(0, numQuestions).map((q) => q.id);
-      // If bank is smaller than requested, repeat questions to fill the session
+      // If the pool is smaller than requested, repeat within the SAME (filtered) pool
+      // to fill the session — never silently fall back to other question types.
       if (questionIds.length < numQuestions) {
-        const extra = [...allQuestions].sort(() => Math.random() - 0.5);
+        const extra = [...pool].sort(() => Math.random() - 0.5);
         while (questionIds.length < numQuestions) {
           questionIds.push(extra[questionIds.length % extra.length].id);
         }

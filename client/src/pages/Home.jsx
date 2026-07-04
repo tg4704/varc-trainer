@@ -60,10 +60,13 @@ function HowStep({ n, children }) {
   );
 }
 
-function ProductCard({ name, italic, desc, bullets, to, cta }) {
+function ProductCard({ step, name, italic, desc, bullets, to, cta, comingSoon = false }) {
   return (
-    <div className="card flex flex-1 flex-col gap-5 p-7">
+    <div className={`card flex flex-1 flex-col gap-5 p-7 ${comingSoon ? "opacity-60" : ""}`}>
       <div>
+        {step && (
+          <div className="mono text-[12px] mb-1.5" style={{ color: "var(--teal)" }}>{step}</div>
+        )}
         <h3 className="display text-[25px]">{name} <span className="italic" style={{ color: "var(--teal)" }}>{italic}</span></h3>
         <p className="mt-2 text-[14.5px] leading-relaxed muted">{desc}</p>
       </div>
@@ -74,9 +77,13 @@ function ProductCard({ name, italic, desc, bullets, to, cta }) {
           </div>
         ))}
       </div>
-      <Link to={to} className="btn btn-ghost mt-auto self-start">
-        {cta} <Icon name="arrowR" size={15} />
-      </Link>
+      {comingSoon ? (
+        <span className="mt-auto self-start text-[13.5px] muted">Coming soon</span>
+      ) : (
+        <Link to={to} className="btn btn-ghost mt-auto self-start">
+          {cta} <Icon name="arrowR" size={15} />
+        </Link>
+      )}
     </div>
   );
 }
@@ -107,7 +114,7 @@ export default function Home() {
           <div className="mt-7 flex flex-wrap gap-3">
             {user ? (
               <>
-                <Link to="/setup" className="btn btn-primary btn-lg">Start practice</Link>
+                <Link to="/setup" className="btn btn-primary btn-lg">Start Drills</Link>
                 {hasActive && (
                   <Link to="/practice" className="btn btn-teal-border btn-lg">Continue session</Link>
                 )}
@@ -132,7 +139,7 @@ export default function Home() {
 
       {/* how it works */}
       <section className="mx-auto max-w-[1000px] px-7 py-14">
-        <h2 className="display text-[30px]">How it works</h2>
+        <h2 className="display text-[30px]">How Drills works</h2>
         <div className="mt-10 flex flex-col gap-8 md:flex-row md:gap-12">
           <HowStep n={1}>Read a short paragraph and pick an answer.</HowStep>
           <HowStep n={2}>Write a line or two explaining your reasoning.</HowStep>
@@ -140,25 +147,38 @@ export default function Home() {
         </div>
       </section>
 
-      {/* two products */}
+      {/* three-stage journey */}
       <section className="mx-auto max-w-[1000px] px-7 py-4">
+        <h2 className="display text-[30px] mb-2">Read widely. Comprehend deeply. Solve fast.</h2>
+        <p className="max-w-xl text-[14.5px] leading-relaxed muted mb-8">
+          Three tools, three different jobs — not the same drill in different lengths.
+        </p>
         <div className="flex flex-col gap-6 md:flex-row">
           <ProductCard
-            name="VARC" italic="Trainer" cta="Start training" to="/setup"
-            desc="Curated CAT-style questions with reasoning feedback."
+            step="01 · READ" name="Reading" italic="Lounge" comingSoon
+            desc="Curated real articles across CAT genres — build the habit and kill topic-unfamiliarity before it costs you marks."
             bullets={[
-              "Pick an answer, then defend your reasoning.",
-              "AI scores the quality of your thinking, not just right/wrong.",
-              "Every question deconstructs its trap — even when you're correct.",
+              "Real long-form writing, not AI-generated text.",
+              "A difficulty ladder — build up to dense, CAT-grade prose.",
+              "Vocab-in-context as you go.",
             ]}
           />
           <ProductCard
-            name="VARC" italic="Coach" cta="Open the coach" to="/coach"
-            desc="Bring any article. The tutor questions you back."
+            step="02 · COMPREHEND" name="" italic="Coach" cta="Open Coach" to="/coach"
+            desc="Full CAT-style passages. Map the argument before you see any question — the AI grades how you read, not just what you answer."
             bullets={[
-              "Paste an article; AI generates CAT-style questions.",
-              "A Socratic back-and-forth guides you to the answer.",
-              "It never just hands you the answer — you earn it.",
+              "Reading-map graded before questions are revealed.",
+              "Full reasoning feedback on every answer.",
+              "Stuck? Discuss it with the AI after the verdict.",
+            ]}
+          />
+          <ProductCard
+            step="03 · SOLVE" name="" italic="Drills" cta="Start Drills" to="/setup"
+            desc="Short paragraph, one question, fast reps. Builds the trap-recognition reflex — the close 50/50 that decides your percentile."
+            bullets={[
+              "Pick an answer, then defend your reasoning.",
+              "AI scores the quality of your thinking, not just right/wrong.",
+              "Inference-focused mode — CAT's single most-tested RC skill.",
             ]}
           />
         </div>

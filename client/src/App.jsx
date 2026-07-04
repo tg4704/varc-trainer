@@ -94,8 +94,8 @@ function NavBar() {
         <div className="flex items-center gap-1">
           {user ? (
             <>
-              {link("/setup", "Practice")}
               {link("/coach", "Coach")}
+              {link("/setup", "Drills")}
               {link("/dashboard", "Dashboard")}
               {link("/my-questions", "My Questions")}
               {user.role === "admin" && link("/admin", "Admin")}
