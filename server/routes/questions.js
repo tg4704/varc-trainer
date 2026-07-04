@@ -70,7 +70,13 @@ router.get("/next", authenticate, async (req, res, next) => {
 // POST /api/questions/:id/flag — user reports a problem with a question
 router.post("/:id/flag", authenticate, async (req, res, next) => {
   try {
-    const VALID_REASONS = ["wrong_answer", "ambiguous", "typo", "poor_quality"];
+    // Kept both the legacy reason codes and the current RC Trainer flag-modal
+    // set (Phase 5 redesign) so already-flagged questions using the old codes
+    // still validate correctly if ever re-submitted.
+    const VALID_REASONS = [
+      "wrong_answer", "ambiguous", "typo", "poor_quality",
+      "confusing_wording", "possible_error", "ambiguous_options", "too_difficult", "revisit_later",
+    ];
     const { reason, note = "" } = req.body || {};
     if (!VALID_REASONS.includes(reason)) {
       return res.status(400).json({ error: "reason must be one of: " + VALID_REASONS.join(", ") });

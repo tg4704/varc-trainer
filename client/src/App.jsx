@@ -131,14 +131,18 @@ const AdminLoading = (
 );
 
 // One universal top nav (TopNav) for every logged-in, non-session page — no
-// persistent nav on the auth family (AuthShell shows its own brand mark), and
-// a temporary session bridge bar on the two in-session routes until Phase 5
-// gives them their own minimal bar.
+// persistent nav on the auth family (AuthShell shows its own brand mark).
+// /practice renders its own SessionTopBar internally (see Practice.jsx).
+// /coach/practice keeps the temporary bridge bar — Coach's debrief-exchange
+// flow doesn't map onto the Trainer's question-by-question progress/timer
+// model, so it's deliberately left on its own reskin rather than retrofitting
+// the RC Trainer session bar onto it.
 const NO_NAV_ROUTES = [
   "/login", "/register", "/verify-email", "/forgot-password", "/reset-password",
   "/choose-username", "/oauth-callback",
+  "/practice", // renders its own SessionTopBar internally — see Practice.jsx
 ];
-const SESSION_ROUTES = ["/practice", "/coach/practice"];
+const SESSION_ROUTES = ["/coach/practice"];
 
 function AppNav() {
   const { pathname } = useLocation();

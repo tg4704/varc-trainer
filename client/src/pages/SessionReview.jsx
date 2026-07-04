@@ -177,6 +177,7 @@ function AttemptReviewCard({ attempt: a, index, total }) {
     correctExplanation: a.correct_explanation,
     trapExplanation: a.trap_explanation,
     keyTakeaway: a.key_takeaway,
+    reasoningText: a.reasoning_text,
   };
 
   const isSkipped = Boolean(a.skipped);

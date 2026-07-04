@@ -5,11 +5,18 @@ import { Button } from "../../components/ui/button.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 
+// Legacy codes (pre Phase-5 redesign) kept alongside the current flag-modal
+// reasons so older flags in the queue still show a human label.
 const REASON_LABELS = {
   wrong_answer: "Wrong answer key",
   ambiguous: "Ambiguous question",
   typo: "Typo or wording issue",
   poor_quality: "Poor quality / off-topic",
+  confusing_wording: "Confusing wording",
+  possible_error: "Possible error",
+  ambiguous_options: "Ambiguous options",
+  too_difficult: "Too difficult",
+  revisit_later: "Revisit later",
 };
 
 function humanReason(raw) {
