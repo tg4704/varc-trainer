@@ -1,8 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
-import FloatingNav from "./components/FloatingNav.jsx";
-import HubLayout from "./components/HubLayout.jsx";
+import TopNav from "./components/TopNav.jsx";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { NavGuardProvider, useNavGuard } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -60,13 +59,15 @@ const AdminImport         = lazyWithReload(() => import("./pages/admin/AdminImpo
 const AdminCosts          = lazyWithReload(() => import("./pages/admin/AdminCosts.jsx"));
 const AdminFlags          = lazyWithReload(() => import("./pages/admin/AdminFlags.jsx"));
 
-function NavBar() {
+// Temporary bridge bar for the two in-session routes (/practice,
+// /coach/practice) until Phase 5 gives them their own minimal session bar
+// (Exit / progress / timer, per the RC Trainer redesign). Every other
+// logged-in route uses the universal TopNav instead.
+function SessionNavBar() {
   const { pathname } = useLocation();
   const { user } = useAuth();
   const { attemptNav } = useNavGuard();
 
-  // If a page registered a nav guard and it intercepts, block the Link's default
-  // navigation — the guard shows its own confirm modal and navigates on confirm.
   const guarded = (to) => (e) => { if (!attemptNav(to)) e.preventDefault(); };
 
   const link = (to, label) => (
@@ -99,7 +100,6 @@ function NavBar() {
               {link("/coach", "Coach")}
               {link("/setup", "Drills")}
               {link("/dashboard", "Dashboard")}
-              {link("/my-questions", "My Questions")}
               {user.role === "admin" && link("/admin", "Admin")}
               {link("/profile", user.username)}
             </>
@@ -130,27 +130,21 @@ const AdminLoading = (
   </div>
 );
 
-// Contextual nav: floating glass pill on Home, no persistent top nav on the
-// auth family (AuthShell already shows its own brand mark), the existing
-// top bar everywhere else until each area gets its own reskin (glass sidebar
-// on hub pages, minimal top bar in-session — per the redesign build order).
+// One universal top nav (TopNav) for every logged-in, non-session page — no
+// persistent nav on the auth family (AuthShell shows its own brand mark), and
+// a temporary session bridge bar on the two in-session routes until Phase 5
+// gives them their own minimal bar.
 const NO_NAV_ROUTES = [
   "/login", "/register", "/verify-email", "/forgot-password", "/reset-password",
   "/choose-username", "/oauth-callback",
 ];
-// Routes whose page brings its own HubLayout (glass sidebar) — no top slot needed.
-// Exact matches only (not prefix): "/coach" must NOT swallow "/coach/practice" or
-// "/coach/summary", which stay on the existing top bar (in-session / post-session).
-const SIDEBAR_EXACT_ROUTES = ["/dashboard", "/coach"];
-const SIDEBAR_PREFIX_ROUTES = ["/coach/history"];
+const SESSION_ROUTES = ["/practice", "/coach/practice"];
 
 function AppNav() {
   const { pathname } = useLocation();
-  if (pathname === "/") return <FloatingNav />;
   if (NO_NAV_ROUTES.includes(pathname)) return null;
-  if (SIDEBAR_EXACT_ROUTES.includes(pathname)) return null;
-  if (SIDEBAR_PREFIX_ROUTES.some((r) => pathname.startsWith(r))) return null;
-  return <NavBar />;
+  if (SESSION_ROUTES.includes(pathname)) return <SessionNavBar />;
+  return <TopNav />;
 }
 
 function AppShell() {
@@ -176,9 +170,7 @@ function AppShell() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <HubLayout>
-                  <Suspense fallback={DashboardSkeleton}><Dashboard /></Suspense>
-                </HubLayout>
+                <Suspense fallback={DashboardSkeleton}><Dashboard /></Suspense>
               </ProtectedRoute>
             }
           />
@@ -188,10 +180,10 @@ function AppShell() {
           <Route path="/my-questions/:id" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
 
           {/* ── VARC Coach ──────────────────────────────────────────── */}
-          <Route path="/coach"          element={<ProtectedRoute><HubLayout><CoachLanding /></HubLayout></ProtectedRoute>} />
+          <Route path="/coach"          element={<ProtectedRoute><CoachLanding /></ProtectedRoute>} />
           <Route path="/coach/practice" element={<ProtectedRoute><CoachPractice /></ProtectedRoute>} />
           <Route path="/coach/summary"  element={<ProtectedRoute><CoachSummary /></ProtectedRoute>} />
-          <Route path="/coach/history"  element={<ProtectedRoute><HubLayout><CoachHistory /></HubLayout></ProtectedRoute>} />
+          <Route path="/coach/history"  element={<ProtectedRoute><CoachHistory /></ProtectedRoute>} />
 
           {/* ── Auth extras ──────────────────────────────────────────── */}
           <Route path="/choose-username" element={<ProtectedRoute><ChooseUsername /></ProtectedRoute>} />

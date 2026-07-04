@@ -362,6 +362,7 @@
 @keyframes thinkSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 @keyframes skelPulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes aiTwinkle { 0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.85; } 50% { transform: scale(1.12) rotate(8deg); opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }

@@ -1,7 +1,12 @@
-// Floating glass pill nav — used on Home (marketing) per the contextual nav
-// model: floating pill here, glass sidebar on hub pages (Dashboard/Lounge/
-// History), minimal top bar in-session (Coach/Drills) — those are reskinned
-// on their own pages when it's their turn in the redesign build order.
+// Universal top nav — floating glass pill shown on every logged-in,
+// non-session page (Home, Dashboard, Coach hub, Drills setup, Profile, My
+// Questions, Results, etc). Replaces the old fragmented model (floating pill
+// on Home only / glass sidebar on hub pages / plain bar everywhere else)
+// with one consistent bar: Practice ▾ (Trainer / AI Coach) · Dashboard ·
+// avatar ▾ (Profile / My Questions / Admin / Log out).
+//
+// In-session pages (/practice, /coach/practice) get their own minimal
+// session bar (Exit / progress / timer) instead of this — see App.jsx.
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
@@ -9,13 +14,15 @@ import { useNavGuard } from "../navGuard.jsx";
 import { BrandMark } from "./AuthShell.jsx";
 import Icon from "./Icon.jsx";
 
-export default function FloatingNav() {
+export default function TopNav() {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
   const { attemptNav } = useNavGuard();
   const [scrolled, setScrolled] = useState(false);
+  const [practiceOpen, setPracticeOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const menuRef = useRef(null);
+  const practiceRef = useRef(null);
+  const userRef = useRef(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -25,31 +32,18 @@ export default function FloatingNav() {
   }, []);
 
   useEffect(() => {
-    if (!userOpen) return;
+    if (!practiceOpen && !userOpen) return;
     function onDocClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setUserOpen(false);
+      if (practiceRef.current && !practiceRef.current.contains(e.target)) setPracticeOpen(false);
+      if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
-  }, [userOpen]);
+  }, [practiceOpen, userOpen]);
 
   const guarded = (to) => (e) => { if (!attemptNav(to)) e.preventDefault(); };
   const isActive = (to) => pathname === to || (to !== "/" && pathname.startsWith(to));
-
-  const pillLink = (to, label) => (
-    <Link
-      to={to}
-      onClick={guarded(to)}
-      className="rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
-      style={
-        isActive(to)
-          ? { background: "var(--teal)", color: "#07130E" }
-          : { background: "transparent", color: "var(--text-2)" }
-      }
-    >
-      {label}
-    </Link>
-  );
+  const practiceActive = isActive("/setup") || isActive("/coach");
 
   return (
     <div className="sticky top-[18px] z-50 px-6">
@@ -68,7 +62,7 @@ export default function FloatingNav() {
         <Link to="/" onClick={guarded("/")} className="fx-logo flex items-center gap-2.5">
           <BrandMark size={30} />
           <span className="display text-xl tracking-tight text-foreground">
-            graspr<span style={{ color: "var(--teal)" }}>.</span>
+            graspr<span style={{ color: "var(--teal)" }}>.</span>in
           </span>
         </Link>
 
@@ -84,11 +78,54 @@ export default function FloatingNav() {
             className="flex items-center gap-1.5 rounded-[13px] p-[5px]"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--glass-border-lo)" }}
           >
-            {pillLink("/coach", "Coach")}
-            {pillLink("/setup", "Drills")}
-            {pillLink("/dashboard", "Dashboard")}
+            <div className="relative" ref={practiceRef}>
+              <button
+                onClick={() => setPracticeOpen((o) => !o)}
+                className="fx-ring flex items-center gap-1 rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
+                style={
+                  practiceOpen || practiceActive
+                    ? { background: "rgba(93,202,165,0.12)", color: "var(--teal)" }
+                    : { background: "transparent", color: "var(--text-2)" }
+                }
+              >
+                Practice
+                <Icon name="chevD" size={11} style={{ opacity: 0.7 }} />
+              </button>
+              {practiceOpen && (
+                <div
+                  className="absolute left-0 top-[calc(100%+10px)] min-w-[184px] rounded-[14px] p-1.5"
+                  style={{
+                    background: "rgba(24,27,35,0.86)",
+                    backdropFilter: "blur(26px) saturate(150%)",
+                    WebkitBackdropFilter: "blur(26px) saturate(150%)",
+                    border: "1px solid var(--glass-border-hi)",
+                    boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
+                  }}
+                >
+                  <DropdownItem to="/setup" onClick={() => setPracticeOpen(false)} icon="book" iconColor="#8B93A7">
+                    Trainer
+                  </DropdownItem>
+                  <DropdownItem to="/coach" onClick={() => setPracticeOpen(false)} icon="spark" iconColor="var(--periwinkle)" glow>
+                    AI Coach
+                  </DropdownItem>
+                </div>
+              )}
+            </div>
 
-            <div className="relative" ref={menuRef}>
+            <Link
+              to="/dashboard"
+              onClick={guarded("/dashboard")}
+              className="rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
+              style={
+                isActive("/dashboard")
+                  ? { background: "var(--teal)", color: "#07130E" }
+                  : { background: "transparent", color: "var(--text-2)" }
+              }
+            >
+              Dashboard
+            </Link>
+
+            <div className="relative" ref={userRef}>
               <button
                 onClick={() => setUserOpen((o) => !o)}
                 className="fx-ring flex items-center gap-2 rounded-[9px] py-1.5 pl-1.5 pr-3 text-[13.5px] font-semibold"
@@ -116,10 +153,10 @@ export default function FloatingNav() {
                   }}
                 >
                   <div className="mono px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wide dim">{user.email}</div>
-                  <UserMenuItem to="/profile" onClick={() => setUserOpen(false)}>Profile</UserMenuItem>
-                  <UserMenuItem to="/my-questions" onClick={() => setUserOpen(false)}>My Questions</UserMenuItem>
+                  <DropdownItem to="/profile" onClick={() => setUserOpen(false)}>Profile</DropdownItem>
+                  <DropdownItem to="/my-questions" onClick={() => setUserOpen(false)}>My Questions</DropdownItem>
                   {user.role === "admin" && (
-                    <UserMenuItem to="/admin" onClick={() => setUserOpen(false)}>Admin</UserMenuItem>
+                    <DropdownItem to="/admin" onClick={() => setUserOpen(false)}>Admin</DropdownItem>
                   )}
                   <div className="my-1 h-px" style={{ background: "var(--glass-border-lo)" }} />
                   <button
@@ -141,17 +178,24 @@ export default function FloatingNav() {
   );
 }
 
-function UserMenuItem({ to, onClick, children }) {
+function DropdownItem({ to, onClick, icon, iconColor, glow = false, children }) {
   return (
     <Link
       to={to}
       onClick={onClick}
-      className="block rounded-[9px] px-3 py-2 text-[13.5px] text-foreground transition-colors"
+      className="flex items-center gap-2.5 rounded-[9px] px-3 py-2 text-[13.5px] text-foreground transition-colors"
       style={{ background: "transparent" }}
       onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
-      {children}
+      {icon && (
+        <Icon
+          name={icon}
+          size={16}
+          style={{ color: iconColor, flex: "none", animation: glow ? "aiTwinkle 2.6s ease-in-out infinite" : undefined }}
+        />
+      )}
+      <span style={glow ? { color: "var(--periwinkle)" } : undefined}>{children}</span>
     </Link>
   );
 }
