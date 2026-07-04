@@ -30,6 +30,7 @@ export default function Icon({ name, size = 18, stroke = 1.6, className, style }
     link: (<><path d="M9 15l6-6" /><path d="M11 6l1-1a4 4 0 0 1 6 6l-2 2" /><path d="M13 18l-1 1a4 4 0 0 1-6-6l2-2" /></>),
     send: (<><path d="M21 3L3 10.5l7 2.5 2.5 7L21 3z" /><path d="M10 13.5L21 3" /></>),
     flame: (<><path d="M12 3c1 3-1.5 4.5-1.5 7A1.5 1.5 0 0 0 12 11c1-1 1-2.5 1-2.5 1.5 1 3 3 3 6a4 4 0 0 1-8 0c0-2 1-3.5 1.5-4.5C7 11 6 12.5 6 14.5A6 6 0 0 0 18 14c0-5-4-8-6-11z" /></>),
+    retry: (<><path d="M3 12a9 9 0 1 1 3 6.7" /><path d="M3 12V7M3 12h5" /></>),
     google: (
       <g stroke="none">
         <path fill="#4285F4" d="M21.6 12.2c0-.6-.05-1.2-.15-1.8H12v3.4h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.1z" />

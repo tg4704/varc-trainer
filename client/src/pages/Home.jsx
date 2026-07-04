@@ -1,50 +1,191 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { loadActiveSession } from "../session.js";
 import Icon from "../components/Icon.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 
+// ── Scripted, looping demo card ─────────────────────────────────────────────
+// No backend calls — a small state machine that mimics the real practice
+// flow: pick an option, type reasoning (character-by-character), see AI
+// feedback, then loop back. Purely illustrative for logged-out visitors.
+const DEMO_OPTIONS = [
+  { letter: "A", text: "Solitude actively prevents original thought.", kind: "trap" },
+  { letter: "B", text: "The myth persists because it is consoling, not because it is true.", kind: "correct" },
+  { letter: "C", text: "Genius requires institutional support to flourish.", kind: "wrong" },
+];
+const DEMO_REASONING =
+  "I picked B because the author says we return to the myth because it “flatters” us, so we keep it around because it feels good, not because it is accurate.";
+const DEMO_FEEDBACK =
+  "Solid reasoning. You correctly located the psychological motive (comfort) the passage names, rather than treating the myth as a claim about truth.";
+
 function DemoCard() {
-  const [hoverTrap, setHoverTrap] = useState(false);
+  const [phase, setPhase] = useState("select"); // select | typing | feedback
+  const [typed, setTyped] = useState("");
+
+  useEffect(() => {
+    if (phase === "select") {
+      const t = setTimeout(() => setPhase("typing"), 2000);
+      return () => clearTimeout(t);
+    }
+    if (phase === "typing") {
+      setTyped("");
+      let i = 0;
+      const iv = setInterval(() => {
+        i++;
+        setTyped(DEMO_REASONING.slice(0, i));
+        if (i >= DEMO_REASONING.length) {
+          clearInterval(iv);
+        }
+      }, 22);
+      return () => clearInterval(iv);
+    }
+    if (phase === "feedback") {
+      const t = setTimeout(() => setPhase("select"), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
+
+  const typingDone = typed.length >= DEMO_REASONING.length;
+
+  useEffect(() => {
+    if (phase === "typing" && typingDone) {
+      const t = setTimeout(() => setPhase("feedback"), 700);
+      return () => clearTimeout(t);
+    }
+  }, [phase, typingDone]);
+
+  function optionStyle(o) {
+    if (phase !== "feedback") {
+      // Pre-feedback: only the "selected" option (B) is highlighted, once we've
+      // moved past the initial select prompt.
+      if (phase !== "select" && o.kind === "correct") {
+        return { background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.5)" };
+      }
+      return { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" };
+    }
+    if (o.kind === "correct") return { background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.45)" };
+    if (o.kind === "trap") return { background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.4)" };
+    return { background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border-lo)", opacity: 0.55 };
+  }
+
+  function letterStyle(o) {
+    if (phase !== "feedback") {
+      if (phase !== "select" && o.kind === "correct") return { background: "var(--teal)", color: "#07130E" };
+      return { background: "rgba(255,255,255,0.06)", color: "var(--text-2)" };
+    }
+    if (o.kind === "correct") return { background: "var(--green)", color: "#06210F" };
+    if (o.kind === "trap") return { background: "rgba(251,191,36,0.2)", color: "var(--amber)" };
+    return { background: "rgba(255,255,255,0.06)", color: "var(--text-2)" };
+  }
+
   return (
     <div className="glass-floating mx-auto w-full max-w-[480px] p-[26px]">
-      <div className="mb-4 flex items-center gap-2.5">
-        <TypeBadge type="inference" />
-        <span className="text-xs dim">Sample question</span>
+      <div className="mb-4 flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5">
+          <TypeBadge type="inference" />
+          <span className="text-xs dim">Sample question</span>
+        </div>
+        <span className="mono text-[11px] dim">demo</span>
       </div>
       <p className="serif-read mb-[18px] text-[15px] leading-[1.8] muted">
         “The lone genius is a figure we return to not because it describes how ideas are made,
         but because it flatters a conception of the self as self-sufficient.”
       </p>
-      <p className="mb-3.5 text-[14.5px] font-medium">What can be inferred?</p>
+      <p className="mb-3.5 text-[14.5px] font-medium">Which can be inferred from the passage?</p>
       <div className="flex flex-col gap-2.5">
-        <div className="opt opt-correct" style={{ minHeight: 0, padding: "13px 15px", cursor: "default" }}>
-          <span className="opt-letter" style={{ color: "var(--green)" }}>B</span>
-          <span className="opt-text" style={{ fontSize: 14 }}>The myth persists because it is consoling, not because it is true.</span>
-          <span style={{ flex: "none", color: "var(--green)" }}><Icon name="check" size={16} stroke={2.2} /></span>
-        </div>
-        <div
-          className="opt opt-trap"
-          style={{ minHeight: 0, padding: "13px 15px", cursor: "default", flexDirection: "column", alignItems: "stretch", gap: 0 }}
-          onMouseEnter={() => setHoverTrap(true)}
-          onMouseLeave={() => setHoverTrap(false)}
-        >
-          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <span className="opt-letter" style={{ color: "var(--trap)" }}>A</span>
-            <span className="opt-text" style={{ fontSize: 14 }}>Solitude actively prevents original thought.</span>
-            <span className="badge" style={{ flex: "none", color: "#0F1117", background: "var(--trap)", fontSize: 10, letterSpacing: "0.08em" }}>TRAP</span>
+        {DEMO_OPTIONS.map((o) => (
+          <div
+            key={o.letter}
+            className="flex items-center gap-3 rounded-[12px] px-[15px] py-[13px] transition-colors"
+            style={optionStyle(o)}
+          >
+            <span
+              className="flex h-6 w-6 flex-none items-center justify-center rounded-[8px] text-[12.5px] font-bold"
+              style={letterStyle(o)}
+            >
+              {o.letter}
+            </span>
+            <span className="flex-1 text-[14px]" style={{ color: phase !== "select" && o.kind === "correct" ? "var(--text)" : "var(--text-2)" }}>
+              {o.text}
+            </span>
+            {phase === "feedback" && o.kind === "correct" && (
+              <span style={{ flex: "none", color: "var(--green)" }}><Icon name="check" size={16} stroke={2.2} /></span>
+            )}
+            {phase === "feedback" && o.kind === "trap" && (
+              <span className="badge flex-none" style={{ color: "var(--amber)", background: "rgba(251,191,36,0.16)", fontSize: 10, letterSpacing: "0.08em" }}>
+                TRAP
+              </span>
+            )}
           </div>
-          <div style={{ maxHeight: hoverTrap ? 70 : 0, overflow: "hidden", transition: "max-height 200ms ease" }}>
-            <p style={{ fontSize: 12.5, color: "var(--amber)", paddingLeft: 38, paddingTop: 10, lineHeight: 1.5 }}>
-              This is stronger than the passage. “Not the source” isn’t “prevents.” True-sounding, but never claimed.
+        ))}
+      </div>
+
+      {phase === "select" && (
+        <p className="mt-3.5 flex items-center gap-1.5 text-[12px] dim">
+          <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: "var(--teal)" }} />
+          Pick the option you'd defend. We'll walk your reasoning.
+        </p>
+      )}
+
+      {(phase === "typing" || phase === "feedback") && (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="mono text-[10px] uppercase tracking-wide dim">Your reasoning</span>
+          </div>
+          <div
+            className="flex items-start gap-2.5 rounded-[12px] px-[14px] py-[13px]"
+            style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.09)" }}
+          >
+            <span
+              className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] text-[11px] font-bold"
+              style={{ background: "linear-gradient(140deg, var(--teal), var(--periwinkle))", color: "#07130E" }}
+            >
+              t
+            </span>
+            <p className="text-[13px] leading-[1.55] text-foreground">
+              {phase === "feedback" ? DEMO_REASONING : typed}
+              {phase === "typing" && !typingDone && (
+                <span className="animate-pulse" style={{ color: "var(--teal)" }}>▍</span>
+              )}
             </p>
           </div>
+
+          {phase === "typing" && (
+            <button
+              disabled
+              className="mt-3.5 w-full rounded-[10px] py-3 text-[13.5px] font-semibold"
+              style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-2)" }}
+            >
+              Check my reasoning →
+            </button>
+          )}
+
+          {phase === "feedback" && (
+            <>
+              <div
+                className="mt-3.5 flex items-start gap-2.5 rounded-[13px] px-4 py-[15px]"
+                style={{ background: "linear-gradient(150deg, rgba(139,157,255,0.12), rgba(139,157,255,0.03))", border: "1px solid rgba(139,157,255,0.28)" }}
+              >
+                <Icon name="spark" size={16} style={{ color: "var(--periwinkle)", flex: "none", marginTop: 1 }} />
+                <div>
+                  <div className="mono mb-1 text-[10.5px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--periwinkle)" }}>
+                    AI feedback
+                  </div>
+                  <p className="text-[12.5px] leading-[1.55] muted">{DEMO_FEEDBACK}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPhase("select")}
+                className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-semibold transition-colors"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.14)", color: "var(--text)" }}
+              >
+                <Icon name="retry" size={13} /> Try another answer
+              </button>
+            </>
+          )}
         </div>
-      </div>
-      <p className="mt-3.5 flex items-center gap-1.5 text-[11.5px] dim">
-        <Icon name="spark" size={13} style={{ color: "var(--teal)" }} /> Hover the amber option to see why it traps you.
-      </p>
+      )}
     </div>
   );
 }
@@ -215,11 +356,51 @@ export default function Home() {
 
       {/* footer */}
       <footer style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
-        <div className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-4 px-7 py-8">
-          <span className="display text-lg">graspr<span style={{ color: "var(--teal)" }}>.</span></span>
-          <p className="text-[13px] dim">Train the reasoning, not the recall.</p>
+        <div className="mx-auto grid max-w-[1000px] gap-8 px-7 py-10 sm:grid-cols-[1.6fr_1fr_1fr_1fr]">
+          <div>
+            <span className="display text-lg">graspr<span style={{ color: "var(--teal)" }}>.</span>in</span>
+            <p className="mt-2.5 max-w-[240px] text-[13px] leading-relaxed dim">
+              Train the reasoning, not the recall. Verbal practice with feedback on every answer.
+            </p>
+          </div>
+          <FooterColumn
+            title="Product"
+            items={[
+              { label: "RC Trainer", to: "/setup" },
+              { label: "AI Coach", to: "/coach" },
+              { label: "Reading Lounge" },
+            ]}
+          />
+          <FooterColumn title="Company" items={[{ label: "About" }, { label: "Blog" }, { label: "Contact" }]} />
+          <FooterColumn title="Legal" items={[{ label: "Privacy" }, { label: "Terms" }]} />
+        </div>
+        <div
+          className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-7 py-4"
+          style={{ borderTop: "1px solid var(--glass-border-lo)" }}
+        >
+          <span className="mono text-[11px] dim">© {new Date().getFullYear()} graspr.in</span>
+          <span className="text-xs dim">Made for serious readers</span>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function FooterColumn({ title, items }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="mono text-[10.5px] uppercase tracking-[0.12em] dim">{title}</div>
+      {items.map((it) =>
+        it.to ? (
+          <Link key={it.label} to={it.to} className="fx-underline text-[13px] dim">
+            {it.label}
+          </Link>
+        ) : (
+          <span key={it.label} className="text-[13px] dim">
+            {it.label}
+          </span>
+        )
+      )}
     </div>
   );
 }
