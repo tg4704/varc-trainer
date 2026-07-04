@@ -1,21 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
-import { getDashboard, changePassword, changeName, resetAccount, streak as streakApi, checkUsernameAvailable, changeUsername } from "../api.js";
+import { getDashboard, changePassword, changeName, resetAccount, checkUsernameAvailable, changeUsername } from "../api.js";
 import { clearActiveSession } from "../session.js";
-import StreakWidget from "../components/StreakWidget.jsx";
 
 export default function Profile() {
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
-  const [streakData, setStreakData] = useState(null);
 
   useEffect(() => {
     getDashboard()
       .then(setStats)
       .catch(() => setStats(null));
-    streakApi.get().then(setStreakData).catch(() => {});
   }, []);
 
   function handleLogout() {
@@ -41,18 +38,6 @@ export default function Profile() {
           <Stat label="Answered" value={stats.answeredCount} />
           <Stat label="Correct" value={stats.correctCount} />
           <Stat label="Accuracy" value={`${Math.round(stats.accuracy * 100)}%`} />
-        </div>
-      )}
-
-      {/* Streak & Daily Goal — Phase 16 */}
-      {streakData && (
-        <div className="mt-6">
-          <h2 className="eyebrow mb-3">Streak &amp; daily goal</h2>
-          <StreakWidget
-            data={streakData}
-            onUpdate={setStreakData}
-            showEditor
-          />
         </div>
       )}
 

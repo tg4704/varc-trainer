@@ -5,13 +5,12 @@ const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
-const { getDueCards } = require("../sr");
 const { VALID_TYPES } = require("../lib/validateQuestion");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
 const VALID_FEEDBACK_MODES = ["instant", "deferred"];
-const VALID_SESSION_TYPES = ["practice", "review"];
+const VALID_SESSION_TYPES = ["practice"];
 const MAX_QUESTIONS = 25;
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -81,29 +80,23 @@ router.post("/", authenticate, async (req, res, next) => {
     }
 
     // Pre-select all questions for this session so order is stable across refreshes.
-    let questionIds;
-    if (sessionType === "review") {
-      const dueCards = await getDueCards(req.userId);
-      questionIds = dueCards.slice(0, numQuestions).map((c) => c.question_id);
-    } else {
-      const allQuestions = await questionsRepo.listForUser(req.userId);
-      // Inference-focused (or any type-focused) drill mode: restrict the pool to a
-      // single question type. Data: inference is ~50% of real CAT RC — the single
-      // highest-leverage skill, worth a dedicated drill mode rather than diluting it
-      // into the general shuffle.
-      const pool = typeFilter ? allQuestions.filter((q) => q.type === typeFilter) : allQuestions;
-      if (typeFilter && pool.length === 0) {
-        return res.status(400).json({ error: `No ${typeFilter} questions available yet. Try again once more are added, or start a general session.` });
-      }
-      const shuffled = [...pool].sort(() => Math.random() - 0.5);
-      questionIds = shuffled.slice(0, numQuestions).map((q) => q.id);
-      // If the pool is smaller than requested, repeat within the SAME (filtered) pool
-      // to fill the session — never silently fall back to other question types.
-      if (questionIds.length < numQuestions) {
-        const extra = [...pool].sort(() => Math.random() - 0.5);
-        while (questionIds.length < numQuestions) {
-          questionIds.push(extra[questionIds.length % extra.length].id);
-        }
+    const allQuestions = await questionsRepo.listForUser(req.userId);
+    // Inference-focused (or any type-focused) drill mode: restrict the pool to a
+    // single question type. Data: inference is ~50% of real CAT RC — the single
+    // highest-leverage skill, worth a dedicated drill mode rather than diluting it
+    // into the general shuffle.
+    const pool = typeFilter ? allQuestions.filter((q) => q.type === typeFilter) : allQuestions;
+    if (typeFilter && pool.length === 0) {
+      return res.status(400).json({ error: `No ${typeFilter} questions available yet. Try again once more are added, or start a general session.` });
+    }
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    let questionIds = shuffled.slice(0, numQuestions).map((q) => q.id);
+    // If the pool is smaller than requested, repeat within the SAME (filtered) pool
+    // to fill the session — never silently fall back to other question types.
+    if (questionIds.length < numQuestions) {
+      const extra = [...pool].sort(() => Math.random() - 0.5);
+      while (questionIds.length < numQuestions) {
+        questionIds.push(extra[questionIds.length % extra.length].id);
       }
     }
 
@@ -449,16 +442,11 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
     let questionIds = s.question_ids ? JSON.parse(s.question_ids) : null;
     if (!questionIds || questionIds.length === 0) {
       // Legacy session without pre-selected IDs — generate on the fly
-      if (s.session_type === "review") {
-        const dueCards = await getDueCards(req.userId);
-        questionIds = dueCards.slice(0, s.num_questions).map((c) => c.question_id);
-      } else {
-        const allQuestions = await questionsRepo.listForUser(req.userId);
-        const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
-        questionIds = shuffled.slice(0, s.num_questions).map((q) => q.id);
-        while (questionIds.length < s.num_questions && allQuestions.length > 0) {
-          questionIds.push(allQuestions[questionIds.length % allQuestions.length].id);
-        }
+      const allQuestions = await questionsRepo.listForUser(req.userId);
+      const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
+      questionIds = shuffled.slice(0, s.num_questions).map((q) => q.id);
+      while (questionIds.length < s.num_questions && allQuestions.length > 0) {
+        questionIds.push(allQuestions[questionIds.length % allQuestions.length].id);
       }
     }
 

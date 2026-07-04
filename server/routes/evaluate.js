@@ -5,7 +5,6 @@ const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL } = require("../ai/provider");
-const { updateCard } = require("../sr");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 
@@ -143,9 +142,6 @@ router.post("/evaluate", authenticate, async (req, res) => {
     trapType: q.trapType,
     selectedTrap: selectedTrap === 1,
   };
-
-  // Update SR card now that we know the result (Phase 15)
-  try { await updateCard(req.userId, questionId, isCorrect === 1); } catch {}
 
   // Invalidate dashboard cache so stats refresh immediately
   clearDashCache(req.userId);

@@ -240,8 +240,6 @@ app.use("/api/account", require("./routes/account"));
 app.use("/api/my-questions", require("./routes/myQuestions"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/coach", require("./routes/coach"));
-app.use("/api/sr", require("./routes/sr"));
-app.use("/api/streak", require("./routes/streak"));
 
 // ── Serve React build in production ──────────────────────────────────────────
 // When Railway runs `npm run build` for the client, the output lands at client/dist/.

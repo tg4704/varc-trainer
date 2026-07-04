@@ -3,7 +3,6 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
-const { updateCard } = require("../sr");
 const { clearCache: clearDashCache } = require("./dashboard");
 
 // Calculate intuition-mode points (server-side, spec §Phase 6)
@@ -92,11 +91,6 @@ router.post("/basic", authenticate, async (req, res, next) => {
         mode, timeTakenSeconds ?? null, elimJson, intuitionPoints,
       ]
     );
-
-    // Update SR card for non-skipped attempts (Phase 15)
-    if (!isSkipped) {
-      try { await updateCard(req.userId, questionId, isCorrect === 1); } catch {}
-    }
 
     // Invalidate dashboard cache so stats refresh immediately
     clearDashCache(req.userId);

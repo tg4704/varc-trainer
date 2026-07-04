@@ -214,15 +214,3 @@ export const admin = {
     request(`/api/admin/passages/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
 };
 
-// ── Spaced Repetition (Phase 15) ─────────────────────────────────────────────
-export const sr = {
-  getQueue: () => request("/api/sr/queue"),
-  getStats: () => request("/api/sr/stats"),
-};
-
-// ── Streaks & Daily Goals (Phase 16) ─────────────────────────────────────────
-export const streak = {
-  get: () => request("/api/streak"),
-  setGoal: (dailyGoal) =>
-    request("/api/streak/goal", { method: "PATCH", body: JSON.stringify({ dailyGoal }) }),
-};

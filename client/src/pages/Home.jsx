@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { loadActiveSession } from "../session.js";
-import { streak as streakApi } from "../api.js";
-import StreakWidget from "../components/StreakWidget.jsx";
 import Icon from "../components/Icon.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 
@@ -107,12 +105,6 @@ function ProductCard({ step, name, italic, desc, bullets, to, cta, comingSoon = 
 export default function Home() {
   const { user } = useAuth();
   const hasActive = Boolean(loadActiveSession());
-  const [streakData, setStreakData] = useState(null);
-
-  useEffect(() => {
-    if (!user) return;
-    streakApi.get().then(setStreakData).catch(() => {});
-  }, [user]);
 
   return (
     <div>
@@ -151,20 +143,13 @@ export default function Home() {
             <FeatureRow color="var(--periwinkle)" path={<path d="M17 4l4 4-4 4M21 8H9M7 20l-4-4 4-4M3 16h12" />}>
               Full reasoning verdicts, not just right or wrong
             </FeatureRow>
-            <FeatureRow color="var(--amber)" path={<path d="M12 2c1 3-1 5-2 6s-2 3-2 5a6 6 0 0012 0c0-3-2-5-3-7-2 1-3 0-3-2 0 0-1.5.5-2 0z" />}>
-              Daily habit streaks
+            <FeatureRow color="var(--amber)" path={<path d="M3 17l6-6 4 4 8-8M21 7v6M15 7h6" />}>
+              Track your accuracy trend over time
             </FeatureRow>
           </div>
         </div>
         <DemoCard />
       </section>
-
-      {/* streak widget — logged-in users with data */}
-      {user && streakData && (
-        <section className="mx-auto max-w-[1000px] px-7 py-4">
-          <StreakWidget data={streakData} onUpdate={setStreakData} />
-        </section>
-      )}
 
       {/* how it works */}
       <section className="mx-auto max-w-[1000px] px-7 py-14">

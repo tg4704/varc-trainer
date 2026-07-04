@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getDashboard, getDashboardTrend, getDashboardHeatmap,
-  coach as coachApi, sr as srApi, streak as streakApi,
+  coach as coachApi,
 } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { getActiveCoachSessionId } from "../coachSession.js";
-import StreakWidget from "../components/StreakWidget.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import FeedbackSections, { ScoreDots } from "../components/FeedbackSections.jsx";
@@ -49,8 +48,6 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   const [error, setError] = useState(null);
   const [coachStats, setCoachStats] = useState(null);
   const [coachLoading, setCoachLoading] = useState(false);
-  const [srStats, setSrStats] = useState(null);
-  const [streakData, setStreakData] = useState(null);
   const [resumeCoach, setResumeCoach] = useState(null);
 
   useEffect(() => {
@@ -70,14 +67,6 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
     setCoachLoading(true);
     coachApi.stats().then(setCoachStats).catch(() => {}).finally(() => setCoachLoading(false));
   }, [tab, coachStats]);
-
-  useEffect(() => {
-    srApi.getStats().then(setSrStats).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    streakApi.get().then(setStreakData).catch(() => {});
-  }, []);
 
   // "Pick up where you left off" — only Coach sessions are resumable (Drills
   // sessions are explicitly End-only, see Practice.jsx), so this only ever
@@ -166,11 +155,6 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
               </Link>
             </div>
           )}
-          {streakData && (
-            <div className="mt-6">
-              <StreakWidget data={streakData} onUpdate={setStreakData} compact />
-            </div>
-          )}
           <HeaderStats data={data} />
 
           <div className="mt-6 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
@@ -194,9 +178,6 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
           <WeakestArea data={data} />
           {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
             <IntuitionStats stats={data.intuitionStats} />
-          )}
-          {srStats && srStats.totalCards > 0 && (
-            <SrWidget stats={srStats} />
           )}
         </>
       )}
@@ -313,7 +294,7 @@ function HeaderStats({ data }) {
         <div key={label} className="glass glasscard p-[19px]">
           <div className="flex items-center justify-between">
             <span className="eyebrow">{label}</span>
-            <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} />
+            <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: dot }} />
           </div>
           <div className="mono mt-3 text-[26px] leading-none" style={{ color: dot === "var(--teal)" || dot === accuracyColor(data.accuracy) ? dot : "var(--text)" }}>
             {value}
@@ -336,7 +317,7 @@ function ResumeCoachCard({ session }) {
       <div className="eyebrow" style={{ color: "var(--teal)" }}>Pick up where you left off</div>
       <div className="display mt-2 text-[22px]">{session.passage?.title || "Untitled passage"}</div>
       <div className="mt-1.5 text-[13px]" style={{ color: "var(--text)" }}>
-        {total ? `${attempted} of ${total} questions answered` : "Reading map in progress"}
+        {total ? `Set of ${total} · ${attempted} of ${total} answered` : "Reading map in progress"}
       </div>
       <Link to={`/coach/practice?sessionId=${session.id}`} className="btn btn-primary fx-sheen mt-4 inline-flex">
         Resume <span className="arrow inline-block">→</span>
@@ -665,54 +646,5 @@ function RecentAttemptCard({ attempt }) {
         </div>
       )}
     </div>
-  );
-}
-
-// ── Spaced repetition widget ────────────────────────────────
-function SrWidget({ stats }) {
-  const { totalCards, dueNow, graduated, avgBucket } = stats;
-  const progress = totalCards > 0 ? Math.round((graduated / totalCards) * 100) : 0;
-
-  return (
-    <section className="mt-8">
-      <SectionTitle>Spaced repetition</SectionTitle>
-      <div className="glass mt-3 p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid flex-1 grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="mono text-2xl leading-none text-foreground">{totalCards}</p>
-              <p className="mt-1.5 text-xs muted">Total cards</p>
-            </div>
-            <div className="text-center">
-              <p className="mono text-2xl leading-none" style={{ color: dueNow > 0 ? "var(--amber)" : "var(--green)" }}>{dueNow}</p>
-              <p className="mt-1.5 text-xs muted">Due now</p>
-            </div>
-            <div className="text-center">
-              <p className="mono text-2xl leading-none" style={{ color: "var(--green)" }}>{graduated}</p>
-              <p className="mt-1.5 text-xs muted">Graduated</p>
-            </div>
-          </div>
-          {dueNow > 0 && (
-            <Link to="/setup" className="btn btn-primary fx-sheen flex-none">
-              Review {dueNow} card{dueNow === 1 ? "" : "s"} →
-            </Link>
-          )}
-        </div>
-
-        <div className="mt-5">
-          <div className="mb-1.5 flex items-center justify-between text-xs muted">
-            <span>Progress to graduation</span>
-            <span className="mono">{progress}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
-            <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: "var(--green)" }} />
-          </div>
-        </div>
-
-        {avgBucket != null && (
-          <p className="mt-3 text-xs dim">Avg. interval bucket: {avgBucket} / 4 &nbsp;·&nbsp; Bucket 4 = 30-day interval (graduated)</p>
-        )}
-      </div>
-    </section>
   );
 }
