@@ -103,6 +103,12 @@ export function submitEvaluateAttempt(payload) {
 export function getDashboard() {
   return request("/api/dashboard");
 }
+export function getDashboardTrend(range = "30d") {
+  return request(`/api/dashboard/trend?range=${encodeURIComponent(range)}`);
+}
+export function getDashboardHeatmap() {
+  return request("/api/dashboard/heatmap");
+}
 
 // ── Question flagging (user) ──────────────────────────
 export function flagQuestion(questionId, reason, note) {

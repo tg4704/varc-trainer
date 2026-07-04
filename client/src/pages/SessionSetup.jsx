@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { createSession, sr } from "../api.js";
 import { saveActiveSession } from "../session.js";
 import { Button } from "../components/ui/button.jsx";
@@ -8,6 +8,12 @@ import { cn } from "../lib/utils.js";
 // Cache due-count across mounts so the SR option doesn't flicker "checking…"
 // every time the user visits the setup page.
 let _cachedDueCount = null;
+
+const TYPE_LABELS = {
+  inference: "Inference", tone: "Tone", title: "Title", detail: "Detail",
+  application: "Application", main_idea: "Main idea", function: "Function",
+  concept_set: "Concept set", vocab_in_context: "Vocab", weaken_strengthen: "Weaken/Strengthen",
+};
 
 const PER_QUESTION_SECONDS = [30, 45, 60, 90, 120];
 const PER_SESSION_MINUTES = [5, 10, 15, 20, 30];
@@ -58,6 +64,12 @@ const TIMER_MODES = [
 
 export default function SessionSetup() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link from Dashboard's "Drill →" CTAs (?type=<questionType>) — always
+  // wins over the inference-only toggle below when present.
+  const deepLinkType = searchParams.get("type");
+  const deepLinkValid = deepLinkType && TYPE_LABELS[deepLinkType];
 
   const [sessionType, setSessionType] = useState("practice");
   const [dueCount, setDueCount] = useState(_cachedDueCount); // seed from cache to avoid flicker
@@ -102,8 +114,9 @@ export default function SessionSetup() {
     }
 
     const config = { numQuestions, timerMode, sessionType };
-    if (sessionType === "practice" && inferenceOnly) {
-      config.typeFilter = "inference";
+    if (sessionType === "practice") {
+      if (deepLinkValid) config.typeFilter = deepLinkType;
+      else if (inferenceOnly) config.typeFilter = "inference";
     }
     if (timerMode !== "untimed") {
       config.timerScope = timerScope;
@@ -183,17 +196,40 @@ export default function SessionSetup() {
         </Section>
       )}
 
-      {/* Focus — inference-only drilling. Inference is ~50% of real CAT RC and the
-          single highest-leverage skill, so it gets a dedicated mode rather than
-          being diluted into the general shuffle. */}
+      {/* Focus — either a deep-link from Dashboard's "Drill →" CTAs (any weak
+          type), or the inference-only toggle. Inference is ~50% of real CAT
+          RC and the single highest-leverage skill, so it gets a dedicated
+          mode rather than being diluted into the general shuffle. */}
       {!reviewReady && (
         <Section title="Focus">
-          <RadioCard
-            active={inferenceOnly}
-            title="Inference-focused drills"
-            desc="Every question in this session is an inference question — CAT's single most-tested RC skill (~50% of all RC questions). Turn off for a mixed shuffle across all types."
-            onClick={() => setInferenceOnly((v) => !v)}
-          />
+          {deepLinkValid ? (
+            <div
+              className="flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
+              style={{ background: "rgba(139,157,255,0.08)", border: "1px solid rgba(139,157,255,0.3)" }}
+            >
+              <div>
+                <div className="text-sm font-semibold text-foreground">
+                  Drilling: {TYPE_LABELS[deepLinkType]}
+                </div>
+                <div className="mt-0.5 text-xs muted">From your Dashboard's weak-area callout.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchParams({}, { replace: true })}
+                className="fx-underline flex-none text-xs font-semibold"
+                style={{ color: "var(--periwinkle)" }}
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <RadioCard
+              active={inferenceOnly}
+              title="Inference-focused drills"
+              desc="Every question in this session is an inference question — CAT's single most-tested RC skill (~50% of all RC questions). Turn off for a mixed shuffle across all types."
+              onClick={() => setInferenceOnly((v) => !v)}
+            />
+          )}
         </Section>
       )}
 
@@ -333,7 +369,9 @@ export default function SessionSetup() {
           ? "Starting…"
           : reviewReady
           ? `Start review · ${Math.min(dueCount ?? 0, 25)} questions`
-          : `Start ${numQuestions}-question${inferenceOnly ? " inference" : ""} session`}
+          : `Start ${numQuestions}-question${
+              deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : inferenceOnly ? " inference" : ""
+            } session`}
       </Button>
     </div>
   );

@@ -215,6 +215,70 @@ async function handle(req, res, next) {
 // The dashboard no longer caches, so there is nothing to invalidate.
 function clearCache() {}
 
+const TREND_RANGE_DAYS = { "7d": 7, "30d": 30, all: 3650 };
+const TREND_MAX_POINTS = 60; // safeguard for "all" on a long-lived account
+
+// GET /api/dashboard/trend?range=7d|30d|all — daily accuracy over answered
+// (non-skipped) attempts, one point per day that has at least one attempt.
+router.get("/trend", authenticate, async (req, res, next) => {
+  try {
+    const range = TREND_RANGE_DAYS[req.query.range] ? req.query.range : "30d";
+    const days = TREND_RANGE_DAYS[range];
+
+    const rows = await db.all(
+      `SELECT DATE(a.created_at) AS day,
+              COUNT(*) AS answered,
+              COALESCE(SUM(a.is_correct), 0) AS correct
+       FROM attempts a
+       JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.skipped = 0
+         AND a.created_at >= NOW() - INTERVAL '${days} days'
+       GROUP BY DATE(a.created_at)
+       ORDER BY day ASC`,
+      [req.userId]
+    );
+
+    const trimmed = rows.slice(-TREND_MAX_POINTS);
+    res.json({
+      range,
+      days: trimmed.map((r) => ({
+        date: r.day,
+        answered: parseInt(r.answered, 10),
+        accuracy: r.answered ? r.correct / r.answered : 0,
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
+// GET /api/dashboard/heatmap — raw per-day answered counts for the last 35
+// days (5 weeks). Client buckets counts into intensity levels for the grid.
+router.get("/heatmap", authenticate, async (req, res, next) => {
+  try {
+    const rows = await db.all(
+      `SELECT DATE(a.created_at) AS day, COUNT(*) AS count
+       FROM attempts a
+       JOIN sessions s ON a.session_id = s.id
+       WHERE s.user_id = $1 AND a.skipped = 0
+         AND a.created_at >= NOW() - INTERVAL '35 days'
+       GROUP BY DATE(a.created_at)`,
+      [req.userId]
+    );
+    const byDate = {};
+    rows.forEach((r) => { byDate[String(r.day).slice(0, 10)] = parseInt(r.count, 10); });
+
+    // Build the last 35 calendar days (oldest first) so the client can lay
+    // out a stable 5x7 grid regardless of which days have zero activity.
+    const out = [];
+    for (let i = 34; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      out.push({ date: iso, count: byDate[iso] || 0 });
+    }
+    res.json({ days: out });
+  } catch (e) { next(e); }
+});
+
 router.get("/", authenticate, handle);
 
 module.exports = router;

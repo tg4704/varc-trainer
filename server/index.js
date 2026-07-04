@@ -169,6 +169,64 @@ app.use((req, res, next) => {
 
   // Expose for the admin impersonation route to reuse (fresh, correct).
   app.locals.computeDashboard = computeDashboard;
+
+  // Defined here for the same deploy-reliability reason as computeDashboard
+  // above — routes/dashboard.js also has its own copies of these two, which
+  // act as a fallback if this block is ever removed.
+  const TREND_RANGE_DAYS = { "7d": 7, "30d": 30, all: 3650 };
+  const TREND_MAX_POINTS = 60;
+
+  app.get("/api/dashboard/trend", authenticate, async (req, res, next) => {
+    try {
+      const range = TREND_RANGE_DAYS[req.query.range] ? req.query.range : "30d";
+      const days = TREND_RANGE_DAYS[range];
+      const rows = await db.all(
+        `SELECT DATE(a.created_at) AS day,
+                COUNT(*) AS answered,
+                COALESCE(SUM(a.is_correct), 0) AS correct
+         FROM attempts a
+         JOIN sessions s ON a.session_id = s.id
+         WHERE s.user_id = $1 AND a.skipped = 0
+           AND a.created_at >= NOW() - INTERVAL '${days} days'
+         GROUP BY DATE(a.created_at)
+         ORDER BY day ASC`,
+        [req.userId]
+      );
+      const trimmed = rows.slice(-TREND_MAX_POINTS);
+      res.json({
+        range,
+        days: trimmed.map((r) => ({
+          date: r.day,
+          answered: Number(r.answered),
+          accuracy: r.answered ? r.correct / r.answered : 0,
+        })),
+      });
+    } catch (e) { next(e); }
+  });
+
+  app.get("/api/dashboard/heatmap", authenticate, async (req, res, next) => {
+    try {
+      const rows = await db.all(
+        `SELECT DATE(a.created_at) AS day, COUNT(*) AS count
+         FROM attempts a
+         JOIN sessions s ON a.session_id = s.id
+         WHERE s.user_id = $1 AND a.skipped = 0
+           AND a.created_at >= NOW() - INTERVAL '35 days'
+         GROUP BY DATE(a.created_at)`,
+        [req.userId]
+      );
+      const byDate = {};
+      rows.forEach((r) => { byDate[String(r.day).slice(0, 10)] = Number(r.count); });
+      const out = [];
+      for (let i = 34; i >= 0; i--) {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - i);
+        const iso = d.toISOString().slice(0, 10);
+        out.push({ date: iso, count: byDate[iso] || 0 });
+      }
+      res.json({ days: out });
+    } catch (e) { next(e); }
+  });
 }
 
 // ── API routes ────────────────────────────────────────────────────────────────

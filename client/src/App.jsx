@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import FloatingNav from "./components/FloatingNav.jsx";
+import HubLayout from "./components/HubLayout.jsx";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { NavGuardProvider, useNavGuard } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -137,11 +138,14 @@ const NO_NAV_ROUTES = [
   "/login", "/register", "/verify-email", "/forgot-password", "/reset-password",
   "/choose-username", "/oauth-callback",
 ];
+// Routes whose page brings its own HubLayout (glass sidebar) — no top slot needed.
+const SIDEBAR_ROUTES = ["/dashboard"];
 
 function AppNav() {
   const { pathname } = useLocation();
   if (pathname === "/") return <FloatingNav />;
   if (NO_NAV_ROUTES.includes(pathname)) return null;
+  if (SIDEBAR_ROUTES.some((r) => pathname.startsWith(r))) return null;
   return <NavBar />;
 }
 
@@ -168,7 +172,9 @@ function AppShell() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Suspense fallback={DashboardSkeleton}><Dashboard /></Suspense>
+                <HubLayout>
+                  <Suspense fallback={DashboardSkeleton}><Dashboard /></Suspense>
+                </HubLayout>
               </ProtectedRoute>
             }
           />
