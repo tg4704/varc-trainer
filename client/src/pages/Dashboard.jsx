@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   getDashboard, getDashboardTrend, getDashboardHeatmap,
   coach as coachApi,
 } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { getActiveCoachSessionId } from "../coachSession.js";
-import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
-import FeedbackSections, { ScoreDots } from "../components/FeedbackSections.jsx";
-import Icon from "../components/Icon.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -42,6 +39,7 @@ function accuracyColor(acc) {
 // callers prepend a banner (e.g., "Viewing as <username>").
 export default function Dashboard({ fetcher = getDashboard, headerSlot = null }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState("practice"); // "practice" | "coach"
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +47,13 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   const [coachStats, setCoachStats] = useState(null);
   const [coachLoading, setCoachLoading] = useState(false);
   const [resumeCoach, setResumeCoach] = useState(null);
+
+  async function handleStartFresh() {
+    if (!resumeCoach) return;
+    try { await coachApi.deleteSession(resumeCoach.id); } catch {}
+    setResumeCoach(null);
+    navigate("/coach");
+  }
 
   useEffect(() => {
     (async () => {
@@ -112,11 +117,11 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-9 md:px-11">
+    <div className="max-w-[1240px] mx-auto px-4 pt-9 pb-14 md:px-11">
       {headerSlot}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <h1 className="display text-[32px] leading-none">
+          <h1 className="display text-[34px] leading-[1.1]">
             {greeting}, <span className="italic" style={{ color: "var(--teal)" }}>{greetName}.</span>
           </h1>
           <p className="mt-2 muted text-sm">{today} · lifetime stats across all your sessions.</p>
@@ -157,20 +162,20 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
           )}
           <HeaderStats data={data} />
 
-          <div className="mt-6 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+          <div className="mt-6 grid gap-[18px] lg:grid-cols-[1.5fr_1fr]">
             <div className="flex flex-col gap-5">
-              {resumeCoach && <ResumeCoachCard session={resumeCoach} />}
+              {resumeCoach && <ResumeCoachCard session={resumeCoach} onStartFresh={handleStartFresh} />}
               <AccuracyTrendChart />
             </div>
             <WeakByTypeList byType={data.byType} />
           </div>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <div className="mt-6 grid gap-[18px] md:grid-cols-2">
             <TrapWeakness byTrapType={data.byTrapType} mostDangerousTrap={data.mostDangerousTrap} />
             <TopicAccuracy byTopic={data.byTopic} />
           </div>
 
-          <div className="mt-6 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+          <div className="mt-6 grid gap-[18px] lg:grid-cols-[1.5fr_1fr]">
             <RecentAttempts attempts={data.recentAttempts} />
             <WeeklyHeatmap />
           </div>
@@ -291,12 +296,12 @@ function HeaderStats({ data }) {
   return (
     <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
       {cards.map(([label, value, dot]) => (
-        <div key={label} className="glass glasscard p-[19px]">
+        <div key={label} className="glass glasscard p-[18px_19px]">
           <div className="flex items-center justify-between">
             <span className="eyebrow">{label}</span>
             <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: dot }} />
           </div>
-          <div className="mono mt-3 text-[26px] leading-none" style={{ color: dot === "var(--teal)" || dot === accuracyColor(data.accuracy) ? dot : "var(--text)" }}>
+          <div className="mono mt-3 text-[30px] leading-none" style={{ color: dot === "var(--teal)" || dot === accuracyColor(data.accuracy) ? dot : "var(--text)" }}>
             {value}
           </div>
         </div>
@@ -306,7 +311,7 @@ function HeaderStats({ data }) {
 }
 
 // ── Resume in-progress Coach session ──────────────────────
-function ResumeCoachCard({ session }) {
+function ResumeCoachCard({ session, onStartFresh }) {
   const attempted = session.questions?.filter((q) => q.correctIndex != null).length || 0;
   const total = session.questions?.length || 0;
   return (
@@ -314,14 +319,23 @@ function ResumeCoachCard({ session }) {
       className="relative overflow-hidden rounded-[16px] p-[22px_24px]"
       style={{ background: "linear-gradient(135deg, rgba(93,202,165,0.18), rgba(139,157,255,0.10))", border: "1px solid rgba(93,202,165,0.32)" }}
     >
+      <div
+        className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(93,202,165,0.25), transparent 70%)" }}
+      />
       <div className="eyebrow" style={{ color: "var(--teal)" }}>Pick up where you left off</div>
-      <div className="display mt-2 text-[22px]">{session.passage?.title || "Untitled passage"}</div>
+      <div className="display mt-2 text-[25px]">{session.passage?.title || "Untitled passage"}</div>
       <div className="mt-1.5 text-[13px]" style={{ color: "var(--text)" }}>
         {total ? `Set of ${total} · ${attempted} of ${total} answered` : "Reading map in progress"}
       </div>
-      <Link to={`/coach/practice?sessionId=${session.id}`} className="btn btn-primary fx-sheen mt-4 inline-flex">
-        Resume <span className="arrow inline-block">→</span>
-      </Link>
+      <div className="mt-4 flex gap-2.5">
+        <Link to={`/coach/practice?sessionId=${session.id}`} className="btn btn-primary fx-sheen inline-flex">
+          Resume <span className="arrow inline-block">→</span>
+        </Link>
+        <button onClick={onStartFresh} className="btn btn-glass fx-ring">
+          Start fresh
+        </button>
+      </div>
     </div>
   );
 }
@@ -372,8 +386,8 @@ function AccuracyTrendChart() {
             <button
               key={r}
               onClick={() => setRange(r)}
-              className="rounded-[7px] px-2.5 py-1 text-[11px] font-semibold transition-colors"
-              style={range === r ? { background: "var(--teal)", color: "#07130E" } : { color: "var(--text-2)" }}
+              className="rounded-[7px] text-[11px] font-semibold transition-colors"
+              style={{ padding: "5px 11px", ...(range === r ? { background: "var(--teal)", color: "#07130E" } : { color: "var(--text-2)" }) }}
             >
               {r === "all" ? "All" : r}
             </button>
@@ -421,7 +435,7 @@ function WeakByTypeList({ byType }) {
         )}
       </div>
       <p className="mt-1 mb-4 text-xs muted">Lowest accuracy by question type.</p>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col" style={{ gap: 17 }}>
         {rows.map((r) => (
           <div key={r.type}>
             <div className="mb-1.5 flex items-baseline justify-between">
@@ -452,6 +466,12 @@ function heatLevel(count) {
   return 4;
 }
 
+// Mockup groups the 35-day heatmap as 7 columns (one per weekday, Mon-first)
+// of 5 cells each — the transpose of the old 5-columns-of-7 (calendar week)
+// layout. Same underlying data from GET /api/dashboard/heatmap, just
+// regrouped client-side by weekday instead of by calendar week.
+const HEAT_DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+
 function WeeklyHeatmap() {
   const [heatmap, setHeatmap] = useState(null);
 
@@ -461,10 +481,12 @@ function WeeklyHeatmap() {
 
   const days = heatmap?.days || [];
   const total = days.reduce((s, d) => s + d.count, 0);
-  // Group the last 35 days into 5 columns of 7 (oldest-first, so newest is the rightmost column)
-  const cols = [];
-  for (let c = 0; c < 5; c++) cols.push(days.slice(c * 7, c * 7 + 7));
-  const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
+  const cols = Array.from({ length: 7 }, () => []);
+  days.forEach((d) => {
+    const jsDay = new Date(`${d.date}T00:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
+    const mondayFirst = (jsDay + 6) % 7; // 0=Mon..6=Sun
+    cols[mondayFirst].push(d);
+  });
 
   return (
     <div className="glass p-[20px_22px]">
@@ -472,17 +494,15 @@ function WeeklyHeatmap() {
       <div className="mt-4 flex gap-1">
         {cols.map((col, ci) => (
           <div key={ci} className="flex flex-col items-center gap-1">
-            {col.map((d, ri) => (
+            {col.map((d) => (
               <span
                 key={d.date}
                 title={d.count === 0 ? "No practice" : `${d.count} question${d.count === 1 ? "" : "s"}`}
-                className="block rounded-[3.5px] transition-transform hover:scale-125"
-                style={{ width: 14, height: 14, background: heatColor(heatLevel(d.count)) }}
+                className="block rounded-[3.5px] transition-transform hover:scale-[1.28]"
+                style={{ width: 15, height: 15, background: heatColor(heatLevel(d.count)) }}
               />
             ))}
-            {ci === cols.length - 1 && col.length > 0 && (
-              <span className="mt-0.5 text-[9px] dim">{dayLabels[new Date(col[col.length - 1].date).getUTCDay()]}</span>
-            )}
+            <span className="mt-0.5 text-[9px] dim">{HEAT_DAY_LABELS[ci]}</span>
           </div>
         ))}
       </div>
@@ -596,55 +616,66 @@ function IntuitionStats({ stats }) {
   );
 }
 
-// ── Recent attempts (expandable) ────────────────────────────
+// ── Recent attempts (flat rows, matching the mockup exactly) ──────────────
+// Colours are scoped to this row only (not the shared TypeBadge/TopicBadge
+// components used elsewhere) so they can match the mockup's colored-initial
+// badge treatment without affecting any other page.
+const TYPE_DOT_COLORS = {
+  inference: "#6FA0E8", tone: "#B388FF", title: "#5DCAA5", detail: "#FBBF24",
+  application: "#F0A868", main_idea: "#5DCAA5", function: "#B388FF",
+  concept_set: "#8B9DFF", vocab_in_context: "#8B9DFF", weaken_strengthen: "#F87171",
+};
+
+function relativeDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function RecentAttempts({ attempts }) {
   if (!attempts || attempts.length === 0) return null;
   return (
-    <section>
+    <div className="glass p-[20px_22px]">
       <SectionTitle>Recent attempts</SectionTitle>
-      <div className="mt-3 space-y-2">
-        {attempts.map((a, i) => <RecentAttemptCard key={i} attempt={a} />)}
+      <div className="mt-3">
+        {attempts.map((a, i) => <RecentAttemptRow key={i} attempt={a} first={i === 0} />)}
       </div>
-    </section>
+    </div>
   );
 }
 
-function RecentAttemptCard({ attempt }) {
-  const [open, setOpen] = useState(false);
-  const badge = attempt.skipped
-    ? { color: "var(--text-2)", bg: "rgba(255,255,255,0.06)", label: "Skipped" }
-    : attempt.isCorrect
-    ? { color: "var(--green)", bg: "rgba(74,222,128,0.12)", label: "Correct" }
-    : { color: "var(--red)", bg: "rgba(248,113,113,0.12)", label: "Incorrect" };
-
+function RecentAttemptRow({ attempt, first }) {
+  const color = TYPE_DOT_COLORS[attempt.type] || "#9AA3B8";
+  const statusColor = attempt.skipped ? "var(--text-2)" : attempt.isCorrect ? "var(--green)" : "var(--red)";
+  const statusLabel = attempt.skipped ? "Skipped" : attempt.isCorrect ? "Correct" : "Incorrect";
+  const topicLabel = attempt.topic ? attempt.topic.charAt(0).toUpperCase() + attempt.topic.slice(1) : "";
   return (
-    <div className="glass">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex-none text-muted-foreground"><Icon name={open ? "chevU" : "chevD"} size={15} /></span>
-          <span className="truncate text-sm text-foreground">{attempt.questionSnippet}</span>
-        </div>
-        <div className="flex flex-none items-center gap-2">
-          <TypeBadge type={attempt.type} />
-          {attempt.reasoningScore != null && <ScoreDots score={attempt.reasoningScore} />}
-          <span className="mono dim text-xs">
-            {Math.floor((attempt.timeTakenSeconds || 0) / 60)}:{String((attempt.timeTakenSeconds || 0) % 60).padStart(2, "0")}
-          </span>
-          <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ color: badge.color, background: badge.bg }}>
-            {badge.label}
-          </span>
-        </div>
-      </button>
-      {open && (
-        <div className="px-4 py-4" style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
-          <div className="mb-3 flex items-center gap-2">
-            <TypeBadge type={attempt.type} />
-            <TopicBadge topic={attempt.topic} />
-          </div>
-          {attempt.question && <p className="mb-3 text-sm font-semibold text-foreground">{attempt.question}</p>}
-          <FeedbackSections attempt={attempt} />
-        </div>
-      )}
+    <div
+      className="flex items-center gap-3.5 rounded-[10px] px-2.5 py-3 transition-colors hover:bg-white/[0.04]"
+      style={!first ? { borderTop: "1px solid rgba(255,255,255,0.05)" } : undefined}
+    >
+      <span
+        className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[9px] text-[13px] font-bold"
+        style={{ color, background: `${color}22`, border: `1px solid ${color}44` }}
+      >
+        {(TYPE_LABELS[attempt.type] || attempt.type || "?").charAt(0).toUpperCase()}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13.5px] font-medium text-foreground">{attempt.questionSnippet}</p>
+        <p className="mt-0.5 text-[11px] dim">
+          {TYPE_LABELS[attempt.type] || attempt.type}{topicLabel ? ` · ${topicLabel}` : ""}
+        </p>
+      </div>
+      <span className="mono flex-none text-[13px] font-semibold" style={{ color: statusColor }}>
+        {statusLabel}
+      </span>
+      <span className="w-[60px] flex-none text-right text-[10.5px] dim">{relativeDate(attempt.createdAt)}</span>
     </div>
   );
 }

@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
-import { getDashboard, changePassword, changeName, resetAccount, checkUsernameAvailable, changeUsername } from "../api.js";
-import { clearActiveSession } from "../session.js";
+import { getDashboard, changeName, checkUsernameAvailable, changeUsername } from "../api.js";
 
+// Change Password / Log out / Reset all data live in the TopNav avatar
+// dropdown now, not here — see TopNav.jsx.
 export default function Profile() {
-  const { user, logout, updateUser } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -14,11 +13,6 @@ export default function Profile() {
       .then(setStats)
       .catch(() => setStats(null));
   }, []);
-
-  function handleLogout() {
-    logout();
-    navigate("/login", { replace: true });
-  }
 
   const joined = user?.createdAt ? (() => { const d = new Date(user.createdAt); return isNaN(d) ? "—" : d.toLocaleDateString(); })() : "—";
 
@@ -40,15 +34,6 @@ export default function Profile() {
           <Stat label="Accuracy" value={`${Math.round(stats.accuracy * 100)}%`} />
         </div>
       )}
-
-      <ChangePassword />
-
-      <div className="mt-8 flex gap-3">
-        <button onClick={handleLogout} className="btn btn-glass fx-ring">
-          Log out
-        </button>
-        <ResetData onReset={() => setStats(null)} />
-      </div>
     </div>
   );
 }
@@ -198,141 +183,3 @@ function Stat({ label, value }) {
   );
 }
 
-function ChangePassword() {
-  const [open, setOpen] = useState(false);
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [msg, setMsg] = useState(null);
-  const [err, setErr] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setErr(null);
-    setMsg(null);
-    setBusy(true);
-    try {
-      await changePassword({ currentPassword: current, newPassword: next });
-      setMsg("Password updated.");
-      setCurrent("");
-      setNext("");
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="fx-underline mt-6 text-sm font-semibold" style={{ color: "var(--teal)" }}>
-        Change password
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="glass mt-6 p-6 space-y-3">
-      <h2 className="font-semibold text-foreground">Change password</h2>
-      <input
-        type="password"
-        placeholder="Current password"
-        value={current}
-        onChange={(e) => setCurrent(e.target.value)}
-        autoComplete="current-password"
-        className="input"
-        required
-      />
-      <input
-        type="password"
-        placeholder="New password (min 6 chars)"
-        value={next}
-        onChange={(e) => setNext(e.target.value)}
-        autoComplete="new-password"
-        minLength={6}
-        className="input"
-        required
-      />
-      {err && <p className="text-sm text-destructive">{err}</p>}
-      {msg && <p className="text-sm" style={{ color: "var(--green)" }}>{msg}</p>}
-      <div className="flex gap-2">
-        <button type="submit" disabled={busy} className="btn btn-primary fx-sheen">
-          {busy ? "Saving…" : "Save"}
-        </button>
-        <button type="button" onClick={() => setOpen(false)} className="btn btn-glass fx-ring">
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function ResetData({ onReset }) {
-  const [showDialog, setShowDialog] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState(null);
-
-  async function handleReset() {
-    setBusy(true);
-    try {
-      await resetAccount();
-      clearActiveSession();
-      onReset();
-      setShowDialog(false);
-      setToast({ type: "success", msg: "All practice data has been reset." });
-    } catch (e) {
-      setToast({ type: "error", msg: e.message });
-    } finally {
-      setBusy(false);
-      setTimeout(() => setToast(null), 4000);
-    }
-  }
-
-  return (
-    <>
-      <button
-        onClick={() => setShowDialog(true)}
-        className="btn fx-ring"
-        style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.35)", color: "var(--red)" }}
-      >
-        Reset all data
-      </button>
-
-      {/* Confirmation dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="glass-floating w-full max-w-sm p-6">
-            <h2 className="text-lg font-bold text-foreground">Reset all practice data?</h2>
-            <p className="mt-2 text-sm muted">
-              This will permanently delete all your sessions, attempts, and stats. Your account
-              will remain active. This cannot be undone.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={handleReset}
-                disabled={busy}
-                className="btn flex-1 disabled:opacity-60"
-                style={{ background: "var(--red)", color: "#fff" }}
-              >
-                {busy ? "Resetting…" : "Yes, reset everything"}
-              </button>
-              <button onClick={() => setShowDialog(false)} disabled={busy} className="btn btn-glass fx-ring flex-1">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast notification */}
-      {toast && (
-        <div
-          className="glass-floating fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-5 py-3 text-sm font-medium"
-          style={{ color: toast.type === "success" ? "var(--teal)" : "var(--red)" }}
-        >
-          {toast.msg}
-        </div>
-      )}
-    </>
-  );
-}

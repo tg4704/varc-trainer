@@ -10,7 +10,10 @@ function formatMMSS(totalSeconds) {
 
 export default function TimerRing({ seconds, totalSeconds, paused = false, onTogglePause, size = 54 }) {
   const clamped = Math.max(0, seconds ?? 0);
-  const fraction = totalSeconds > 0 ? clamped / totalSeconds : 0;
+  // No fixed total (count-up mode) — show a simple filled ring, not a depleting
+  // fraction, since there's nothing to count down toward.
+  const countUp = totalSeconds == null;
+  const fraction = countUp ? 1 : totalSeconds > 0 ? clamped / totalSeconds : 0;
   const r = (size - 8) / 2;
   const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - Math.min(1, Math.max(0, fraction)));
@@ -18,7 +21,7 @@ export default function TimerRing({ seconds, totalSeconds, paused = false, onTog
 
   let stroke = "var(--teal)";
   if (paused) stroke = "var(--amber)";
-  else if (clamped <= 15) stroke = "var(--red)";
+  else if (!countUp && clamped <= 15) stroke = "var(--red)";
 
   return (
     <button

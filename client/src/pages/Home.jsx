@@ -5,61 +5,72 @@ import { loadActiveSession } from "../session.js";
 import Icon from "../components/Icon.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 
-// ── Scripted, looping demo card ─────────────────────────────────────────────
-// No backend calls — a small state machine that mimics the real practice
-// flow: pick an option, type reasoning (character-by-character), see AI
-// feedback, then loop back. Purely illustrative for logged-out visitors.
+// ── Interactive demo card ────────────────────────────────────────────────────
+// No backend calls, but genuinely interactive: the visitor clicks whichever
+// option they'd defend (correct, trap, or plain wrong — all three lead
+// through the same flow), watches their reasoning type itself out, clicks
+// "Check my reasoning" once typing finishes, sees a verdict tailored to
+// their pick, then explicitly retries for a blank slate.
 const DEMO_OPTIONS = [
-  { letter: "A", text: "Solitude actively prevents original thought.", kind: "trap" },
-  { letter: "B", text: "The myth persists because it is consoling, not because it is true.", kind: "correct" },
-  { letter: "C", text: "Genius requires institutional support to flourish.", kind: "wrong" },
+  {
+    letter: "A", text: "Solitude actively prevents original thought.", kind: "trap",
+    reasoning: "I picked A because the passage frames genius as something solitary, so solitude must block original thought.",
+    feedback: "This is the trap. The passage never claims solitude “prevents” anything, it explains why the myth persists, not what isolation does to thinking. Too strong a claim for what's actually said.",
+  },
+  {
+    letter: "B", text: "The myth persists because it is consoling, not because it is true.", kind: "correct",
+    reasoning: "I picked B because the author says we return to the myth because it “flatters” us, so we keep it around because it feels good, not because it is accurate.",
+    feedback: "Solid reasoning. You correctly located the psychological motive (comfort) the passage names, rather than treating the myth as a claim about truth.",
+  },
+  {
+    letter: "C", text: "Genius requires institutional support to flourish.", kind: "wrong",
+    reasoning: "I picked C because institutions like universities produce most breakthroughs today.",
+    feedback: "Off the text. The passage never discusses institutional support, this brings in an idea from outside the paragraph rather than something it actually argues.",
+  },
 ];
-const DEMO_REASONING =
-  "I picked B because the author says we return to the myth because it “flatters” us, so we keep it around because it feels good, not because it is accurate.";
-const DEMO_FEEDBACK =
-  "Solid reasoning. You correctly located the psychological motive (comfort) the passage names, rather than treating the myth as a claim about truth.";
 
 function DemoCard() {
   const [phase, setPhase] = useState("select"); // select | typing | feedback
+  const [selectedIdx, setSelectedIdx] = useState(null);
   const [typed, setTyped] = useState("");
 
-  useEffect(() => {
-    if (phase === "select") {
-      const t = setTimeout(() => setPhase("typing"), 2000);
-      return () => clearTimeout(t);
-    }
-    if (phase === "typing") {
-      setTyped("");
-      let i = 0;
-      const iv = setInterval(() => {
-        i++;
-        setTyped(DEMO_REASONING.slice(0, i));
-        if (i >= DEMO_REASONING.length) {
-          clearInterval(iv);
-        }
-      }, 22);
-      return () => clearInterval(iv);
-    }
-    if (phase === "feedback") {
-      const t = setTimeout(() => setPhase("select"), 5000);
-      return () => clearTimeout(t);
-    }
-  }, [phase]);
+  const selectedOption = selectedIdx != null ? DEMO_OPTIONS[selectedIdx] : null;
 
-  const typingDone = typed.length >= DEMO_REASONING.length;
+  function selectOption(idx) {
+    if (phase !== "select") return;
+    setSelectedIdx(idx);
+    setPhase("typing");
+  }
 
   useEffect(() => {
-    if (phase === "typing" && typingDone) {
-      const t = setTimeout(() => setPhase("feedback"), 700);
-      return () => clearTimeout(t);
-    }
-  }, [phase, typingDone]);
+    if (phase !== "typing" || !selectedOption) return;
+    setTyped("");
+    let i = 0;
+    const full = selectedOption.reasoning;
+    const iv = setInterval(() => {
+      i++;
+      setTyped(full.slice(0, i));
+      if (i >= full.length) clearInterval(iv);
+    }, 22);
+    return () => clearInterval(iv);
+  }, [phase, selectedOption]);
 
-  function optionStyle(o) {
+  const typingDone = selectedOption ? typed.length >= selectedOption.reasoning.length : false;
+
+  function checkReasoning() {
+    if (!typingDone) return;
+    setPhase("feedback");
+  }
+
+  function retry() {
+    setPhase("select");
+    setSelectedIdx(null);
+    setTyped("");
+  }
+
+  function optionStyle(o, idx) {
     if (phase !== "feedback") {
-      // Pre-feedback: only the "selected" option (B) is highlighted, once we've
-      // moved past the initial select prompt.
-      if (phase !== "select" && o.kind === "correct") {
+      if (phase === "typing" && idx === selectedIdx) {
         return { background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.5)" };
       }
       return { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" };
@@ -69,9 +80,9 @@ function DemoCard() {
     return { background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border-lo)", opacity: 0.55 };
   }
 
-  function letterStyle(o) {
+  function letterStyle(o, idx) {
     if (phase !== "feedback") {
-      if (phase !== "select" && o.kind === "correct") return { background: "var(--teal)", color: "#07130E" };
+      if (phase === "typing" && idx === selectedIdx) return { background: "var(--teal)", color: "#07130E" };
       return { background: "rgba(255,255,255,0.06)", color: "var(--text-2)" };
     }
     if (o.kind === "correct") return { background: "var(--green)", color: "#06210F" };
@@ -94,19 +105,22 @@ function DemoCard() {
       </p>
       <p className="mb-3.5 text-[14.5px] font-medium">Which can be inferred from the passage?</p>
       <div className="flex flex-col gap-2.5">
-        {DEMO_OPTIONS.map((o) => (
-          <div
+        {DEMO_OPTIONS.map((o, idx) => (
+          <button
             key={o.letter}
-            className="flex items-center gap-3 rounded-[12px] px-[15px] py-[13px] transition-colors"
-            style={optionStyle(o)}
+            type="button"
+            onClick={() => selectOption(idx)}
+            disabled={phase !== "select"}
+            className="flex w-full items-center gap-3 rounded-[12px] px-[15px] py-[13px] text-left transition-colors"
+            style={{ ...optionStyle(o, idx), cursor: phase === "select" ? "pointer" : "default" }}
           >
             <span
               className="flex h-6 w-6 flex-none items-center justify-center rounded-[8px] text-[12.5px] font-bold"
-              style={letterStyle(o)}
+              style={letterStyle(o, idx)}
             >
               {o.letter}
             </span>
-            <span className="flex-1 text-[14px]" style={{ color: phase !== "select" && o.kind === "correct" ? "var(--text)" : "var(--text-2)" }}>
+            <span className="flex-1 text-[14px]" style={{ color: phase === "typing" && idx === selectedIdx ? "var(--text)" : "var(--text-2)" }}>
               {o.text}
             </span>
             {phase === "feedback" && o.kind === "correct" && (
@@ -117,7 +131,10 @@ function DemoCard() {
                 TRAP
               </span>
             )}
-          </div>
+            {phase === "feedback" && o.kind === "wrong" && idx === selectedIdx && (
+              <span style={{ flex: "none", color: "var(--red)" }}><Icon name="x" size={16} stroke={2.2} /></span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -128,7 +145,7 @@ function DemoCard() {
         </p>
       )}
 
-      {(phase === "typing" || phase === "feedback") && (
+      {(phase === "typing" || phase === "feedback") && selectedOption && (
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="mono text-[10px] uppercase tracking-wide dim">Your reasoning</span>
@@ -144,7 +161,7 @@ function DemoCard() {
               t
             </span>
             <p className="text-[13px] leading-[1.55] text-foreground">
-              {phase === "feedback" ? DEMO_REASONING : typed}
+              {phase === "feedback" ? selectedOption.reasoning : typed}
               {phase === "typing" && !typingDone && (
                 <span className="animate-pulse" style={{ color: "var(--teal)" }}>▍</span>
               )}
@@ -153,9 +170,14 @@ function DemoCard() {
 
           {phase === "typing" && (
             <button
-              disabled
-              className="mt-3.5 w-full rounded-[10px] py-3 text-[13.5px] font-semibold"
-              style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-2)" }}
+              onClick={checkReasoning}
+              disabled={!typingDone}
+              className="mt-3.5 w-full rounded-[10px] py-3 text-[13.5px] font-semibold transition-colors"
+              style={
+                typingDone
+                  ? { background: "var(--teal)", color: "#07130E", cursor: "pointer" }
+                  : { background: "rgba(255,255,255,0.05)", color: "var(--text-2)", cursor: "default" }
+              }
             >
               Check my reasoning →
             </button>
@@ -172,11 +194,11 @@ function DemoCard() {
                   <div className="mono mb-1 text-[10.5px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--periwinkle)" }}>
                     AI feedback
                   </div>
-                  <p className="text-[12.5px] leading-[1.55] muted">{DEMO_FEEDBACK}</p>
+                  <p className="text-[12.5px] leading-[1.55] muted">{selectedOption.feedback}</p>
                 </div>
               </div>
               <button
-                onClick={() => setPhase("select")}
+                onClick={retry}
                 className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-[13px] font-semibold transition-colors"
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.14)", color: "var(--text)" }}
               >
@@ -250,9 +272,9 @@ export default function Home() {
   return (
     <div>
       {/* hero */}
-      <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:pt-[52px]">
+      <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-10 md:grid-cols-[0.82fr_1.18fr] md:gap-14 md:pt-[52px]">
         <div>
-          <h1 className="display text-[44px] leading-[1.06] tracking-[-0.02em] sm:text-[54px]">
+          <h1 className="display text-[44px] leading-[1.02] tracking-[-0.01em] sm:text-[56px]">
             Stop picking the<br />
             <span className="italic" style={{ color: "var(--teal)" }}>trap option.</span>
           </h1>
@@ -277,7 +299,7 @@ export default function Home() {
               </>
             )}
           </div>
-          <div className="mt-9 flex flex-col gap-3.5">
+          <div className="mt-9 flex flex-col" style={{ gap: 13 }}>
             <FeatureRow color="var(--teal)" path={<path d="M12 3l1.7 4.4L18 9l-4.3 1.6L12 15l-1.7-4.4L6 9l4.3-1.6z" />}>
               AI feedback on every answer
             </FeatureRow>
@@ -289,7 +311,9 @@ export default function Home() {
             </FeatureRow>
           </div>
         </div>
-        <DemoCard />
+        <div className="md:border-l md:pl-12 md:py-11" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+          <DemoCard />
+        </div>
       </section>
 
       {/* how it works */}

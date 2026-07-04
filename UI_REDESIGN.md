@@ -168,6 +168,59 @@ on the glass redesign except Admin (explicitly out of scope) and the in-session 
 (explicitly deferred). The Reading Lounge (Phase 4) will be designed and built fresh, not
 retrofitted.
 
+## Bug-fix pass after first live review (v3.1)
+
+The user's first live test of the v3 pass surfaced real, concrete gaps beyond what static
+esbuild checks could catch. Fixed:
+
+- **Home demo card is genuinely interactive now** — clicking any of the 3 options (not a
+  `setTimeout`) drives the select → type → feedback flow, each option has its own canned
+  reasoning/feedback tuned to its verdict (correct/trap/wrong), and "Try another answer" resets
+  to a blank slate. Matches the mockup's own `selectDemo`/`submitDemo`/`retryDemo` script.
+- **`BrandMark` (the logo icon) was soft/smudgy** — its box-shadow blur (20px at size 30) was
+  proportionally much larger than the mockup's (16px), plus a rounder outer radius. Fixed to
+  scale all three (radius, shadow, inner-square radius) proportionally from the `size` prop.
+- **Home hero spacing** tightened to the mockup's actual ratios: grid `0.82fr 1.18fr` (was
+  `1.05fr 0.95fr`), headline 56px/1.02 line-height, feature-list 13px row gap, and the demo
+  card now sits in its own bordered/padded column matching the mockup's right-column treatment.
+- **`.opt`'s left accent bar removed app-wide** — a pre-existing Graspr design element
+  (`border-left: 3px solid transparent`, colored on hover/select/correct/wrong/trap) that
+  predates the RC Trainer mockup and the user disliked ("that little green thing"). Single CSS
+  class fix in `index.css` cleans it up everywhere `OptionCard`/`.opt` is used: Practice.jsx,
+  CoachPractice.jsx, the Home demo card. Full-perimeter border-color states are unchanged.
+- **Options couldn't be deselected** — `Practice.jsx`'s option `onClick` always set
+  `tentativeSelected: i`; now toggles to `null` if the same option is clicked again (both
+  Analysis and Intuition modes).
+- **Question stepper overlapped passage text** — the floating `QuestionStepper` needed more
+  left clearance than the passage panel reserved; bumped `md:pl-12` → `md:pl-24` to match the
+  mockup's own 96px passage-panel left padding.
+- **Per-question timer donut was missing for count-up sessions** — `TimerRing` only rendered
+  for `countdown` mode; now renders for `count_up` too (as a static filled ring, since there's
+  no fixed total to deplete against). Pause stays scoped to countdown + per-question only.
+- **Dashboard rebuilt to match `Dashboard.dc.html` precisely** (confirmed against the mockup's
+  own component script, not just appearance): container `1240px`/`36px 44px 56px` padding,
+  greeting 34px/1.1 line-height, KPI cards `18px 19px` padding with 30px mono values, `18px`
+  grid gaps, the "Resume where you left off" card gained a second **"Start fresh"** button
+  (discards the in-progress Coach session via `coach.deleteSession`, then routes to `/coach`)
+  and a decorative gradient blob, range-toggle buttons at exact `5px 11px` padding, **Recent
+  attempts flattened** from expandable cards into single-line rows (colored initial badge +
+  title + type·topic + status + relative date — required adding `createdAt` to the
+  `recentAttempts` payload in both `server/index.js` and `server/routes/dashboard.js`), and the
+  **weekly heatmap transposed** from 5-columns-by-calendar-week to the mockup's 7-columns-by-
+  weekday (Mon-first) × 5-cells, at 15px cells with 1.28× hover scale. Per explicit confirmation,
+  the mockup's "Day streak" KPI and heatmap streak footer were **not** resurrected — Streaks
+  stay removed; the existing 4 KPI metrics (Answered/Accuracy/Trap rate/Reasoning) carry the
+  mockup's typography instead.
+- **Change Password / Reset all data moved into the `TopNav` avatar dropdown** as
+  directly-triggered modals (reusing the exact logic that used to live inline on
+  `Profile.jsx`), alongside the existing Log out. Profile.jsx keeps only Name/Username/Email/
+  Joined and the stat cards — no more standalone Log out button there either, since that's now
+  exclusively a dropdown action too.
+- **Nav dropdown blur wasn't visible** — `TopNav`'s two dropdowns used an 86%-opaque dark
+  background (`rgba(24,27,35,0.86)`), which hides most of the `backdrop-filter` blur happening
+  underneath. Switched to the same recipe `.glass-floating` uses elsewhere (`rgba(255,255,255,
+  0.08)` + an inset highlight), where the frosted effect reads correctly.
+
 ## Related
 
 - Design source: `UI redesign project/` (Foundations, Home - Build, Login, Dashboard,

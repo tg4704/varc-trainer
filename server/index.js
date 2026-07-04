@@ -149,6 +149,7 @@ app.use((req, res, next) => {
         reasoningScore: a.reasoning_score, reasoningFeedback: a.reasoning_feedback,
         correctExplanation: a.correct_explanation, trapExplanation: a.trap_explanation,
         keyTakeaway: a.key_takeaway, timeTakenSeconds: a.time_taken_seconds,
+        createdAt: a.created_at,
       };
     }));
 

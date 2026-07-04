@@ -187,6 +187,7 @@ async function handle(req, res, next) {
         trapExplanation: a.trap_explanation,
         keyTakeaway: a.key_takeaway,
         timeTakenSeconds: a.time_taken_seconds,
+        createdAt: a.created_at,
       };
     }));
 

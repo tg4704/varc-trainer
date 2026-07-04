@@ -690,7 +690,7 @@ export default function Practice() {
                         status={optionStatus(i)}
                         trapBadge={!!fb && i === fb.trapOptionIndex}
                         disabled={!!fb || cs.submitting}
-                        onClick={() => { if (!isElim) patchCS(currentIdx, { tentativeSelected: i }); }}
+                        onClick={() => { if (!isElim) patchCS(currentIdx, { tentativeSelected: cs.tentativeSelected === i ? null : i }); }}
                       />
                     </div>
                     {!fb && (
@@ -790,7 +790,7 @@ export default function Practice() {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row gap-10 md:pl-12">
+      <div className="flex flex-col md:flex-row gap-10 md:pl-24">
         {/* Left — passage panel (52%) */}
         <div className="md:w-[52%] md:border-r md:pr-8" style={{ borderColor: "var(--glass-border-lo)" }}>
           <div className="mb-4 flex items-start justify-between gap-3">
@@ -809,12 +809,16 @@ export default function Practice() {
                 annotationCount={cs.annotations.length}
                 onClearAnnotations={() => patchCS(currentIdx, { annotations: [] })}
               />
-              {timer && session.timerMode === "countdown" && (
+              {timer && (
                 <TimerRing
                   seconds={Math.max(0, timer.remaining)}
                   totalSeconds={timer.total}
                   paused={!!cs.pausedTimer}
-                  onTogglePause={!cs.locked && session.timerScope === "per_question" ? togglePause : undefined}
+                  onTogglePause={
+                    !cs.locked && session.timerMode === "countdown" && session.timerScope === "per_question"
+                      ? togglePause
+                      : undefined
+                  }
                 />
               )}
               <button type="button" onClick={() => setParagraphOpen((o) => !o)}
@@ -870,7 +874,7 @@ export default function Practice() {
                 trapBadge={!!fb && i === fb.trapOptionIndex}
                 disabled={!!fb || cs.submitting || cs.locked}
                 onClick={() => {
-                  if (!cs.locked && !fb) patchCS(currentIdx, { tentativeSelected: i });
+                  if (!cs.locked && !fb) patchCS(currentIdx, { tentativeSelected: cs.tentativeSelected === i ? null : i });
                 }}
               />
             ))}

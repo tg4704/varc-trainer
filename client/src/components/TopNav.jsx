@@ -3,24 +3,31 @@
 // Questions, Results, etc). Replaces the old fragmented model (floating pill
 // on Home only / glass sidebar on hub pages / plain bar everywhere else)
 // with one consistent bar: Practice ▾ (Trainer / AI Coach) · Dashboard ·
-// avatar ▾ (Profile / My Questions / Admin / Log out).
+// avatar ▾ (Profile / My Questions / Admin / Change Password / Reset all
+// data / Log out). Change Password and Reset all data open modals directly
+// from here rather than navigating to Profile.
 //
 // In-session pages (/practice, /coach/practice) get their own minimal
 // session bar (Exit / progress / timer) instead of this — see App.jsx.
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { useNavGuard } from "../navGuard.jsx";
 import { BrandMark } from "./AuthShell.jsx";
 import Icon from "./Icon.jsx";
+import { changePassword, resetAccount } from "../api.js";
+import { clearActiveSession } from "../session.js";
 
 export default function TopNav() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { attemptNav } = useNavGuard();
   const [scrolled, setScrolled] = useState(false);
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showResetData, setShowResetData] = useState(false);
   const practiceRef = useRef(null);
   const userRef = useRef(null);
 
@@ -95,11 +102,11 @@ export default function TopNav() {
                 <div
                   className="absolute left-0 top-[calc(100%+10px)] min-w-[184px] rounded-[14px] p-1.5"
                   style={{
-                    background: "rgba(24,27,35,0.86)",
+                    background: "var(--glass-floating)",
                     backdropFilter: "blur(26px) saturate(150%)",
                     WebkitBackdropFilter: "blur(26px) saturate(150%)",
                     border: "1px solid var(--glass-border-hi)",
-                    boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
+                    boxShadow: "0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 60px rgba(0,0,0,0.55)",
                   }}
                 >
                   <DropdownItem to="/setup" onClick={() => setPracticeOpen(false)} icon="book" iconColor="#8B93A7">
@@ -145,11 +152,11 @@ export default function TopNav() {
                 <div
                   className="absolute right-0 top-[calc(100%+10px)] min-w-[196px] rounded-[14px] p-1.5"
                   style={{
-                    background: "rgba(24,27,35,0.86)",
+                    background: "var(--glass-floating)",
                     backdropFilter: "blur(26px) saturate(150%)",
                     WebkitBackdropFilter: "blur(26px) saturate(150%)",
                     border: "1px solid var(--glass-border-hi)",
-                    boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
+                    boxShadow: "0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 60px rgba(0,0,0,0.55)",
                   }}
                 >
                   <div className="mono px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wide dim">{user.email}</div>
@@ -158,6 +165,12 @@ export default function TopNav() {
                   {user.role === "admin" && (
                     <DropdownItem to="/admin" onClick={() => setUserOpen(false)}>Admin</DropdownItem>
                   )}
+                  <DropdownButton onClick={() => { setUserOpen(false); setShowChangePassword(true); }}>
+                    Change Password
+                  </DropdownButton>
+                  <DropdownButton onClick={() => { setUserOpen(false); setShowResetData(true); }}>
+                    Reset all data
+                  </DropdownButton>
                   <div className="my-1 h-px" style={{ background: "var(--glass-border-lo)" }} />
                   <button
                     onClick={() => { setUserOpen(false); logout(); }}
@@ -174,6 +187,135 @@ export default function TopNav() {
           </div>
         )}
       </nav>
+
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+      {showResetData && (
+        <ResetDataModal
+          onClose={() => setShowResetData(false)}
+          onDone={() => { setShowResetData(false); navigate("/dashboard"); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DropdownButton({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-[9px] px-3 py-2 text-left text-[13.5px] text-foreground transition-colors"
+      style={{ background: "transparent" }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ChangePasswordModal({ onClose }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    setBusy(true);
+    try {
+      await changePassword({ currentPassword: current, newPassword: next });
+      setMsg("Password updated.");
+      setCurrent("");
+      setNext("");
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+      <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} className="glass-floating w-full max-w-sm p-6 space-y-3">
+        <h2 className="font-semibold text-foreground">Change password</h2>
+        <input
+          type="password"
+          placeholder="Current password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          autoComplete="current-password"
+          className="input"
+          required
+        />
+        <input
+          type="password"
+          placeholder="New password (min 6 chars)"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          autoComplete="new-password"
+          minLength={6}
+          className="input"
+          required
+        />
+        {err && <p className="text-sm text-destructive">{err}</p>}
+        {msg && <p className="text-sm" style={{ color: "var(--green)" }}>{msg}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={busy} className="btn btn-primary fx-sheen">
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={onClose} className="btn btn-glass fx-ring">
+            {msg ? "Done" : "Cancel"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ResetDataModal({ onClose, onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  async function handleReset() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await resetAccount();
+      clearActiveSession();
+      onDone();
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold text-foreground">Reset all practice data?</h2>
+        <p className="mt-2 text-sm muted">
+          This will permanently delete all your sessions, attempts, and stats. Your account
+          will remain active. This cannot be undone.
+        </p>
+        {err && <p className="mt-2 text-sm text-destructive">{err}</p>}
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={handleReset}
+            disabled={busy}
+            className="btn flex-1 disabled:opacity-60"
+            style={{ background: "var(--red)", color: "#fff" }}
+          >
+            {busy ? "Resetting…" : "Yes, reset everything"}
+          </button>
+          <button onClick={onClose} disabled={busy} className="btn btn-glass fx-ring flex-1">
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
