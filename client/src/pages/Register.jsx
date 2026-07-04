@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
-import { AuthShell, AuthTabs, AuthDivider, GoogleButton, PasswordField } from "../components/AuthShell.jsx";
+import {
+  AuthShell, AuthCard, AuthTabs, AuthDivider, AuthError, GoogleButton, PasswordField,
+} from "../components/AuthShell.jsx";
 
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
@@ -9,6 +11,7 @@ export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +28,7 @@ export default function Register() {
     }
     setBusy(true);
     try {
-      const result = await register(username.trim(), email.trim(), password);
+      const result = await register(username.trim(), email.trim(), password, name.trim());
       if (result.requiresVerification) {
         navigate(`/verify-email?email=${encodeURIComponent(result.email)}`);
       } else {
@@ -40,9 +43,27 @@ export default function Register() {
 
   return (
     <AuthShell>
-      <div className="card w-[420px] max-w-full p-[30px]">
+      <AuthCard
+        title="Create your account"
+        subtitle="Start training your reasoning today."
+        footer={<>By continuing you agree to our <span className="muted">Terms</span> and <span className="muted">Privacy Policy</span>.</>}
+      >
         <AuthTabs active="register" />
+        <AuthError>{error}</AuthError>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="field-label">Name <span className="dim font-normal">(optional)</span></label>
+            <input
+              className="input"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+              maxLength={60}
+              placeholder="Tarun Mehta"
+            />
+          </div>
           <div>
             <label className="field-label">Username</label>
             <input
@@ -71,20 +92,21 @@ export default function Register() {
           <PasswordField label="Password" value={password} onChange={setPassword} autoComplete="new-password" />
           <PasswordField label="Confirm password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
 
-          {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}
-
-          <button type="submit" disabled={busy} className="btn btn-primary btn-block mt-1">
-            {busy ? "Creating…" : "Create account"}
+          <button type="submit" disabled={busy} className="btn btn-primary btn-block fx-sheen mt-1">
+            {busy ? "Creating…" : <>Create account <span className="arrow inline-block">→</span></>}
           </button>
         </form>
 
         <AuthDivider label="or" />
         <GoogleButton href={GOOGLE_AUTH_URL} />
-      </div>
-      <p className="mt-[18px] max-w-[360px] text-center text-xs leading-relaxed dim">
-        By continuing you agree to our <span className="muted">Terms</span> and{" "}
-        <span className="muted">Privacy Policy</span>.
-      </p>
+
+        <div className="mt-5 text-center text-[13px] muted">
+          Already have an account?{" "}
+          <Link to="/login" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>
+            Log in
+          </Link>
+        </div>
+      </AuthCard>
     </AuthShell>
   );
 }

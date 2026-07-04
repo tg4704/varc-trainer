@@ -71,6 +71,7 @@ async function createTables() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT,
       google_id TEXT,
+      name TEXT,
       role TEXT NOT NULL DEFAULT 'user',
       tier TEXT NOT NULL DEFAULT 'free',
       daily_goal INTEGER NOT NULL DEFAULT 10,
@@ -379,8 +380,9 @@ async function schemaIsStale() {
       await resetTables();
     }
     await createTables();
+    // Additive migration for existing (pre-name-field) live databases.
+    await ensureColumn("users", "name", "TEXT");
     // Unique partial index on google_id (allows multiple NULLs for non-Google users).
-    // The `ensureColumn` helper above is retained for future additive migrations.
     await db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL"
     );

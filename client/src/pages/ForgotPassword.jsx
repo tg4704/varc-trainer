@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { forgotPassword } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
-import { Input } from "../components/ui/input.jsx";
+import { AuthShell, AuthCard, AuthError } from "../components/AuthShell.jsx";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -26,38 +25,39 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <h1 className="text-2xl font-bold text-foreground">Forgot password</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Enter your email and we'll send a 6-digit code to reset your password.
-      </p>
+    <AuthShell>
+      <AuthCard
+        title="Forgot password"
+        subtitle="Enter your email and we'll send a 6-digit code to reset it."
+      >
+        <AuthError>{error}</AuthError>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">Email</span>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            placeholder="you@example.com"
-            required
-          />
-        </label>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="field-label">Email</label>
+            <input
+              className="input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="you@email.com"
+              required
+            />
+          </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+          <button type="submit" disabled={busy} className="btn btn-primary btn-block fx-sheen mt-1">
+            {busy ? "Sending…" : <>Send reset code <span className="arrow inline-block">→</span></>}
+          </button>
+        </form>
 
-        <Button type="submit" disabled={busy} className="w-full" size="lg">
-          {busy ? "Sending…" : "Send reset code"}
-        </Button>
-      </form>
-
-      <p className="mt-6 text-sm text-muted-foreground">
-        Remember it?{" "}
-        <Link to="/login" className="font-medium text-foreground underline underline-offset-4">
-          Log in
-        </Link>
-      </p>
-    </div>
+        <div className="mt-5 text-center text-[13px] muted">
+          Remember it?{" "}
+          <Link to="/login" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>
+            Log in
+          </Link>
+        </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

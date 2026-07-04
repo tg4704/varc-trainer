@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { checkUsernameAvailable, changeUsername } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
+import { AuthShell, AuthCard, AuthError } from "../components/AuthShell.jsx";
 
 const USERNAME_RE = /^[a-z0-9_]+$/i;
 
@@ -48,43 +48,43 @@ export default function ChooseUsername() {
     }
   }
 
-  const statusColor = available === true ? "text-green-600" : available === false ? "text-destructive" : "text-muted-foreground";
+  const statusColor = available === true ? "var(--green)" : available === false ? "var(--red)" : "var(--text-2)";
   const statusText  = checking ? "Checking…" : available === true ? "Available ✓" : available === false ? "Not available" : "";
   const canSave     = value && value.length >= 3 && USERNAME_RE.test(value) && available !== false && !saving && !checking;
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <h1 className="text-2xl font-bold text-foreground">Choose your username</h1>
-      <p className="mt-2 text-muted-foreground text-sm">
-        This is how you'll appear on the platform. You can change it later in your profile.
-      </p>
+    <AuthShell>
+      <AuthCard
+        title="Choose your username"
+        subtitle="This is how you'll appear on the platform. You can change it later in your profile."
+      >
+        <AuthError>{error}</AuthError>
 
-      <div className="mt-6">
-        <label className="block text-sm font-semibold text-foreground mb-1">Username</label>
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => { setValue(e.target.value.trim()); setError(null); }}
-          onKeyDown={(e) => e.key === "Enter" && handleSave()}
-          maxLength={30}
-          autoFocus
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-          placeholder="e.g. ravi_sharma"
-        />
-        <div className={`mt-1 text-xs ${statusColor}`}>{statusText || " "}</div>
-        <p className="text-xs text-muted-foreground mt-1">3–30 characters. Letters, numbers, underscores only.</p>
-      </div>
+        <div>
+          <label className="field-label">Username</label>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => { setValue(e.target.value.trim()); setError(null); }}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            maxLength={30}
+            autoFocus
+            className="input"
+            placeholder="e.g. ravi_sharma"
+          />
+          <div className="mt-1.5 text-xs" style={{ color: statusColor }}>{statusText || " "}</div>
+          <p className="text-xs dim mt-0.5">3–30 characters. Letters, numbers, underscores only.</p>
+        </div>
 
-      {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-
-      <div className="mt-6 flex gap-3">
-        <Button className="flex-1" disabled={!canSave} onClick={handleSave}>
-          {saving ? "Saving…" : "Continue →"}
-        </Button>
-        <Button variant="outline" onClick={() => navigate("/setup", { replace: true })}>
-          Skip
-        </Button>
-      </div>
-    </div>
+        <div className="mt-6 flex gap-3">
+          <button className="btn btn-primary flex-1 fx-sheen" disabled={!canSave} onClick={handleSave}>
+            {saving ? "Saving…" : <>Continue <span className="arrow inline-block">→</span></>}
+          </button>
+          <button className="btn btn-glass" onClick={() => navigate("/setup", { replace: true })}>
+            Skip
+          </button>
+        </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

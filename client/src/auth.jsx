@@ -39,8 +39,8 @@ export function AuthProvider({ children }) {
     return { requiresVerification: false };
   }
 
-  async function register(username, email, password) {
-    const result = await api.register({ username, email, password });
+  async function register(username, email, password, name) {
+    const result = await api.register({ username, email, password, name });
     if (result.requiresVerification) {
       return { requiresVerification: true, email: result.email };
     }

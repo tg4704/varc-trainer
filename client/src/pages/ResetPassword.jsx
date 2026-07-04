@@ -2,8 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { resetPassword, resendOtp } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
-import { Input } from "../components/ui/input.jsx";
+import { AuthShell, AuthCard, AuthError, PasswordField } from "../components/AuthShell.jsx";
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
@@ -80,92 +79,59 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <div className="mb-2 text-4xl">🔐</div>
-      <h1 className="text-2xl font-bold text-foreground">Reset password</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Enter the 6-digit code sent to{" "}
-        <span className="font-medium text-foreground">{email || "your email"}</span>{" "}
-        and choose a new password.
-      </p>
+    <AuthShell>
+      <AuthCard
+        title="Reset password"
+        subtitle={<>Enter the code sent to <span className="text-foreground font-medium">{email || "your email"}</span> and choose a new password.</>}
+      >
+        <AuthError>{error}</AuthError>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        {/* OTP boxes */}
-        <div>
-          <p className="text-sm font-medium text-foreground mb-2">Verification code</p>
-          <div className="flex gap-2">
-            {digits.map((d, i) => (
-              <input
-                key={i}
-                ref={(el) => (inputRefs.current[i] = el)}
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={d}
-                onChange={(e) => handleDigit(i, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(i, e)}
-                onFocus={(e) => e.target.select()}
-                className="h-14 w-12 rounded-lg border border-input bg-background text-center text-2xl font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 transition-colors"
-              />
-            ))}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <div>
+            <label className="field-label text-center block">Verification code</label>
+            <div className="flex gap-2 justify-center">
+              {digits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={(el) => (inputRefs.current[i] = el)}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={d}
+                  onChange={(e) => handleDigit(i, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(i, e)}
+                  onFocus={(e) => e.target.select()}
+                  className="otp-box"
+                />
+              ))}
+            </div>
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                onClick={handleResend}
+                className="fx-underline text-xs font-semibold"
+                style={{ color: "var(--teal)" }}
+              >
+                Resend code
+              </button>
+              {resendMsg && <p className="mt-1 text-xs muted">{resendMsg}</p>}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleResend}
-            className="mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-          >
-            Resend code
+
+          <PasswordField label="New password" value={newPassword} onChange={setNewPassword} autoComplete="new-password" />
+          <PasswordField label="Confirm password" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
+
+          <button type="submit" disabled={busy || otp.length < 6} className="btn btn-primary btn-block fx-sheen">
+            {busy ? "Resetting…" : <>Reset password <span className="arrow inline-block">→</span></>}
           </button>
-          {resendMsg && (
-            <p className="mt-1 text-xs text-muted-foreground">{resendMsg}</p>
-          )}
+        </form>
+
+        <div className="mt-5 text-center text-[13px] muted">
+          <Link to="/login" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>
+            Back to log in
+          </Link>
         </div>
-
-        <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">New password</span>
-          <Input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            autoComplete="new-password"
-            minLength={6}
-            required
-          />
-        </label>
-
-        <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">Confirm password</span>
-          <Input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
-        </label>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <Button
-          type="submit"
-          disabled={busy || otp.length < 6}
-          className="w-full"
-          size="lg"
-        >
-          {busy ? (
-            <span className="flex items-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-              Resetting…
-            </span>
-          ) : "Reset password"}
-        </Button>
-      </form>
-
-      <p className="mt-6 text-sm text-muted-foreground text-center">
-        <Link to="/login" className="font-medium text-foreground underline underline-offset-4">
-          Back to log in
-        </Link>
-      </p>
-    </div>
+      </AuthCard>
+    </AuthShell>
   );
 }

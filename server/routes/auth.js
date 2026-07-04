@@ -38,6 +38,7 @@ function publicUser(u) {
     id: u.id,
     username: u.username,
     email: u.email,
+    name: u.name || null,
     role: u.role || "user",
     createdAt: u.created_at,
   };
@@ -110,7 +111,7 @@ async function canResend(userId, purpose) {
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
-  const { username, email, password } = req.body || {};
+  const { username, email, password, name } = req.body || {};
   if (!username || !email || !password)
     return res.status(400).json({ error: "Username, email, and password are required" });
   if (username.length < 3)
@@ -131,8 +132,8 @@ router.post("/register", async (req, res) => {
 
   const hash   = bcrypt.hashSync(password, 10);
   const result = await db.run(
-    "INSERT INTO users (username, email, password_hash, email_verified) VALUES ($1, $2, $3, 0) RETURNING id",
-    [username, email, hash]
+    "INSERT INTO users (username, email, password_hash, name, email_verified) VALUES ($1, $2, $3, $4, 0) RETURNING id",
+    [username, email, hash, (name || "").trim() || null]
   );
   const user   = await db.get("SELECT * FROM users WHERE id = $1", [result.lastId]);
 
@@ -374,9 +375,9 @@ router.get("/google/callback", async (req, res) => {
           username = `${base}${suffix++}`;
         }
         const ins = await db.run(
-          `INSERT INTO users (username, email, password_hash, google_id, email_verified, role)
-           VALUES ($1, $2, NULL, $3, 1, 'user') RETURNING id`,
-          [username, email, googleId]
+          `INSERT INTO users (username, email, password_hash, google_id, name, email_verified, role)
+           VALUES ($1, $2, NULL, $3, $4, 1, 'user') RETURNING id`,
+          [username, email, googleId, name || null]
         );
         user = await db.get("SELECT * FROM users WHERE id = $1", [ins.lastId]);
         isNewUser = true;

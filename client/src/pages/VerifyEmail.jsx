@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { verifyEmail, resendOtp } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
+import { AuthShell, AuthCard, AuthError } from "../components/AuthShell.jsx";
 
 export default function VerifyEmail() {
   const [params] = useSearchParams();
@@ -85,77 +85,61 @@ export default function VerifyEmail() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <div className="mb-2 text-4xl">✉️</div>
-      <h1 className="text-2xl font-bold text-foreground">Check your email</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        We sent a 6-digit code to{" "}
-        <span className="font-medium text-foreground">{email || "your email address"}</span>.
-        Enter it below to verify your account.
-      </p>
+    <AuthShell>
+      <AuthCard
+        title="Check your email"
+        subtitle={<>We sent a 6-digit code to <span className="text-foreground font-medium">{email || "your email address"}</span>.</>}
+      >
+        <AuthError>{error}</AuthError>
 
-      <form onSubmit={handleSubmit} className="mt-8">
-        {/* OTP boxes */}
-        <div className="flex gap-2 justify-center mb-6">
-          {digits.map((d, i) => (
-            <input
-              key={i}
-              ref={(el) => (inputRefs.current[i] = el)}
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={d}
-              onChange={(e) => handleDigit(i, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(i, e)}
-              onFocus={(e) => e.target.select()}
-              className="h-14 w-12 rounded-lg border border-input bg-background text-center text-2xl font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 transition-colors"
-            />
-          ))}
+        <form onSubmit={handleSubmit}>
+          <div className="flex gap-2 justify-center mb-2">
+            {digits.map((d, i) => (
+              <input
+                key={i}
+                ref={(el) => (inputRefs.current[i] = el)}
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={d}
+                onChange={(e) => handleDigit(i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(i, e)}
+                onFocus={(e) => e.target.select()}
+                className="otp-box"
+              />
+            ))}
+          </div>
+
+          <button type="submit" disabled={busy || otp.length < 6} className="btn btn-primary btn-block fx-sheen mt-5">
+            {busy ? "Verifying…" : <>Verify email <span className="arrow inline-block">→</span></>}
+          </button>
+        </form>
+
+        <div className="mt-5 text-center text-[13px] muted">
+          Didn't receive the code?{" "}
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resendState === "sending"}
+            className="fx-underline font-semibold disabled:opacity-60"
+            style={{ color: "var(--teal)" }}
+          >
+            {resendState === "sending" ? "Sending…" : "Resend code"}
+          </button>
+          {resendMsg && (
+            <p className="mt-2 text-xs" style={{ color: resendState === "error" ? "var(--red)" : "var(--green)" }}>
+              {resendMsg}
+            </p>
+          )}
         </div>
 
-        {error && (
-          <p className="mb-4 text-sm text-destructive text-center">{error}</p>
-        )}
-
-        <Button
-          type="submit"
-          disabled={busy || otp.length < 6}
-          className="w-full"
-          size="lg"
-        >
-          {busy ? (
-            <span className="flex items-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-              Verifying…
-            </span>
-          ) : "Verify email"}
-        </Button>
-      </form>
-
-      {/* Resend */}
-      <div className="mt-6 text-center text-sm text-muted-foreground">
-        Didn't receive the code?{" "}
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={resendState === "sending"}
-          className="font-medium text-foreground underline underline-offset-4 disabled:opacity-60"
-        >
-          {resendState === "sending" ? "Sending…" : "Resend code"}
-        </button>
-        {resendMsg && (
-          <p className={`mt-2 text-xs ${resendState === "error" ? "text-destructive" : "text-success"}`}>
-            {resendMsg}
-          </p>
-        )}
-      </div>
-
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        Wrong email?{" "}
-        <Link to="/register" className="font-medium text-foreground underline underline-offset-4">
-          Start over
-        </Link>
-      </p>
-    </div>
+        <div className="mt-3 text-center text-[13px] muted">
+          Wrong email?{" "}
+          <Link to="/register" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>
+            Start over
+          </Link>
+        </div>
+      </AuthCard>
+    </AuthShell>
   );
 }
