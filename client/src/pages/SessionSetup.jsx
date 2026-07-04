@@ -40,7 +40,7 @@ const PRACTICE_MODES = [
   {
     value: "intuition",
     title: "Intuition mode",
-    desc: "Fast pattern recognition — pick quickly, earn bonus points for speed and correct eliminations. No reasoning required.",
+    desc: "Fast pattern recognition. Pick quickly, earn bonus points for speed and correct eliminations. No reasoning required.",
   },
 ];
 
@@ -53,7 +53,7 @@ const TIMER_MODES = [
   {
     value: "count_up",
     title: "Count up",
-    desc: "A timer counts upward as you go. Unlimited time — see your total at the end.",
+    desc: "A timer counts upward as you go. Unlimited time, see your total at the end.",
   },
   {
     value: "countdown",
@@ -226,7 +226,7 @@ export default function SessionSetup() {
             <RadioCard
               active={inferenceOnly}
               title="Inference-focused drills"
-              desc="Every question in this session is an inference question — CAT's single most-tested RC skill (~50% of all RC questions). Turn off for a mixed shuffle across all types."
+              desc="Every question in this session is an inference question, CAT's single most-tested RC skill (~50% of all RC questions). Turn off for a mixed shuffle across all types."
               onClick={() => setInferenceOnly((v) => !v)}
             />
           )}
@@ -349,8 +349,8 @@ export default function SessionSetup() {
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
                 {feedbackMode === "instant"
-                  ? "AI feedback appears immediately after each answer — good for deep learning."
-                  : "Your reasoning is saved; AI feedback for all questions is shown together at the end — better for uninterrupted practice."}
+                  ? "AI feedback appears immediately after each answer, good for deep learning."
+                  : "Your reasoning is saved; AI feedback for all questions is shown together at the end, better for uninterrupted practice."}
               </p>
             </Section>
           )}

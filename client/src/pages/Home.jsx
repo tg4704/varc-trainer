@@ -39,7 +39,7 @@ function DemoCard() {
           </div>
           <div style={{ maxHeight: hoverTrap ? 70 : 0, overflow: "hidden", transition: "max-height 200ms ease" }}>
             <p style={{ fontSize: 12.5, color: "var(--amber)", paddingLeft: 38, paddingTop: 10, lineHeight: 1.5 }}>
-              This is stronger than the passage — “not the source” isn’t “prevents.” True-sounding, but never claimed.
+              This is stronger than the passage. “Not the source” isn’t “prevents.” True-sounding, but never claimed.
             </p>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function Home() {
         <div className="mt-10 flex flex-col gap-8 md:flex-row md:gap-12">
           <HowStep n={1}>Read a short paragraph and pick an answer.</HowStep>
           <HowStep n={2}>Write a line or two explaining your reasoning.</HowStep>
-          <HowStep n={3}>Get feedback on exactly where your thinking went wrong — not just whether you were right.</HowStep>
+          <HowStep n={3}>Get feedback on exactly where your thinking went wrong, not just whether you were right.</HowStep>
         </div>
       </section>
 
@@ -180,21 +180,21 @@ export default function Home() {
       <section className="mx-auto max-w-[1000px] px-7 py-4">
         <h2 className="display text-[30px] mb-2">Read widely. Comprehend deeply. Solve fast.</h2>
         <p className="max-w-xl text-[14.5px] leading-relaxed muted mb-8">
-          Three tools, three different jobs — not the same drill in different lengths.
+          Three tools, three different jobs, not the same drill in different lengths.
         </p>
         <div className="flex flex-col gap-6 md:flex-row">
           <ProductCard
             step="01 · READ" name="Reading" italic="Lounge" comingSoon
-            desc="Curated real articles across CAT genres — build the habit and kill topic-unfamiliarity before it costs you marks."
+            desc="Curated real articles across CAT genres. Build the habit and kill topic-unfamiliarity before it costs you marks."
             bullets={[
               "Real long-form writing, not AI-generated text.",
-              "A difficulty ladder — build up to dense, CAT-grade prose.",
+              "A difficulty ladder, building up to dense, CAT-grade prose.",
               "Vocab-in-context as you go.",
             ]}
           />
           <ProductCard
             step="02 · COMPREHEND" name="" italic="Coach" cta="Open Coach" to="/coach"
-            desc="Full CAT-style passages. Map the argument before you see any question — the AI grades how you read, not just what you answer."
+            desc="Full CAT-style passages. Map the argument before you see any question, and the AI grades how you read, not just what you answer."
             bullets={[
               "Reading-map graded before questions are revealed.",
               "Full reasoning feedback on every answer.",
@@ -203,11 +203,11 @@ export default function Home() {
           />
           <ProductCard
             step="03 · SOLVE" name="" italic="Drills" cta="Start Drills" to="/setup"
-            desc="Short paragraph, one question, fast reps. Builds the trap-recognition reflex — the close 50/50 that decides your percentile."
+            desc="Short paragraph, one question, fast reps. Builds the trap-recognition reflex, the close 50/50 that decides your percentile."
             bullets={[
               "Pick an answer, then defend your reasoning.",
               "AI scores the quality of your thinking, not just right/wrong.",
-              "Inference-focused mode — CAT's single most-tested RC skill.",
+              "Inference-focused mode, CAT's single most-tested RC skill.",
             ]}
           />
         </div>

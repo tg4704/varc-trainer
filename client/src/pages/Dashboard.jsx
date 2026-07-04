@@ -159,7 +159,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
           {!hasAttempts && (
             <div className="glass mt-6 flex items-center justify-between gap-4 px-5 py-4">
               <p className="text-sm muted">
-                No attempts yet — run a practice session and your breakdown fills in here.
+                No attempts yet. Run a practice session and your breakdown fills in here.
               </p>
               <Link to="/setup" className="btn btn-primary fx-sheen flex-none">
                 Start a session
@@ -415,7 +415,7 @@ function AccuracyTrendChart() {
             <circle cx={dotX} cy={dotY} r="4.5" fill="var(--bg)" stroke="var(--teal)" strokeWidth="2.5" />
           </svg>
         ) : (
-          <p className="py-8 text-center text-sm dim">Not enough data yet — answer a few more questions.</p>
+          <p className="py-8 text-center text-sm dim">Not enough data yet. Answer a few more questions.</p>
         )}
       </div>
     </div>
