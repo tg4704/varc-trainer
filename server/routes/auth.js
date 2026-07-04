@@ -438,6 +438,21 @@ router.patch("/username", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── PATCH /api/auth/name ────────────────────────────────────────────────────
+// Optional display name (powers "Good evening, {name}" greetings). Unlike
+// username, not unique — trimmed, max 60 chars, empty string clears it to NULL.
+router.patch("/name", authenticate, async (req, res, next) => {
+  try {
+    const raw = (req.body?.name ?? "").trim();
+    if (raw.length > 60) {
+      return res.status(400).json({ error: "Name must be 60 characters or fewer" });
+    }
+    await db.run("UPDATE users SET name = $1 WHERE id = $2", [raw || null, req.userId]);
+    const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
+    res.json({ user: publicUser(user) });
+  } catch (e) { next(e); }
+});
+
 // ── PATCH /api/auth/password ──────────────────────────────────────────────────
 router.patch("/password", authenticate, async (req, res, next) => {
   try {

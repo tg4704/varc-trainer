@@ -49,6 +49,9 @@ export function checkUsernameAvailable(username) {
 export function changeUsername(username) {
   return request("/api/auth/username", { method: "PATCH", body: JSON.stringify({ username }) });
 }
+export function changeName(name) {
+  return request("/api/auth/name", { method: "PATCH", body: JSON.stringify({ name }) });
+}
 export function verifyEmail(payload) {
   return request("/api/auth/verify-email", { method: "POST", body: JSON.stringify(payload) });
 }

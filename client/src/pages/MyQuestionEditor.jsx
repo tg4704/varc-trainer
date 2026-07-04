@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { myQuestions } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
-import { Input, Textarea } from "../components/ui/input.jsx";
-import { Card, CardContent } from "../components/ui/card.jsx";
+import { Textarea } from "../components/ui/input.jsx";
 import { Badge } from "../components/ui/badge.jsx";
-import { cn } from "../lib/utils.js";
 import { Sparkles } from "lucide-react";
 
 const TYPES = ["inference", "tone", "title", "detail", "application"];
@@ -52,41 +49,40 @@ function DraftEntry({ onDraft }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 flex items-start gap-3">
-        <Sparkles className="h-4 w-4 text-primary mt-0.5 flex-none" />
+      <div className="glass-recessed flex items-start gap-3 px-4 py-3" style={{ borderLeft: "2px solid var(--teal)" }}>
+        <Sparkles className="h-4 w-4 mt-0.5 flex-none" style={{ color: "var(--teal)" }} />
         <div className="text-sm text-foreground">
-          <span className="font-semibold">AI draft:</span> Paste a passage from any source — The Economist, Aeon, an old CAT paper — and Claude will generate a CAT-quality question with 4 options, mark the correct answer and trap, and identify the source lines. You review and edit before saving.
+          <span className="font-semibold">AI draft:</span> paste a passage from any source
+          (an old CAT paper, a long-form essay, anywhere) and Claude will generate a
+          CAT-quality question with 4 options, mark the correct answer and trap, and
+          identify the source lines. You review and edit before saving.
         </div>
       </div>
 
       <label className="block">
-        <span className="block text-sm font-medium text-foreground mb-1">
-          Paste your passage
-        </span>
+        <span className="field-label">Paste your passage</span>
         <Textarea
           rows={8}
           value={passage}
           onChange={(e) => setPassage(e.target.value)}
-          placeholder="Paste any dense, argument-driven paragraph (90–500 words)…"
+          placeholder="Paste any dense, argument-driven paragraph (90-500 words)…"
           className="resize-none"
         />
-        <div className={cn("mt-1 text-right text-xs", wordCount >= 50 ? "text-success" : "text-muted-foreground")}>
+        <div className="mt-1 text-right text-xs" style={{ color: wordCount >= 50 ? "var(--green)" : "var(--text-2)" }}>
           {wordCount} words {wordCount < 50 && "(need at least 50)"}
         </div>
       </label>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">Question type</span>
-          <select value={type} onChange={(e) => setType(e.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+          <span className="field-label">Question type</span>
+          <select value={type} onChange={(e) => setType(e.target.value)} className="input">
             {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
         <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">Topic</span>
-          <select value={topic} onChange={(e) => setTopic(e.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+          <span className="field-label">Topic</span>
+          <select value={topic} onChange={(e) => setTopic(e.target.value)} className="input">
             {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </label>
@@ -95,14 +91,10 @@ function DraftEntry({ onDraft }) {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-3">
-        <Button
-          disabled={wordCount < 50 || loading}
-          onClick={generate}
-          className="flex items-center gap-2"
-        >
+        <button disabled={wordCount < 50 || loading} onClick={generate} className="btn btn-primary fx-sheen">
           {loading ? (
             <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "#07130E", borderTopColor: "transparent" }} />
               Generating…
             </>
           ) : (
@@ -111,10 +103,10 @@ function DraftEntry({ onDraft }) {
               Generate draft
             </>
           )}
-        </Button>
-        <Button variant="outline" onClick={() => onDraft(null)}>
+        </button>
+        <button onClick={() => onDraft(null)} className="btn btn-glass fx-ring">
           Write manually instead
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -150,79 +142,83 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
   }
 
   return (
-    <Card>
-      <CardContent className="p-5 space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="block text-sm font-medium text-foreground mb-1">Topic</span>
-            <select value={form.topic} onChange={e => setField("topic", e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-sm font-medium text-foreground mb-1">Question type</span>
-            <select value={form.type} onChange={e => setField("type", e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
+    <div className="glass p-5 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="field-label">Topic</span>
+          <select value={form.topic} onChange={e => setField("topic", e.target.value)} className="input">
+            {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="field-label">Question type</span>
+          <select value={form.type} onChange={e => setField("type", e.target.value)} className="input">
+            {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <label className="block">
+        <span className="field-label">Passage</span>
+        <Textarea rows={6} value={form.paragraph}
+          onChange={e => setField("paragraph", e.target.value)}
+          placeholder="The passage text (90-500 words)…" className="resize-none" />
+      </label>
+
+      <label className="block">
+        <span className="field-label">Question</span>
+        <Textarea rows={2} value={form.question}
+          onChange={e => setField("question", e.target.value)}
+          placeholder="Which of the following…?" className="resize-none" />
+      </label>
+
+      {/* Options */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-medium text-foreground">Options</div>
+          <button
+            type="button"
+            onClick={() => setShowAnswer((v) => !v)}
+            className="fx-underline text-xs"
+            style={{ color: "var(--teal)" }}
+          >
+            {showAnswer ? "Hide answer" : "Show answer"}
+          </button>
         </div>
-
-        <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">Passage</span>
-          <Textarea rows={6} value={form.paragraph}
-            onChange={e => setField("paragraph", e.target.value)}
-            placeholder="The passage text (90–500 words)…" className="resize-none" />
-        </label>
-
-        <label className="block">
-          <span className="block text-sm font-medium text-foreground mb-1">Question</span>
-          <Textarea rows={2} value={form.question}
-            onChange={e => setField("question", e.target.value)}
-            placeholder="Which of the following…?" className="resize-none" />
-        </label>
-
-        {/* Options */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <div className="text-sm font-medium text-foreground">Options</div>
-            <button
-              type="button"
-              onClick={() => setShowAnswer((v) => !v)}
-              className="text-xs text-primary hover:underline underline-offset-2"
-            >
-              {showAnswer ? "Hide answer" : "Show answer"}
-            </button>
-          </div>
-          {showAnswer && (
-            <p className="text-xs text-muted-foreground mb-2">Mark which option is correct and which is the trap.</p>
-          )}
-          <div className="space-y-3">
-            {form.options.map((o, i) => (
-              <div key={i} className={cn(
-                "rounded-lg border p-3 transition-colors",
-                showAnswer && form.correctIndex === i ? "border-success bg-success/5"
-                  : showAnswer && form.trapIndex === i ? "border-warning bg-warning/5"
-                  : "border-border"
-              )}>
+        {showAnswer && (
+          <p className="text-xs muted mb-2">Mark which option is correct and which is the trap.</p>
+        )}
+        <div className="space-y-3">
+          {form.options.map((o, i) => {
+            const isCorrect = showAnswer && form.correctIndex === i;
+            const isTrap = showAnswer && form.trapIndex === i;
+            return (
+              <div
+                key={i}
+                className="rounded-[12px] p-3 transition-colors"
+                style={
+                  isCorrect ? { background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.4)" }
+                    : isTrap ? { background: "rgba(240,168,104,0.06)", border: "1px solid rgba(240,168,104,0.4)" }
+                    : { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }
+                }
+              >
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-muted-foreground w-5">{LETTERS[i]}</span>
+                  <span className="font-bold muted w-5">{LETTERS[i]}</span>
                   {showAnswer && (
                     <div className="flex gap-4 text-xs">
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input type="radio" name="correct" checked={form.correctIndex === i}
                           onChange={() => setField("correctIndex", i)} className="accent-green-500" />
-                        <span className="text-success font-medium">Correct</span>
+                        <span className="font-medium" style={{ color: "var(--green)" }}>Correct</span>
                       </label>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input type="radio" name="trap"
                           checked={form.trapIndex === i}
                           onChange={() => setField("trapIndex", i)} className="accent-amber-500" />
-                        <span className="text-warning font-medium">Trap</span>
+                        <span className="font-medium" style={{ color: "var(--amber)" }}>Trap</span>
                       </label>
                       {(form.correctIndex !== i && form.trapIndex !== i) && (
-                        <span className="text-muted-foreground">Distractor</span>
+                        <span className="muted">Distractor</span>
                       )}
                     </div>
                   )}
@@ -231,51 +227,55 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
                   onChange={e => setOptionText(i, e.target.value)}
                   placeholder={`Option ${LETTERS[i]}…`} className="resize-none text-sm" />
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Trap type — only visible when showing answer */}
-        {showAnswer && form.trapIndex != null && (
-          <label className="block">
-            <span className="block text-sm font-medium text-foreground mb-1">Trap type</span>
-            <select value={form.trapType || ""} onChange={e => setField("trapType", e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {TRAP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-        )}
+      {/* Trap type — only visible when showing answer */}
+      {showAnswer && form.trapIndex != null && (
+        <label className="block">
+          <span className="field-label">Trap type</span>
+          <select value={form.trapType || ""} onChange={e => setField("trapType", e.target.value)} className="input">
+            {TRAP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+      )}
 
-        {/* Source lines — only visible when showing answer */}
-        {showAnswer && (
-          <label className="block">
-            <span className="block text-sm font-medium text-foreground mb-1">
-              Source lines
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                — the 2–4 sentences in the passage that contain the answer (used internally)
-              </span>
+      {/* Source lines — only visible when showing answer */}
+      {showAnswer && (
+        <label className="block">
+          <span className="field-label">
+            Source lines
+            <span className="ml-1 dim font-normal">
+              (the 2-4 sentences in the passage that contain the answer, used internally)
             </span>
-            <Textarea rows={3} value={form.sourceLines}
-              onChange={e => setField("sourceLines", e.target.value)}
-              placeholder="The exact sentences from the passage that justify the correct answer…"
-              className="resize-none" />
-          </label>
+          </span>
+          <Textarea rows={3} value={form.sourceLines}
+            onChange={e => setField("sourceLines", e.target.value)}
+            placeholder="The exact sentences from the passage that justify the correct answer…"
+            className="resize-none" />
+        </label>
+      )}
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <div className="flex flex-wrap gap-2 pt-2" style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
+        <button disabled={busy} onClick={save} className="btn btn-primary fx-sheen">
+          {busy ? "Saving…" : isNew ? "Save question" : "Save changes"}
+        </button>
+        {!isNew && onDelete && (
+          <button
+            disabled={busy}
+            onClick={del}
+            className="btn"
+            style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.35)", color: "var(--red)" }}
+          >
+            Delete question
+          </button>
         )}
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-          <Button disabled={busy} onClick={save}>
-            {busy ? "Saving…" : isNew ? "Save question" : "Save changes"}
-          </Button>
-          {!isNew && onDelete && (
-            <Button variant="destructive" disabled={busy} onClick={del}>
-              Delete question
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -339,15 +339,15 @@ export default function MyQuestionEditor() {
     navigate("/my-questions");
   }
 
-  if (loading) return <p className="text-muted-foreground">Loading…</p>;
+  if (loading) return <p className="muted px-4 py-10">Loading…</p>;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 space-y-6">
       <div>
-        <Link to="/my-questions" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link to="/my-questions" className="fx-underline text-sm muted">
           ← My questions
         </Link>
-        <h1 className="mt-2 text-2xl font-bold text-foreground">
+        <h1 className="mt-2 display text-[28px] leading-none">
           {isNew ? "Add question" : "Edit question"}
         </h1>
       </div>
@@ -359,24 +359,25 @@ export default function MyQuestionEditor() {
         <div className="grid sm:grid-cols-2 gap-4">
           <button
             onClick={() => setMode("ai")}
-            className="rounded-xl border border-primary/30 bg-primary/5 p-6 text-left hover:bg-primary/10 transition-colors"
+            className="glass glasscard p-6 text-left"
+            style={{ borderColor: "rgba(93,202,165,0.3)" }}
           >
             <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="h-5 w-5 text-primary" />
+              <Sparkles className="h-5 w-5" style={{ color: "var(--teal)" }} />
               <span className="font-semibold text-foreground">AI-assisted</span>
               <Badge variant="default" className="text-xs">Recommended</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm muted">
               Paste a passage. Claude generates the question, 4 options, marks correct and trap, and finds the source lines. You review and edit.
             </p>
           </button>
           <button
             onClick={() => { setInitial(blankForm()); setMode("form"); }}
-            className="rounded-xl border border-border p-6 text-left hover:bg-muted transition-colors"
+            className="glass glasscard p-6 text-left"
           >
             <div className="mb-2 font-semibold text-foreground">Write manually</div>
-            <p className="text-sm text-muted-foreground">
-              Fill in everything yourself — passage, question, 4 options, mark correct and trap.
+            <p className="text-sm muted">
+              Fill in everything yourself: passage, question, 4 options, mark correct and trap.
             </p>
           </button>
         </div>
