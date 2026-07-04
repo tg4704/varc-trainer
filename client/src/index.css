@@ -157,16 +157,28 @@
 
 /* ── Component utility classes (ported from the Graspr design) ──────────── */
 @layer components {
-  /* legacy escape hatch — kept until all forms migrate to <Input/> */
+  /* glass form field (v2) */
   .input {
-    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--border);
     border-radius: var(--r-default); color: var(--text);
-    padding: 11px 13px; font-size: 14px;
-    transition: border-color var(--t), background var(--t);
+    padding: 12px 14px; font-size: 14px;
+    transition: border-color var(--t), background var(--t), box-shadow var(--t);
   }
   .input::placeholder { color: var(--text-muted); }
-  .input:focus { outline: none; border-color: var(--teal); }
+  .input:focus { outline: none; border-color: rgba(93,202,165,0.6); background: rgba(93,202,165,0.05); }
   textarea.input { resize: vertical; line-height: 1.6; }
+
+  /* reusable hover FX ported from the design */
+  .fx-sheen { position: relative; overflow: hidden; }
+  .fx-sheen::before { content: ""; position: absolute; top: 0; left: -80%; width: 55%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,0.4), transparent); transform: skewX(-20deg); pointer-events: none; }
+  .fx-sheen:hover::before { left: 140%; transition: left .6s ease; }
+  .fx-sheen .arrow { transition: transform .2s ease; }
+  .fx-sheen:hover .arrow { transform: translateX(4px); }
+  .fx-underline { position: relative; }
+  .fx-underline::after { content: ""; position: absolute; left: 0; bottom: -2px; height: 1.5px; width: 0; background: var(--teal); transition: width .25s ease; border-radius: 2px; }
+  .fx-underline:hover::after { width: 100%; }
+  .fx-ring { transition: box-shadow .2s ease; }
+  .fx-ring:hover { box-shadow: 0 0 0 3px rgba(93,202,165,0.22); }
 
   .field-label { font-size: 13px; font-weight: 500; color: var(--text-2); margin-bottom: 7px; display: block; }
 

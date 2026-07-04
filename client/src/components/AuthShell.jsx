@@ -2,45 +2,109 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "./Icon.jsx";
 
+// Centered full-height wrapper. The body already carries the ambient glow.
+// The gradient brand mark sits at the top so every auth page stays branded,
+// including the ones still on the legacy card until their own reskin.
 export function AuthShell({ children }) {
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center px-6 pb-12 pt-16 sm:pt-24">
-      <Link to="/" className="mb-7 display text-xl tracking-tight">
-        graspr<span style={{ color: "var(--teal)" }}>.</span>
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-6 py-16">
+      <Link to="/" className="mb-7 flex items-center gap-2.5">
+        <BrandMark size={30} />
+        <span className="display text-xl tracking-tight text-foreground">
+          graspr<span style={{ color: "var(--teal)" }}>.</span>
+        </span>
       </Link>
       {children}
     </div>
   );
 }
 
+// The frosted-glass auth card: heading + subhead, then the form.
+export function AuthCard({ title, subtitle, children, footer }) {
+  return (
+    <>
+      <div className="glass-floating w-[424px] max-w-full rounded-[20px] p-9">
+        <div className="mb-6 flex flex-col items-center gap-1.5 text-center">
+          <div className="text-[20px] font-semibold tracking-tight text-foreground">{title}</div>
+          {subtitle && <div className="text-[13px] muted">{subtitle}</div>}
+        </div>
+        {children}
+      </div>
+      {footer && (
+        <p className="mt-[18px] max-w-[360px] text-center text-xs leading-relaxed dim">{footer}</p>
+      )}
+    </>
+  );
+}
+
+export function BrandMark({ size = 38 }) {
+  const inner = Math.round(size * 0.34);
+  return (
+    <div
+      className="flex items-center justify-center"
+      style={{
+        width: size, height: size, borderRadius: 11,
+        background: "linear-gradient(140deg, var(--teal), var(--periwinkle))",
+        boxShadow: "0 6px 20px rgba(93,202,165,0.4)",
+      }}
+    >
+      <div style={{ width: inner, height: inner, borderRadius: 4, background: "var(--bg)" }} />
+    </div>
+  );
+}
+
+// Segmented pill toggle between /login and /register. Looks like a control,
+// but each half is a real route link so our separate pages stay intact.
 export function AuthTabs({ active }) {
   const tabs = [
-    ["login", "Sign in", "/login"],
-    ["register", "Create account", "/register"],
+    ["login", "Log in", "/login"],
+    ["register", "Sign up", "/register"],
   ];
   return (
-    <div className="mb-[26px] flex gap-[22px]" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-      {tabs.map(([id, label, to]) => (
-        <Link
-          key={id}
-          to={to}
-          className="pb-[13px] text-[15px] font-medium"
-          style={{
-            color: active === id ? "var(--text)" : "var(--text-muted)",
-            borderBottom: active === id ? "2px solid var(--teal)" : "2px solid transparent",
-            marginBottom: -1,
-          }}
-        >
-          {label}
-        </Link>
-      ))}
+    <div
+      className="mb-[22px] flex gap-1 rounded-[11px] p-1"
+      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--glass-border-lo)" }}
+    >
+      {tabs.map(([id, label, to]) => {
+        const on = active === id;
+        return (
+          <Link
+            key={id}
+            to={to}
+            className="flex-1 rounded-[8px] py-2 text-center text-[13px] font-semibold transition-colors"
+            style={
+              on
+                ? { background: "var(--teal)", color: "#07130E" }
+                : { background: "transparent", color: "var(--text-2)" }
+            }
+          >
+            {label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+export function AuthError({ children }) {
+  if (!children) return null;
+  return (
+    <div
+      className="mb-4 flex items-center gap-2.5 rounded-[10px] px-3 py-2.5"
+      style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)" }}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F87171" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" style={{ flex: "none" }}>
+        <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+      </svg>
+      <span className="text-[12.5px]" style={{ color: "#F8A0A0" }}>{children}</span>
     </div>
   );
 }
 
 export function AuthDivider({ label }) {
   return (
-    <div className="my-[18px] flex items-center gap-3.5">
+    <div className="my-4 flex items-center gap-3.5">
       <hr className="hairline flex-1" />
       <span className="text-xs dim">{label}</span>
       <hr className="hairline flex-1" />
@@ -50,13 +114,13 @@ export function AuthDivider({ label }) {
 
 export function GoogleButton({ href }) {
   return (
-    <a href={href} className="btn btn-ghost btn-block">
+    <a href={href} className="btn btn-glass btn-block fx-ring">
       <Icon name="google" size={17} /> Continue with Google
     </a>
   );
 }
 
-export function PasswordField({ label, value, onChange, hint, autoComplete }) {
+export function PasswordField({ label, value, onChange, hint, autoComplete, placeholder = "••••••••" }) {
   const [show, setShow] = useState(false);
   return (
     <div>
@@ -68,18 +132,18 @@ export function PasswordField({ label, value, onChange, hint, autoComplete }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
-          style={{ paddingRight: 42 }}
-          placeholder="••••••••"
+          style={{ paddingRight: 56 }}
+          placeholder={placeholder}
           required
         />
         <button
           type="button"
           onClick={() => setShow((s) => !s)}
           aria-label="Toggle password visibility"
-          className="absolute right-2.5 top-1/2 grid -translate-y-1/2 place-items-center"
-          style={{ color: "var(--text-muted)" }}
+          className="mono absolute right-3 top-1/2 -translate-y-1/2 text-[11px]"
+          style={{ color: "var(--text-2)" }}
         >
-          <Icon name={show ? "eyeOff" : "eye"} size={17} />
+          {show ? "Hide" : "Show"}
         </button>
       </div>
       {hint}

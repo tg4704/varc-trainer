@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
-import { AuthShell, AuthTabs, AuthDivider, GoogleButton, PasswordField } from "../components/AuthShell.jsx";
+import {
+  AuthShell, AuthCard, AuthTabs, AuthDivider, AuthError, GoogleButton, PasswordField,
+} from "../components/AuthShell.jsx";
 
-// Resolves the backend URL for Google OAuth redirect.
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
 export default function Login() {
@@ -38,8 +39,14 @@ export default function Login() {
 
   return (
     <AuthShell>
-      <div className="card w-[420px] max-w-full p-[30px]">
+      <AuthCard
+        title="Welcome back"
+        subtitle="Sign in to keep your streak alive."
+        footer={<>By continuing you agree to our <span className="muted">Terms</span> and <span className="muted">Privacy Policy</span>.</>}
+      >
         <AuthTabs active="login" />
+        <AuthError>{error}</AuthError>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
             <label className="field-label">Email or username</label>
@@ -60,27 +67,28 @@ export default function Login() {
             autoComplete="current-password"
             hint={
               <div className="mt-1.5 text-right">
-                <Link to="/forgot-password" className="text-[12.5px]" style={{ color: "var(--teal)" }}>
-                  Forgot password?
+                <Link to="/forgot-password" className="fx-underline text-[12px]" style={{ color: "var(--teal)" }}>
+                  Forgot?
                 </Link>
               </div>
             }
           />
 
-          {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}
-
-          <button type="submit" disabled={busy} className="btn btn-primary btn-block mt-1">
-            {busy ? "Signing in…" : "Sign in"}
+          <button type="submit" disabled={busy} className="btn btn-primary btn-block fx-sheen mt-1">
+            {busy ? "Signing in…" : <>Log in <span className="arrow inline-block">→</span></>}
           </button>
         </form>
 
         <AuthDivider label="or" />
         <GoogleButton href={GOOGLE_AUTH_URL} />
-      </div>
-      <p className="mt-[18px] max-w-[360px] text-center text-xs leading-relaxed dim">
-        By continuing you agree to our <span className="muted">Terms</span> and{" "}
-        <span className="muted">Privacy Policy</span>.
-      </p>
+
+        <div className="mt-5 text-center text-[13px] muted">
+          New here?{" "}
+          <Link to="/register" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>
+            Create an account
+          </Link>
+        </div>
+      </AuthCard>
     </AuthShell>
   );
 }
