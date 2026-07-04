@@ -59,7 +59,8 @@ blurred glass — legibility and mobile GPU cost both matter more there than the
 | Drills (SessionSetup, Practice, Results, SessionReview) | ✅ Done | Practice needed only modal/toast fixes — most chrome inherited the palette for free |
 | Coach (Landing, History, Practice, Summary) | ✅ Done | Landing + History on `HubLayout`; Practice/Summary keep the top bar |
 | Reading Lounge | Not built | Phase 4, unbuilt — no pages exist yet |
-| Profile, My Questions, My Question Editor | Not started | Still on pre-redesign styling |
+| Profile | ✅ Done | New editable `NameRow` (`PATCH /api/auth/name`) added alongside the existing username editor |
+| My Questions, My Question Editor | ✅ Done | Editor deliberately skips the shared `Card`/`Button`/`Input` primitives (raw `.glass` divs + `.btn`/`.input` classes) to avoid bleeding into Admin, which shares those components |
 | Admin (all pages) | Out of scope | Internal tool, left as-is per the original design review |
 | In-session minimal top bar | **Held off** | Explicit user instruction; existing top bar stays for now |
 
@@ -90,12 +91,18 @@ These weren't purely cosmetic and are worth knowing about separately from the re
 
 - No build tooling in the working environment (no local `node_modules`) — every change this
   pass was verified by brace-balance + import-resolution checks, not an actual Vite build or
-  browser render. Worth a real smoke test pass before calling any of this done-done.
+  browser render. Worth a real smoke test pass before calling any of this done-done. The user
+  has already flagged that a dedicated "intense test check" pass is coming before Phase 4.
 - In-session minimal top bar (see above) — deferred, not forgotten.
-- Reading Lounge, Profile, My Questions, My Question Editor — untouched, still legacy styling.
+- Reading Lounge — out of scope for this pass; it's unbuilt (Phase 4), not unreskinned.
 - Custom-styled range slider (SessionSetup question-count slider) — left on native
   `accent-primary` styling rather than building the design's gradient-thumb slider; low value
   for the effort.
+
+With Profile / My Questions / My Question Editor done, every existing user-facing page is now
+on the glass redesign except Admin (explicitly out of scope) and the in-session top bar
+(explicitly deferred). The Reading Lounge (Phase 4) will be designed and built fresh, not
+retrofitted.
 
 ## Related
 
