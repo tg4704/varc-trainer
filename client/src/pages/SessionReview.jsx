@@ -107,7 +107,7 @@ export default function SessionReview() {
           <div className="mt-3 flex items-center gap-3">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="text-muted-foreground">
-              Evaluating {answered.length} reasoning{answered.length !== 1 ? "s" : ""} — hang tight…
+              Evaluating {answered.length} reasoning{answered.length !== 1 ? "s" : ""}, hang tight…
             </p>
           </div>
         )}
@@ -131,7 +131,7 @@ export default function SessionReview() {
       {(phase === "loading" || phase === "evaluating") && attempts.length === 0 && (
         <div className="space-y-8">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-6 animate-pulse">
+            <div key={i} className="glass p-6 animate-pulse">
               <div className="h-4 w-24 rounded bg-muted mb-3" />
               <div className="h-3 w-full rounded bg-muted mb-2" />
               <div className="h-3 w-3/4 rounded bg-muted" />
@@ -144,7 +144,7 @@ export default function SessionReview() {
       {phase === "done" && (
         <div className="mt-12 flex flex-col sm:flex-row gap-3">
           <Button
-            className="flex-1"
+            className="fx-sheen flex-1"
             size="lg"
             onClick={() => navigate(`/results?sessionId=${sessionId}`)}
           >
@@ -184,12 +184,12 @@ function AttemptReviewCard({ attempt: a, index, total }) {
   const isEvaluated = Boolean(a.reasoning_score);
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="glass overflow-hidden">
       {/* Card header */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-start justify-between gap-4 px-5 py-4 text-left hover:bg-muted/40 transition-colors"
+        className="w-full flex items-start justify-between gap-4 px-5 py-4 text-left hover:bg-white/[0.03] transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -225,7 +225,7 @@ function AttemptReviewCard({ attempt: a, index, total }) {
 
       {/* Expanded body */}
       {open && (
-        <div className="px-5 pb-6 border-t border-border">
+        <div className="px-5 pb-6" style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
           {/* Paragraph */}
           {a.paragraph && (
             <p
@@ -277,9 +277,9 @@ function AttemptReviewCard({ attempt: a, index, total }) {
 
           {/* AI feedback */}
           {isSkipped ? (
-            <p className="mt-4 text-sm text-muted-foreground italic">Question was skipped — no feedback.</p>
+            <p className="mt-4 text-sm text-muted-foreground italic">Question was skipped. No feedback.</p>
           ) : !hasReasoning ? (
-            <p className="mt-4 text-sm text-muted-foreground italic">No reasoning submitted — no AI feedback.</p>
+            <p className="mt-4 text-sm text-muted-foreground italic">No reasoning submitted. No AI feedback.</p>
           ) : a.aiError ? (
             <div className="mt-4 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
               AI feedback unavailable for this question.

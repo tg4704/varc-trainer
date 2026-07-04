@@ -653,7 +653,7 @@ export default function Practice() {
 
             {!fb ? (
               <div className="mt-6 flex gap-3">
-                <Button className="flex-1" size="lg"
+                <Button className="fx-sheen flex-1" size="lg"
                   disabled={cs.tentativeSelected === null || cs.submitting || cs.isSkipping}
                   onClick={handleIntuitionSubmit}>
                   {cs.submitting ? "Submitting…" : "Submit"}
@@ -676,8 +676,8 @@ export default function Practice() {
         </div>
 
         {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
-          onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
-        {flagToast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-border bg-card text-foreground px-5 py-3 text-sm shadow-lg">{flagToast}</div>}
+          onSuccess={() => { setFlagModal(null); setFlagToast("Reported, thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
+        {flagToast && <div className="glass-floating fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-5 py-3 text-sm text-foreground">{flagToast}</div>}
         {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
         {showLeaveModal && <LeaveSessionModal busy={leaving} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
       </div>
@@ -698,7 +698,7 @@ export default function Practice() {
         <div className="mb-6 rounded-md border px-4 py-3 text-sm flex items-center gap-2.5"
           style={{ background: "color-mix(in oklch, var(--amber) 9%, transparent)", borderColor: "color-mix(in oklch, var(--amber) 28%, transparent)", color: "var(--amber)" }}>
           <Icon name="clock" size={16} />
-          <span><strong className="font-semibold">Spaced repetition review</strong> — questions you previously got wrong, due for reinforcement.</span>
+          <span><strong className="font-semibold">Spaced repetition review.</strong> Questions you previously got wrong, due for reinforcement.</span>
         </div>
       )}
       <QuestionNavBar
@@ -773,7 +773,7 @@ export default function Practice() {
           {/* Submit Answer button — visible when option selected but not yet locked */}
           {!cs.locked && !fb && cs.tentativeSelected !== null && (
             <div className="mt-4 animate-slide-up">
-              <Button className="w-full" size="lg" onClick={lockAnswer}>
+              <Button className="fx-sheen w-full" size="lg" onClick={lockAnswer}>
                 Submit Answer →
               </Button>
               <p className="mt-1 text-center text-xs text-muted-foreground">
@@ -836,7 +836,7 @@ export default function Practice() {
               No Skip here: the answer is already locked, so the user must submit. */}
           {cs.locked && !fb && (
             <div className="mt-4">
-              <Button className="w-full" size="lg"
+              <Button className="fx-sheen w-full" size="lg"
                 disabled={reasoningLen > REASONING_MAX || cs.submitting || cs.isSkipping}
                 onClick={handleSubmit}>
                 {cs.submitting ? (
@@ -913,10 +913,10 @@ export default function Practice() {
     )}
 
     {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
-      onSuccess={() => { setFlagModal(null); setFlagToast("Reported — thanks for the feedback!"); setTimeout(() => setFlagToast(null), 3500); }} />}
+      onSuccess={() => { setFlagModal(null); setFlagToast("Reported, thanks for the feedback!"); setTimeout(() => setFlagToast(null), 3500); }} />}
 
     {flagToast && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl border border-border bg-card text-foreground px-5 py-3 text-sm font-medium shadow-lg">
+      <div className="glass-floating fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-5 py-3 text-sm font-medium text-foreground">
         {flagToast}
       </div>
     )}
@@ -931,13 +931,13 @@ export default function Practice() {
 function EndSessionModal({ onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-xl">
+      <div className="glass-floating w-full max-w-sm p-6">
         <h2 className="text-base font-bold text-foreground mb-2">Submit session?</h2>
         <p className="text-sm text-muted-foreground mb-5">
           All questions answered. Submit the session to see your results, or keep reviewing.
         </p>
         <div className="flex gap-3">
-          <Button className="flex-1" onClick={onConfirm}>Submit session</Button>
+          <Button className="fx-sheen flex-1" onClick={onConfirm}>Submit session</Button>
           <Button variant="outline" className="flex-1" onClick={onCancel}>Keep reviewing</Button>
         </div>
       </div>
@@ -951,15 +951,15 @@ function EndSessionModal({ onConfirm, onCancel }) {
 function LeaveSessionModal({ busy, onEnd, onDiscard, onStay }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-xl">
+      <div className="glass-floating w-full max-w-sm p-6">
         <h2 className="text-base font-bold text-foreground mb-2">Leave this session?</h2>
         <p className="text-sm text-muted-foreground mb-5">
           Practice sessions can't be resumed. <strong>End</strong> keeps your answered
           questions (the rest count as skipped). <strong>Discard</strong> deletes the
-          session entirely — as if it never happened.
+          session entirely, as if it never happened.
         </p>
         <div className="flex flex-col gap-2">
-          <Button className="w-full" disabled={busy} onClick={onEnd}>
+          <Button className="fx-sheen w-full" disabled={busy} onClick={onEnd}>
             {busy ? "Ending…" : "End session"}
           </Button>
           <Button variant="destructive" className="w-full" disabled={busy} onClick={onDiscard}>
@@ -986,10 +986,10 @@ function DeferredSavedCard({ feedback, isLast, onNext, onEnd }) {
       )}>
         {feedback.isCorrect ? "✓ Correct" : "✗ Incorrect"}
         <span className="ml-auto text-xs font-normal text-muted-foreground">
-          Reasoning saved — full feedback after the session
+          Reasoning saved, full feedback after the session
         </span>
       </div>
-      <Button className="w-full" size="lg" onClick={isLast ? onEnd : onNext}>
+      <Button className="fx-sheen w-full" size="lg" onClick={isLast ? onEnd : onNext}>
         {isLast ? "End Session & Get Feedback" : "Next Question →"}
       </Button>
     </div>
@@ -1017,11 +1017,11 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, isLast, onN
     <div className="mt-6 animate-slide-up">
       {feedback.aiError && (
         <div className="mb-4 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
-          {feedback.aiErrorMessage || "AI feedback unavailable — your attempt was saved."}
+          {feedback.aiErrorMessage || "AI feedback unavailable. Your attempt was saved."}
         </div>
       )}
       <FeedbackSections attempt={attempt} />
-      <Button className="mt-6 w-full" size="lg" onClick={isLast ? onEnd : onNext}>
+      <Button className="fx-sheen mt-6 w-full" size="lg" onClick={isLast ? onEnd : onNext}>
         {isLast ? "End Session" : "Next Question"}
       </Button>
     </div>
@@ -1057,7 +1057,7 @@ function QuestionNavBar({ total, currentIdx, questionStates, onJump }) {
             key={i}
             type="button"
             onClick={() => !isCurrent && onJump(i)}
-            title={`Q${i + 1} — ${isCurrent ? "current" : statusLabel}`}
+            title={`Q${i + 1}: ${isCurrent ? "current" : statusLabel}`}
             className={cn(
               "h-7 w-7 rounded-full text-xs font-bold border flex items-center justify-center transition-all flex-none",
               colorCls,
@@ -1099,7 +1099,7 @@ function FlagModal({ questionId, onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
       <div
-        className="w-full max-w-sm rounded-2xl bg-background border border-border p-6 shadow-xl"
+        className="glass-floating w-full max-w-sm p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-bold text-foreground mb-1">Report a problem</h2>
@@ -1170,7 +1170,7 @@ function IntuitionFeedback({ feedback, sessionPoints, isLast, onNext, onEnd }) {
       {trapLetter && (
         <div className="rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
           <span className="font-semibold">The trap: {trapLetter}.</span>{" "}
-          {trapLabel(feedback.trapType)} — {trapDescription(feedback.trapType)}
+          {trapLabel(feedback.trapType)}. {trapDescription(feedback.trapType)}
         </div>
       )}
 
@@ -1180,7 +1180,7 @@ function IntuitionFeedback({ feedback, sessionPoints, isLast, onNext, onEnd }) {
         </div>
       )}
 
-      <Button className="w-full" size="lg" onClick={isLast ? onEnd : onNext}>
+      <Button className="fx-sheen w-full" size="lg" onClick={isLast ? onEnd : onNext}>
         {isLast ? "End Session" : "Next"}
       </Button>
     </div>

@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { createSession, sr } from "../api.js";
 import { saveActiveSession } from "../session.js";
 import { Button } from "../components/ui/button.jsx";
-import { cn } from "../lib/utils.js";
 
 // Cache due-count across mounts so the SR option doesn't flicker "checking…"
 // every time the user visits the setup page.
@@ -145,9 +144,10 @@ export default function SessionSetup() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-12">
-      <h1 className="display text-[34px]">Start a session</h1>
+      <h1 className="display text-[34px]">Start a Drills session</h1>
       <p className="mt-2 muted">Set the shape of your practice. You can change this any time.</p>
 
+      <div className="glass mt-8 p-6 md:p-7">
       {/* Session type */}
       <Section title="Session type">
         <div className="space-y-2">
@@ -362,7 +362,7 @@ export default function SessionSetup() {
       <Button
         onClick={handleStart}
         disabled={busy || (reviewReady && dueCount === 0)}
-        className="mt-8 w-full"
+        className="fx-sheen mt-8 w-full"
         size="lg"
       >
         {busy
@@ -373,6 +373,7 @@ export default function SessionSetup() {
               deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : inferenceOnly ? " inference" : ""
             } session`}
       </Button>
+      </div>
     </div>
   );
 }
@@ -380,9 +381,7 @@ export default function SessionSetup() {
 function Section({ title, children }) {
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h2>
+      <h2 className="eyebrow">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -393,12 +392,12 @@ function Pill({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+      className="fx-ring rounded-[10px] px-4 py-2 text-sm font-medium transition-colors"
+      style={
         active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-input bg-background text-foreground hover:border-foreground/40"
-      )}
+          ? { background: "var(--teal)", color: "#07130E", border: "1px solid var(--teal)" }
+          : { background: "rgba(255,255,255,0.03)", color: "var(--text)", border: "1px solid var(--border)" }
+      }
     >
       {children}
     </button>
@@ -411,27 +410,25 @@ function RadioCard({ active, title, desc, onClick, disabled = false }) {
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={cn(
-        "w-full rounded-lg border p-4 text-left transition-colors",
+      className="w-full rounded-[12px] p-4 text-left transition-colors"
+      style={
         disabled
-          ? "border-border bg-card opacity-40 cursor-not-allowed"
+          ? { background: "rgba(255,255,255,0.02)", border: "1px solid var(--glass-border-lo)", opacity: 0.4, cursor: "not-allowed" }
           : active
-          ? "border-primary bg-primary/5"
-          : "border-border bg-card hover:border-foreground/40"
-      )}
+          ? { background: "rgba(93,202,165,0.07)", border: "1px solid rgba(93,202,165,0.45)" }
+          : { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }
+      }
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         <span
-          className={cn(
-            "flex h-4 w-4 items-center justify-center rounded-full border",
-            active ? "border-primary" : "border-input"
-          )}
+          className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full"
+          style={active ? { border: "2px solid var(--teal)" } : { border: "2px solid var(--text-muted)" }}
         >
-          {active && <span className="h-2 w-2 rounded-full bg-primary" />}
+          {active && <span className="h-2 w-2 rounded-full" style={{ background: "var(--teal)" }} />}
         </span>
         <span className="font-semibold text-foreground">{title}</span>
       </div>
-      <p className="mt-1 ml-6 text-sm text-muted-foreground">{desc}</p>
+      <p className="mt-1 ml-[26px] text-sm muted">{desc}</p>
     </button>
   );
 }

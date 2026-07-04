@@ -72,7 +72,7 @@ export default function Results() {
 
       <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-4">
         {stats.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-5">
+          <div key={label} className="glass glasscard p-5">
             <div className="mono text-[26px] leading-none text-foreground">{value}</div>
             <div className="mt-2 text-sm muted">{label}</div>
           </div>
@@ -80,12 +80,14 @@ export default function Results() {
       </div>
 
       <section className="mt-10">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Question by question
-        </h2>
-        <div className="mt-3 divide-y divide-border rounded-xl border border-border bg-card">
+        <h2 className="eyebrow">Question by question</h2>
+        <div className="glass mt-3">
           {attempts.map((a, i) => (
-            <div key={i} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div
+              key={i}
+              className="flex items-center justify-between gap-3 px-4 py-3"
+              style={i > 0 ? { borderTop: "1px solid var(--glass-border-lo)" } : undefined}
+            >
               <div className="flex items-center gap-2">
                 <span className="text-sm dim w-6 mono">{i + 1}</span>
                 <TypeBadge type={a.question_type} />
@@ -103,10 +105,10 @@ export default function Results() {
       </section>
 
       <div className="mt-8 flex gap-3">
-        <Link to="/setup" className="btn btn-primary">
+        <Link to="/setup" className="btn btn-primary fx-sheen">
           New session
         </Link>
-        <Link to="/dashboard" className="btn btn-ghost">
+        <Link to="/dashboard" className="btn btn-glass fx-ring">
           View dashboard
         </Link>
       </div>
