@@ -189,6 +189,17 @@
   .fx-underline:hover::after { width: 100%; }
   .fx-ring { transition: box-shadow .2s ease; }
   .fx-ring:hover { box-shadow: 0 0 0 3px rgba(93,202,165,0.22); }
+  .fx-logo { position: relative; overflow: hidden; }
+
+  /* feature-row icon glow on hover (Home hero) */
+  .fx-featrow .ficon { transition: box-shadow .2s ease; }
+  .fx-featrow .ftxt { transition: color .2s ease; }
+  .fx-featrow:hover .ficon { box-shadow: 0 0 0 4px var(--rc, transparent); }
+  .fx-featrow:hover .ftxt { color: var(--text); }
+
+  /* glass card hover lift (Home product cards, Dashboard KPI cards) */
+  .glasscard { transition: transform .18s ease, border-color .18s ease; }
+  .glasscard:hover { transform: translateY(-2px); border-color: var(--glass-border-hi); }
 
   .field-label { font-size: 13px; font-weight: 500; color: var(--text-2); margin-bottom: 7px; display: block; }
 

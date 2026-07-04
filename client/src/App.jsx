@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import FloatingNav from "./components/FloatingNav.jsx";
 import { AuthProvider, useAuth } from "./auth.jsx";
 import { NavGuardProvider, useNavGuard } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -128,11 +129,27 @@ const AdminLoading = (
   </div>
 );
 
+// Contextual nav: floating glass pill on Home, no persistent top nav on the
+// auth family (AuthShell already shows its own brand mark), the existing
+// top bar everywhere else until each area gets its own reskin (glass sidebar
+// on hub pages, minimal top bar in-session — per the redesign build order).
+const NO_NAV_ROUTES = [
+  "/login", "/register", "/verify-email", "/forgot-password", "/reset-password",
+  "/choose-username", "/oauth-callback",
+];
+
+function AppNav() {
+  const { pathname } = useLocation();
+  if (pathname === "/") return <FloatingNav />;
+  if (NO_NAV_ROUTES.includes(pathname)) return null;
+  return <NavBar />;
+}
+
 function AppShell() {
   return (
     <NavGuardProvider>
     <div className="min-h-screen bg-background text-foreground">
-      <NavBar />
+      <AppNav />
       <main>
         <ErrorBoundary>
         <Routes>

@@ -10,7 +10,7 @@ import TypeBadge from "../components/TypeBadge.jsx";
 function DemoCard() {
   const [hoverTrap, setHoverTrap] = useState(false);
   return (
-    <div className="card mx-auto w-full max-w-[480px] p-[22px]">
+    <div className="glass-floating mx-auto w-full max-w-[480px] p-[26px]">
       <div className="mb-4 flex items-center gap-2.5">
         <TypeBadge type="inference" />
         <span className="text-xs dim">Sample question</span>
@@ -60,9 +60,25 @@ function HowStep({ n, children }) {
   );
 }
 
+function FeatureRow({ color, path, children }) {
+  return (
+    <div className="fx-featrow flex items-center gap-3">
+      <span
+        className="ficon flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[9px]"
+        style={{ "--rc": `${color}2e`, background: `${color}1a`, border: `1px solid ${color}40` }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          {path}
+        </svg>
+      </span>
+      <span className="ftxt text-[14px] muted">{children}</span>
+    </div>
+  );
+}
+
 function ProductCard({ step, name, italic, desc, bullets, to, cta, comingSoon = false }) {
   return (
-    <div className={`card flex flex-1 flex-col gap-5 p-7 ${comingSoon ? "opacity-60" : ""}`}>
+    <div className={`glass glasscard flex flex-1 flex-col gap-5 p-7 ${comingSoon ? "opacity-60" : ""}`}>
       <div>
         {step && (
           <div className="mono text-[12px] mb-1.5" style={{ color: "var(--teal)" }}>{step}</div>
@@ -72,7 +88,7 @@ function ProductCard({ step, name, italic, desc, bullets, to, cta, comingSoon = 
       </div>
       <div className="flex flex-col">
         {bullets.map((b, i) => (
-          <div key={i} className="border-t border-border py-2.5 text-[13.5px] leading-snug muted first:border-t-0 first:pt-0">
+          <div key={i} className="py-2.5 text-[13.5px] leading-snug muted first:pt-0" style={{ borderTop: i === 0 ? "none" : "1px solid var(--glass-border-lo)" }}>
             {b}
           </div>
         ))}
@@ -80,7 +96,7 @@ function ProductCard({ step, name, italic, desc, bullets, to, cta, comingSoon = 
       {comingSoon ? (
         <span className="mt-auto self-start text-[13.5px] muted">Coming soon</span>
       ) : (
-        <Link to={to} className="btn btn-ghost mt-auto self-start">
+        <Link to={to} className="btn btn-glass fx-ring mt-auto self-start">
           {cta} <Icon name="arrowR" size={15} />
         </Link>
       )}
@@ -101,7 +117,7 @@ export default function Home() {
   return (
     <div>
       {/* hero */}
-      <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-16 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:pt-[76px]">
+      <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-10 md:grid-cols-[1.05fr_0.95fr] md:gap-14 md:pt-[52px]">
         <div>
           <h1 className="display text-[44px] leading-[1.06] tracking-[-0.02em] sm:text-[54px]">
             Stop picking the<br />
@@ -111,20 +127,33 @@ export default function Home() {
             Most CAT students know the passage. They still pick the wrong answer. This trains the
             reasoning skill that separates <span className="text-foreground">95 from 99 percentile.</span>
           </p>
-          <div className="mt-7 flex flex-wrap gap-3">
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             {user ? (
               <>
-                <Link to="/setup" className="btn btn-primary btn-lg">Start Drills</Link>
+                <Link to="/setup" className="btn btn-primary btn-lg fx-sheen">Start Drills</Link>
                 {hasActive && (
-                  <Link to="/practice" className="btn btn-teal-border btn-lg">Continue session</Link>
+                  <Link to="/practice" className="btn btn-glass btn-lg fx-ring">Continue session</Link>
                 )}
               </>
             ) : (
               <>
-                <Link to="/register" className="btn btn-primary btn-lg">Start free</Link>
-                <Link to="/login" className="btn btn-teal-border btn-lg">Log in</Link>
+                <Link to="/register" className="btn btn-primary btn-lg fx-sheen">Start free</Link>
+                <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--teal)", letterSpacing: "0.12em" }}>
+                  Free to start
+                </span>
               </>
             )}
+          </div>
+          <div className="mt-9 flex flex-col gap-3.5">
+            <FeatureRow color="var(--teal)" path={<path d="M12 3l1.7 4.4L18 9l-4.3 1.6L12 15l-1.7-4.4L6 9l4.3-1.6z" />}>
+              AI feedback on every answer
+            </FeatureRow>
+            <FeatureRow color="var(--periwinkle)" path={<path d="M17 4l4 4-4 4M21 8H9M7 20l-4-4 4-4M3 16h12" />}>
+              Full reasoning verdicts, not just right or wrong
+            </FeatureRow>
+            <FeatureRow color="var(--amber)" path={<path d="M12 2c1 3-1 5-2 6s-2 3-2 5a6 6 0 0012 0c0-3-2-5-3-7-2 1-3 0-3-2 0 0-1.5.5-2 0z" />}>
+              Daily habit streaks
+            </FeatureRow>
           </div>
         </div>
         <DemoCard />
@@ -187,20 +216,20 @@ export default function Home() {
       {/* closing CTA — only for logged-out visitors */}
       {!user && (
         <section className="mx-auto max-w-[1000px] px-7 pb-20 pt-10">
-          <div className="border-t border-border pt-12 text-center">
+          <div className="pt-12 text-center" style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
             <h2 className="display text-[30px] leading-tight">
               Read closely. <span className="italic" style={{ color: "var(--teal)" }}>Reason better.</span>
             </h2>
             <p className="mx-auto mt-3 max-w-md text-[15px] muted">
               A few questions a day is enough to change how you read under pressure.
             </p>
-            <Link to="/register" className="btn btn-primary btn-lg mt-6 inline-flex">Start free</Link>
+            <Link to="/register" className="btn btn-primary btn-lg fx-sheen mt-6 inline-flex">Start free</Link>
           </div>
         </section>
       )}
 
       {/* footer */}
-      <footer style={{ borderTop: "1px solid var(--border-subtle)" }}>
+      <footer style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
         <div className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-4 px-7 py-8">
           <span className="display text-lg">graspr<span style={{ color: "var(--teal)" }}>.</span></span>
           <p className="text-[13px] dim">Train the reasoning, not the recall.</p>
