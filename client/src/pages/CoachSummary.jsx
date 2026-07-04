@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { coach } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import { cn } from "../lib/utils.js";
 
@@ -51,17 +50,17 @@ export default function CoachSummary() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Session Complete</h1>
-        {passage.title && <p className="mt-1 text-muted-foreground">{passage.title}</p>}
+        <h1 className="display text-[32px] leading-none">Session complete</h1>
+        {passage.title && <p className="mt-2 muted">{passage.title}</p>}
       </div>
 
       {/* Reading grade recap */}
       {readingGrade && (
-        <div className="mb-8 rounded-xl border border-primary/30 bg-primary/5 p-4">
-          <span className="text-xs font-semibold uppercase tracking-wide text-primary">
+        <div className="glass mb-8 p-4" style={{ borderLeft: "3px solid var(--teal)" }}>
+          <span className="eyebrow" style={{ color: "var(--teal)" }}>
             Your reading: {readingGrade.reading_mode?.replace(/-/g, " ")}
           </span>
-          <p className="mt-1 text-sm text-foreground">{readingGrade.verdict_line}</p>
+          <p className="mt-1.5 text-sm text-foreground">{readingGrade.verdict_line}</p>
         </div>
       )}
 
@@ -71,19 +70,19 @@ export default function CoachSummary() {
           label="Score"
           value={`${correct} / ${totalAttempted}`}
           sub="questions correct"
-          color={correct >= questions.length * 0.75 ? "text-success" : correct >= questions.length * 0.5 ? "text-amber-500" : "text-destructive"}
+          color={correct >= questions.length * 0.75 ? "var(--green)" : correct >= questions.length * 0.5 ? "var(--amber)" : "var(--red)"}
         />
         <StatCard
           label="Avg reasoning"
           value={avgReasoning === "—" ? avgReasoning : `${avgReasoning}/5`}
           sub="score across questions"
-          color={parseFloat(avgReasoning) >= 4 ? "text-success" : "text-muted-foreground"}
+          color={parseFloat(avgReasoning) >= 4 ? "var(--green)" : "var(--text-2)"}
         />
         <StatCard
           label="Words read"
           value={passage.wordCount?.toLocaleString()}
           sub="passage length"
-          color="text-muted-foreground"
+          color="var(--text-2)"
         />
       </div>
 
@@ -92,36 +91,39 @@ export default function CoachSummary() {
         {questions.map((q, i) => {
           const a = attempts.find((at) => at.question_index === i);
           if (!a) return (
-            <div key={q.id} className="rounded-xl border border-border bg-card px-4 py-3">
+            <div key={q.id} className="glass px-4 py-3">
               <div className="flex items-center gap-2">
                 <TypeBadge type={q.type} />
-                <span className="text-xs text-muted-foreground">Not attempted</span>
+                <span className="text-xs muted">Not attempted</span>
               </div>
             </div>
           );
           return (
-            <div key={q.id} className={cn("rounded-xl border bg-card p-4", a.is_correct ? "border-success/20" : "border-destructive/20")}>
+            <div key={q.id} className="glass p-4" style={{ borderLeft: `3px solid ${a.is_correct ? "var(--green)" : "var(--red)"}` }}>
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <TypeBadge type={q.type} />
-                  <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", a.is_correct ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={a.is_correct ? { color: "var(--green)", background: "rgba(74,222,128,0.12)" } : { color: "var(--red)", background: "rgba(248,113,113,0.12)" }}
+                  >
                     {a.is_correct ? "Correct" : "Incorrect"}
                   </span>
                 </div>
                 {a.reasoning_score != null && (
-                  <span className="text-xs text-muted-foreground flex-none">Reasoning: {a.reasoning_score}/5</span>
+                  <span className="text-xs muted flex-none">Reasoning: {a.reasoning_score}/5</span>
                 )}
               </div>
               <p className="text-sm text-foreground font-medium mb-2">{q.question}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs muted">
                 Your answer: {LETTERS[a.selected_option_index]}
                 {!a.is_correct && <> · Correct: {LETTERS[a.correct_option_index]}</>}
               </p>
               {a.key_takeaway && (
-                <p className="mt-2 text-xs text-muted-foreground italic">"{a.key_takeaway}"</p>
+                <p className="mt-2 text-xs muted italic">&ldquo;{a.key_takeaway}&rdquo;</p>
               )}
               {a.exchange_count > 0 && (
-                <p className="mt-1 text-xs text-muted-foreground">Discussed · {a.exchange_count} exchange{a.exchange_count !== 1 ? "s" : ""}</p>
+                <p className="mt-1 text-xs muted">Discussed · {a.exchange_count} exchange{a.exchange_count !== 1 ? "s" : ""}</p>
               )}
             </div>
           );
@@ -129,8 +131,12 @@ export default function CoachSummary() {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <Button className="flex-1" size="lg" onClick={() => navigate("/coach")}>Practice Another Passage</Button>
-        <Button variant="outline" size="lg" onClick={() => navigate("/dashboard")}>Go to Dashboard</Button>
+        <button className="btn btn-primary fx-sheen flex-1" style={{ padding: "14px 22px", fontSize: 15 }} onClick={() => navigate("/coach")}>
+          Practice another passage
+        </button>
+        <button className="btn btn-glass fx-ring flex-1" style={{ padding: "14px 22px", fontSize: 15 }} onClick={() => navigate("/dashboard")}>
+          Go to dashboard
+        </button>
       </div>
     </div>
   );
@@ -138,10 +144,10 @@ export default function CoachSummary() {
 
 function StatCard({ label, value, sub, color }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 text-center">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className={cn("text-2xl font-bold", color)}>{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+    <div className="glass glasscard p-4 text-center">
+      <p className="text-xs muted mb-1">{label}</p>
+      <p className={cn("mono text-2xl")} style={{ color }}>{value}</p>
+      <p className="text-xs muted mt-0.5">{sub}</p>
     </div>
   );
 }

@@ -4,7 +4,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { coach } from "../api.js";
-import { Button } from "../components/ui/button.jsx";
 import { Badge } from "../components/ui/badge.jsx";
 import { cn } from "../lib/utils.js";
 
@@ -42,19 +41,19 @@ export default function CoachLanding() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
+    <div className="max-w-4xl mx-auto px-4 py-10 md:px-9">
       <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="display text-[34px]">Coach</h1>
           <p className="mt-2 muted leading-relaxed max-w-xl">
-            Full CAT-style passages. Map the argument before you see any question — the AI
+            Full CAT-style passages. Map the argument before you see any question, and the AI
             grades how you read, not just what you answer. Stuck on a question? Discuss it
             after you see the verdict.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link to="/coach/history">History</Link>
-        </Button>
+        <Link to="/coach/history" className="btn btn-glass fx-ring flex-none">
+          History
+        </Link>
       </div>
 
       {/* Topic filter */}
@@ -63,12 +62,12 @@ export default function CoachLanding() {
           <button
             key={t}
             onClick={() => setTopic(t)}
-            className={cn(
-              "rounded-full px-3.5 py-1.5 text-sm font-medium border transition-colors capitalize",
+            className="fx-ring rounded-[10px] px-3.5 py-1.5 text-sm font-medium capitalize transition-colors"
+            style={
               topic === t
-                ? "bg-foreground text-background border-foreground"
-                : "border-border text-muted-foreground hover:text-foreground"
-            )}
+                ? { background: "var(--teal)", color: "#07130E", border: "1px solid var(--teal)" }
+                : { background: "rgba(255,255,255,0.03)", color: "var(--text-2)", border: "1px solid var(--border)" }
+            }
           >
             {t || "All topics"}
           </button>
@@ -76,12 +75,14 @@ export default function CoachLanding() {
       </div>
 
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+        <p className="mb-4 rounded-[10px] px-3 py-2 text-sm text-destructive" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)" }}>
+          {error}
+        </p>
       )}
 
       {passages === null && (
         <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-24 rounded-[16px] bg-muted animate-pulse" />)}
         </div>
       )}
 
@@ -94,7 +95,7 @@ export default function CoachLanding() {
       {passages?.length > 0 && (
         <div className="grid sm:grid-cols-2 gap-4">
           {passages.map((p) => (
-            <div key={p.id} className="rounded-xl border border-border bg-card p-5 flex flex-col">
+            <div key={p.id} className="glass glasscard flex flex-col p-5">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <Badge variant="outline" className="capitalize">{p.topic}</Badge>
                 {p.genre && <span className="text-xs text-muted-foreground">{p.genre}</span>}
@@ -105,13 +106,13 @@ export default function CoachLanding() {
               <p className="text-xs text-muted-foreground mb-4">
                 {p.wordCount?.toLocaleString()} words · {p.questionCount} question{p.questionCount === 1 ? "" : "s"}
               </p>
-              <Button
-                className="mt-auto"
+              <button
+                className={cn("btn btn-primary fx-sheen mt-auto", startingId === p.id && "opacity-60")}
                 disabled={startingId === p.id}
                 onClick={() => start(p.id, p.activeSessionId)}
               >
                 {startingId === p.id ? "Starting…" : p.activeSessionId ? "Resume →" : "Start →"}
-              </Button>
+              </button>
             </div>
           ))}
         </div>

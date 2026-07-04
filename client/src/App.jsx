@@ -139,13 +139,17 @@ const NO_NAV_ROUTES = [
   "/choose-username", "/oauth-callback",
 ];
 // Routes whose page brings its own HubLayout (glass sidebar) — no top slot needed.
-const SIDEBAR_ROUTES = ["/dashboard"];
+// Exact matches only (not prefix): "/coach" must NOT swallow "/coach/practice" or
+// "/coach/summary", which stay on the existing top bar (in-session / post-session).
+const SIDEBAR_EXACT_ROUTES = ["/dashboard", "/coach"];
+const SIDEBAR_PREFIX_ROUTES = ["/coach/history"];
 
 function AppNav() {
   const { pathname } = useLocation();
   if (pathname === "/") return <FloatingNav />;
   if (NO_NAV_ROUTES.includes(pathname)) return null;
-  if (SIDEBAR_ROUTES.some((r) => pathname.startsWith(r))) return null;
+  if (SIDEBAR_EXACT_ROUTES.includes(pathname)) return null;
+  if (SIDEBAR_PREFIX_ROUTES.some((r) => pathname.startsWith(r))) return null;
   return <NavBar />;
 }
 
@@ -184,10 +188,10 @@ function AppShell() {
           <Route path="/my-questions/:id" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
 
           {/* ── VARC Coach ──────────────────────────────────────────── */}
-          <Route path="/coach"          element={<ProtectedRoute><CoachLanding /></ProtectedRoute>} />
+          <Route path="/coach"          element={<ProtectedRoute><HubLayout><CoachLanding /></HubLayout></ProtectedRoute>} />
           <Route path="/coach/practice" element={<ProtectedRoute><CoachPractice /></ProtectedRoute>} />
           <Route path="/coach/summary"  element={<ProtectedRoute><CoachSummary /></ProtectedRoute>} />
-          <Route path="/coach/history"  element={<ProtectedRoute><CoachHistory /></ProtectedRoute>} />
+          <Route path="/coach/history"  element={<ProtectedRoute><HubLayout><CoachHistory /></HubLayout></ProtectedRoute>} />
 
           {/* ── Auth extras ──────────────────────────────────────────── */}
           <Route path="/choose-username" element={<ProtectedRoute><ChooseUsername /></ProtectedRoute>} />

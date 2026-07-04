@@ -219,22 +219,24 @@ export default function CoachPractice() {
   // ── Reading phase ────────────────────────────────────────────────────────
   if (inReadingPhase) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <div className="flex flex-col lg:flex-row gap-6">
+      <div className="max-w-5xl mx-auto px-4 py-6 md:px-9">
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Passage — plain canvas, no glass, maximum reading legibility */}
           <div className="lg:w-[55%]">
-            <div className="rounded-xl border border-border bg-card p-5">
-              {passage.title && <h2 className="mb-3 display text-[22px] leading-tight">{passage.title}</h2>}
-              <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>
+            <div className="lg:border-r lg:pr-8" style={{ borderColor: "var(--glass-border-lo)" }}>
+              <div className="eyebrow mb-2">Passage</div>
+              {passage.title && <h2 className="mb-4 display text-[24px] italic leading-tight">{passage.title}</h2>}
+              <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 16, lineHeight: 1.9, color: "#C9D0E0" }}>
                 {passage.body}
               </p>
             </div>
           </div>
 
           <div className="lg:w-[45%]">
-            <div className="rounded-xl border border-border bg-card p-5 sticky top-4">
+            <div className="glass-floating sticky top-4 p-6">
               <h3 className="font-bold text-foreground mb-1">Map the argument first</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Before you see any question — what is each paragraph doing? Write in any
+              <p className="text-xs muted mb-4">
+                Before you see any question, what is each paragraph doing? Write in any
                 language, including your own words or mother tongue. Grammar doesn't matter;
                 understanding does.
               </p>
@@ -242,11 +244,13 @@ export default function CoachPractice() {
               <div className="flex gap-2 mb-4">
                 <button
                   onClick={() => setMapMode("quick")}
-                  className={cn("rounded-full px-3 py-1 text-xs font-medium border", mapMode === "quick" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground")}
+                  className="rounded-[999px] px-3 py-1 text-xs font-semibold transition-colors"
+                  style={mapMode === "quick" ? { background: "var(--teal)", color: "#07130E" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-2)", border: "1px solid var(--glass-border-lo)" }}
                 >Quick (crux words)</button>
                 <button
                   onClick={() => setMapMode("full")}
-                  className={cn("rounded-full px-3 py-1 text-xs font-medium border", mapMode === "full" ? "bg-foreground text-background border-foreground" : "border-border text-muted-foreground")}
+                  className="rounded-[999px] px-3 py-1 text-xs font-semibold transition-colors"
+                  style={mapMode === "full" ? { background: "var(--teal)", color: "#07130E" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-2)", border: "1px solid var(--glass-border-lo)" }}
                 >Full summary</button>
               </div>
 
@@ -254,12 +258,13 @@ export default function CoachPractice() {
                 <div className="space-y-2">
                   {cruxRows.map((val, i) => (
                     <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-6 flex-none">¶{i + 1}</span>
+                      <span className="text-xs muted w-6 flex-none">¶{i + 1}</span>
                       <input
                         value={val}
                         onChange={(e) => setCruxRow(i, e.target.value)}
-                        placeholder="4-5 words — this paragraph's crux"
-                        className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="4-5 words: this paragraph's crux"
+                        className="input"
+                        style={{ padding: "8px 12px", fontSize: 13.5 }}
                       />
                     </div>
                   ))}
@@ -267,40 +272,36 @@ export default function CoachPractice() {
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Main point</label>
-                    <textarea value={mainPoint} onChange={(e) => setMainPoint(e.target.value)} rows={2}
-                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                    <label className="field-label">Main point</label>
+                    <textarea value={mainPoint} onChange={(e) => setMainPoint(e.target.value)} rows={2} className="input" style={{ resize: "vertical" }} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Tone</label>
-                    <input value={tone} onChange={(e) => setTone(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                    <label className="field-label">Tone</label>
+                    <input value={tone} onChange={(e) => setTone(e.target.value)} className="input" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Structure (what each paragraph does)</label>
+                    <label className="field-label">Structure (what each paragraph does)</label>
                     <div className="space-y-2">
                       {structureRows.map((val, i) => (
                         <div key={i} className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground w-6 flex-none">¶{i + 1}</span>
-                          <input value={val} onChange={(e) => setStructureRow(i, e.target.value)}
-                            className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                          <span className="text-xs muted w-6 flex-none">¶{i + 1}</span>
+                          <input value={val} onChange={(e) => setStructureRow(i, e.target.value)} className="input" style={{ padding: "8px 12px", fontSize: 13.5 }} />
                         </div>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">The turn <span className="font-normal">(optional)</span></label>
-                    <input value={theTurn} onChange={(e) => setTheTurn(e.target.value)}
-                      className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                    <label className="field-label">The turn <span className="dim font-normal">(optional)</span></label>
+                    <input value={theTurn} onChange={(e) => setTheTurn(e.target.value)} className="input" />
                   </div>
                 </div>
               )}
 
               {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-              <Button className="mt-4 w-full" size="lg" disabled={gradingMap} onClick={submitReadingMap}>
-                {gradingMap ? "Grading your reading…" : "Grade my reading →"}
-              </Button>
+              <button className="btn btn-primary fx-sheen btn-block mt-4" disabled={gradingMap} onClick={submitReadingMap}>
+                {gradingMap ? "Grading your reading…" : <>Grade my reading <span className="arrow inline-block">→</span></>}
+              </button>
             </div>
           </div>
         </div>
@@ -314,48 +315,52 @@ export default function CoachPractice() {
   const isLastQuestion = qIdx === questions.length - 1;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-6 md:px-9">
       {/* Reading grade banner — shown once, above the questions */}
       {qIdx === 0 && !verdictShown && (
-        <div className={cn(
-          "mb-4 rounded-xl border p-4",
-          readingGrade.ungraded ? "border-amber-500/30 bg-amber-500/5" : "border-primary/30 bg-primary/5"
-        )}>
+        <div
+          className="mb-4 rounded-[16px] p-4"
+          style={readingGrade.ungraded
+            ? { background: "rgba(240,168,104,0.06)", border: "1px solid rgba(240,168,104,0.3)" }
+            : { background: "rgba(93,202,165,0.06)", border: "1px solid rgba(93,202,165,0.3)" }}
+        >
           <div className="flex items-center justify-between mb-1">
-            <span className={cn(
-              "text-xs font-semibold uppercase tracking-wide",
-              readingGrade.ungraded ? "text-amber-600 dark:text-amber-400" : "text-primary"
-            )}>
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: readingGrade.ungraded ? "var(--amber)" : "var(--teal)" }}>
               {readingGrade.ungraded ? "Reading feedback unavailable" : `Your reading: ${readingGrade.reading_mode?.replace(/-/g, " ")}`}
             </span>
           </div>
           <p className="text-sm text-foreground mb-1">{readingGrade.verdict_line}</p>
-          <p className="text-xs text-muted-foreground">{readingGrade.what_you_missed}</p>
+          <p className="text-xs muted">{readingGrade.what_you_missed}</p>
           {!readingGrade.ungraded && (
-            <p className="text-xs text-muted-foreground mt-1"><strong>Try this next:</strong> {readingGrade.one_technique}</p>
+            <p className="text-xs muted mt-1"><strong className="text-foreground">Try this next:</strong> {readingGrade.one_technique}</p>
           )}
         </div>
       )}
 
       <div className="mb-4 flex items-center gap-3">
         {questions.map((_, i) => (
-          <div key={i} className={cn("h-1.5 flex-1 rounded-full transition-colors", i < qIdx || attempts[questions[i].id] ? "bg-primary" : i === qIdx ? "bg-primary/40" : "bg-border")} />
+          <div
+            key={i}
+            className="h-1.5 flex-1 rounded-full transition-colors"
+            style={{ background: i < qIdx || attempts[questions[i].id] ? "var(--teal)" : i === qIdx ? "rgba(93,202,165,0.4)" : "var(--glass-border-lo)" }}
+          />
         ))}
-        <span className="text-xs text-muted-foreground flex-none">Q{qIdx + 1} / {questions.length}</span>
+        <span className="text-xs muted flex-none">Q{qIdx + 1} / {questions.length}</span>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Passage */}
+        {/* Passage — plain canvas, no glass, maximum reading legibility */}
         <div className="lg:w-[45%]">
-          <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border border-border bg-card p-5">
-            {passage.title && <h2 className="mb-3 display text-[22px] leading-tight">{passage.title}</h2>}
+          <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto lg:border-r lg:pr-6" style={{ borderColor: "var(--glass-border-lo)" }}>
+            <div className="eyebrow mb-2">Passage</div>
+            {passage.title && <h2 className="mb-3 display text-[22px] italic leading-tight">{passage.title}</h2>}
             <ArticleWithHighlight text={passage.body} sourceLines={question?.sourceLines || null} />
           </div>
         </div>
 
         {/* Question + verdict + discuss */}
         <div className="lg:w-[55%] flex flex-col gap-5">
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="glass p-5">
             <div className="flex items-center justify-between mb-3">
               {verdictShown ? <TypeBadge type={question.type} /> : <span className="text-xs text-transparent select-none">·</span>}
             </div>
@@ -383,50 +388,51 @@ export default function CoachPractice() {
 
             {selected !== null && !verdictShown && (
               <div className="mt-4">
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Your reasoning (optional)</label>
+                <label className="field-label">Your reasoning (optional)</label>
                 <textarea
                   value={reasoningText}
                   onChange={(e) => setReasoningText(e.target.value)}
                   rows={3}
                   maxLength={800}
                   placeholder="Why this option? What in the passage supports it?"
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="input"
+                  style={{ resize: "vertical" }}
                 />
                 {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-                <Button className="mt-3 w-full" size="lg" disabled={submitting} onClick={submitAnswer}>
+                <button className="btn btn-primary fx-sheen btn-block mt-3" disabled={submitting} onClick={submitAnswer}>
                   {submitting ? "Checking…" : reasoningText.trim() ? "Submit Answer →" : "Submit (No AI Feedback) →"}
-                </Button>
+                </button>
               </div>
             )}
           </div>
 
           {/* Verdict */}
           {verdictShown && (
-            <div className="rounded-xl border border-border bg-card p-5">
+            <div className="glass p-5">
               <FeedbackSections
                 attempt={{ ...attempt, options: question.options.map((o) => ({ text: o.text })), trapOptionIndex: question.trapIndex }}
               />
 
               <div className="mt-5 flex flex-col sm:flex-row gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setDiscussOpen((o) => !o)}>
+                <button className="btn btn-glass fx-ring flex-1" onClick={() => setDiscussOpen((o) => !o)}>
                   {discussOpen ? "Hide discussion" : "Stuck? Discuss →"}
-                </Button>
-                <Button className="flex-1" onClick={nextQuestion}>
+                </button>
+                <button className="btn btn-primary fx-sheen flex-1" onClick={nextQuestion}>
                   {isLastQuestion ? "View Summary →" : "Next Question →"}
-                </Button>
+                </button>
               </div>
             </div>
           )}
 
           {/* Stuck? Discuss chat */}
           {verdictShown && discussOpen && (
-            <div className="rounded-xl border border-border bg-card flex flex-col overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border bg-muted/30">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Discuss with Coach</span>
+            <div className="glass-recessed flex flex-col overflow-hidden">
+              <div className="px-4 py-2.5" style={{ borderBottom: "1px solid var(--glass-border-lo)" }}>
+                <span className="eyebrow">Discuss with Coach</span>
               </div>
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 max-h-72">
                 {(attempt.discussConversation || []).length === 0 && (
-                  <p className="text-sm text-muted-foreground">Ask anything about this question — why an option is wrong, how to read the passage, whatever's unclear.</p>
+                  <p className="text-sm muted">Ask anything about this question: why an option is wrong, how to read the passage, whatever's unclear.</p>
                 )}
                 {(attempt.discussConversation || []).map((msg, i) => (
                   <div key={i} className={cn("flex", msg.role === "student" ? "justify-end" : "justify-start")}>
@@ -438,7 +444,7 @@ export default function CoachPractice() {
                 <div ref={chatEndRef} />
               </div>
               {(attempt.exchangeCount || 0) < MAX_DISCUSS ? (
-                <div className="border-t border-border p-3">
+                <div className="p-3" style={{ borderTop: "1px solid var(--glass-border-lo)" }}>
                   <div className="flex gap-2 items-end">
                     <textarea
                       value={discussInput}
@@ -448,14 +454,25 @@ export default function CoachPractice() {
                       rows={2}
                       maxLength={300}
                       placeholder="Ask a follow-up…"
-                      className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
+                      className="input flex-1"
+                      style={{ resize: "none" }}
                     />
-                    <Button size="sm" disabled={!discussInput.trim() || discussSending} onClick={sendDiscussMessage}>Send</Button>
+                    <button
+                      onClick={sendDiscussMessage}
+                      disabled={!discussInput.trim() || discussSending}
+                      className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] disabled:opacity-40"
+                      style={{ background: "var(--teal)", color: "#07130E" }}
+                      aria-label="Send"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14M13 6l6 6-6 6" />
+                      </svg>
+                    </button>
                   </div>
                   {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
                 </div>
               ) : (
-                <p className="px-4 py-3 text-xs text-muted-foreground border-t border-border">Discussion limit reached for this question.</p>
+                <p className="px-4 py-3 text-xs muted" style={{ borderTop: "1px solid var(--glass-border-lo)" }}>Discussion limit reached for this question.</p>
               )}
             </div>
           )}
@@ -467,19 +484,19 @@ export default function CoachPractice() {
 
 function ArticleWithHighlight({ text, sourceLines }) {
   if (!sourceLines || !text) return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>{text || ""}</p>
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9, color: "#C9D0E0" }}>{text || ""}</p>
   );
   const idx = text.indexOf(sourceLines.slice(0, 40));
   if (idx === -1) return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>{text}</p>
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9, color: "#C9D0E0" }}>{text}</p>
   );
   const before = text.slice(0, idx);
   const match = text.slice(idx, idx + sourceLines.length);
   const after = text.slice(idx + sourceLines.length);
   return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9 }}>
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9, color: "#C9D0E0" }}>
       {before}
-      <mark className="bg-amber-200 dark:bg-amber-900/60 rounded px-0.5">{match}</mark>
+      <mark style={{ background: "rgba(93,202,165,0.18)", borderBottom: "2px solid var(--teal)", borderRadius: 3, padding: "0 1px" }}>{match}</mark>
       {after}
     </p>
   );
