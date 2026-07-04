@@ -1,9 +1,9 @@
 /* ── Fonts ─────────────────────────────────────────────────────────────────
-   Graspr design system (dark, editorial, serious study tool).
-   Newsreader = display serif; Source Serif 4 = reading passages;
-   Inter = UI; IBM Plex Mono = numbers / counters.
+   Graspr design system v2 (dark, editorial, glassy).
+   Newsreader = display serif + reading passages; Instrument Sans = UI;
+   IBM Plex Mono = numbers / counters. (Source Serif 4 kept as reading fallback.)
 */
-@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=IBM+Plex+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Instrument+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -23,18 +23,21 @@
 */
 @layer base {
   :root {
-    /* ---- Tailwind/shadcn HSL tokens (remapped to the dark palette) ---- */
-    --background: 225 21% 7%;           /* #0F1117 */
-    --foreground: 220 35% 93%;          /* #E8ECF4 */
-    --card: 224 19% 12%;                /* #181B23 surface */
-    --card-foreground: 220 35% 93%;
-    --muted: 227 23% 15%;               /* #1E2230 surface-2 */
-    --muted-foreground: 223 14% 60%;    /* #8B93A7 text-2 */
+    /* ---- Tailwind/shadcn HSL tokens (remapped to the v2 glass palette) ----
+       These are SOLID approximations of the glass surfaces so existing
+       bg-card / bg-muted pages read correctly on the deeper canvas. Real
+       frosted glass is opt-in via the .glass* utility classes below. */
+    --background: 225 26% 6%;           /* #0B0D13 deep canvas */
+    --foreground: 226 33% 91%;          /* #ECEFF6 */
+    --card: 225 17% 11%;                /* solid stand-in for glass surface */
+    --card-foreground: 226 33% 91%;
+    --muted: 226 18% 14%;               /* elevated well */
+    --muted-foreground: 222 18% 66%;    /* #9AA3B8 text-2 */
 
     --primary: 160 51% 58%;             /* #5DCAA5 teal */
     --primary-foreground: 155 46% 5%;   /* #07130E */
-    --accent: 227 23% 15%;
-    --accent-foreground: 220 35% 93%;
+    --accent: 226 18% 14%;              /* neutral elevated surface (ghost/outline hover) */
+    --accent-foreground: 226 33% 91%;
 
     --success: 142 69% 58%;             /* #4ADE80 */
     --success-foreground: 155 46% 5%;
@@ -43,53 +46,63 @@
     --destructive: 0 91% 71%;           /* #F87171 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 225 19% 20%;              /* #2A2F3E */
-    --input: 225 19% 20%;
+    --border: 225 16% 18%;              /* ~white 10% over canvas */
+    --input: 225 16% 18%;
     --ring: 160 51% 58%;                /* teal */
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;                 /* 10px controls */
 
     /* ---- Raw Graspr design tokens (hex) ---- */
-    /* surfaces */
-    --bg:            #0F1117;
-    --surface:       #181B23;
-    --surface-2:     #1E2230;
-    --border-subtle: #1F2333;
+    /* surfaces (solid fallbacks; use .glass utilities for true frost) */
+    --bg:            #0B0D13;
+    --surface:       #14171F;
+    --surface-2:     #1B1E27;
+    --border-subtle: #1E212C;
+
+    /* glass surfaces (for backdrop-filter panels) */
+    --glass:            rgba(255,255,255,0.05);
+    --glass-recessed:   rgba(255,255,255,0.03);
+    --glass-floating:   rgba(255,255,255,0.08);
+    --glass-border:     rgba(255,255,255,0.09);
+    --glass-border-lo:  rgba(255,255,255,0.07);
+    --glass-border-hi:  rgba(255,255,255,0.13);
 
     /* text */
-    --text:      #E8ECF4;
-    --text-2:    #8B93A7;
-    --text-muted:#545C72;
+    --text:      #ECEFF6;
+    --text-2:    #9AA3B8;
+    --text-muted:#5B647C;
 
     /* accents */
-    --teal:     #5DCAA5;
-    --teal-dim: #3a8c72;
-    --amber:    #F0A868;
-    --green:    #4ADE80;
-    --red:      #F87171;
-    --trap:     #FBBF24;
+    --teal:       #5DCAA5;
+    --teal-dim:   #3a8c72;
+    --periwinkle: #8B9DFF;   /* NEW secondary accent */
+    --amber:      #F0A868;
+    --green:      #4ADE80;
+    --red:        #F87171;
+    --trap:       #FBBF24;
+    --info:       #6FA0E8;
 
     /* topic colors */
-    --topic-economics: #7D90C9;
-    --topic-philosophy:#B492D9;
+    --topic-economics: #8B9DFF;
+    --topic-philosophy:#B388FF;
     --topic-science:   #5DCAA5;
     --topic-humanities:#F0A868;
     --topic-social:    #F08C8C;
 
     /* type colors (question types) */
     --type-inference:   #6FA0E8;
-    --type-tone:        #B492D9;
+    --type-tone:        #B388FF;
     --type-title:       #5DCAA5;
     --type-detail:      #F0A868;
     --type-application: #F08C8C;
 
     /* radii */
-    --r-default: 8px;
-    --r-card:    12px;
-    --r-pill:    6px;
+    --r-default: 10px;   /* controls */
+    --r-card:    16px;   /* cards */
+    --r-pill:    999px;  /* chips / pills — fully round */
 
     /* shadow */
-    --shadow-card: 0 1px 3px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.25);
+    --shadow-card: 0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 40px rgba(0,0,0,0.45);
 
     /* motion */
     --t: 160ms ease;
@@ -97,7 +110,7 @@
     /* fonts */
     --font-display: "Newsreader", Georgia, serif;
     --font-read:    "Source Serif 4", Georgia, serif;
-    --font-ui:      "Inter", system-ui, sans-serif;
+    --font-ui:      "Instrument Sans", system-ui, sans-serif;
     --font-mono:    "IBM Plex Mono", ui-monospace, monospace;
   }
 
@@ -116,10 +129,15 @@
   }
   body {
     margin: 0;
-    background-color: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* deep canvas with soft teal + periwinkle ambient glow, fixed so it doesn't scroll */
+    background:
+      radial-gradient(1000px 700px at 8% -5%, rgba(93,202,165,0.10), transparent 55%),
+      radial-gradient(1000px 800px at 100% 4%, rgba(139,157,255,0.10), transparent 52%),
+      var(--bg);
+    background-attachment: fixed;
   }
 
   ::selection { background: rgba(93,202,165,0.28); color: #fff; }
@@ -127,8 +145,8 @@
   /* scrollbars — quiet */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #262b39; border-radius: 8px; border: 2px solid var(--bg); }
-  ::-webkit-scrollbar-thumb:hover { background: #333a4d; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); background-clip: padding-box; }
 
   :focus-visible {
     outline: 2px solid var(--teal);
@@ -168,8 +186,13 @@
   .btn-ghost:hover { border-color: var(--teal); background: var(--surface-2); }
   .btn-teal-border { border-color: var(--teal-dim); color: var(--teal); background: transparent; }
   .btn-teal-border:hover { border-color: var(--teal); background: rgba(93,202,165,0.07); }
+  .btn-peri { background: var(--periwinkle); color: #0B0D13; font-weight: 600; }
+  .btn-peri:hover { background: #a0afff; }
+  .btn-glass { background: var(--glass); border-color: var(--glass-border-hi); color: var(--text); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .btn-glass:hover { background: rgba(255,255,255,0.1); }
   .btn-block { width: 100%; }
   .btn-lg { padding: 14px 22px; font-size: 15px; }
+  .btn-primary { box-shadow: 0 6px 20px rgba(93,202,165,0.3); }
 
   /* badges */
   .badge {
@@ -184,6 +207,40 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--r-card);
     box-shadow: var(--shadow-card);
+  }
+
+  /* ---- Glass surfaces (v2) ----
+     Three elevations from Foundations. Use on chrome + cards; keep heavy blur
+     OFF the passage/reasoning reading text (readability + mobile GPU cost).
+     `.glass-solid-fallback` swaps to a solid bg when backdrop-filter is
+     unsupported so panels never render fully transparent. */
+  .glass {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-card);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 40px rgba(0,0,0,0.45);
+  }
+  .glass-recessed {
+    background: var(--glass-recessed);
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
+    border: 1px solid var(--glass-border-lo);
+    border-radius: var(--r-default);
+  }
+  .glass-floating {
+    background: var(--glass-floating);
+    backdrop-filter: blur(26px) saturate(150%);
+    -webkit-backdrop-filter: blur(26px) saturate(150%);
+    border: 1px solid var(--glass-border-hi);
+    border-radius: var(--r-card);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 60px rgba(0,0,0,0.55);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass { background: var(--surface); }
+    .glass-recessed { background: #101219; }
+    .glass-floating { background: #1C1F28; }
   }
 
   .hairline { height: 1px; background: var(--border-subtle); border: none; margin: 0; }
@@ -247,6 +304,12 @@
   .display { font-family: var(--font-display); }
   .muted { color: var(--text-2); }
   .dim { color: var(--text-muted); }
+  .peri { color: var(--periwinkle); }
+  /* IBM Plex Mono uppercase micro-label ("eyebrow") used across the design */
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-muted);
+  }
 
   .anim-reason   { animation: slideUp8 200ms ease-out 1; }
   .anim-feedback { animation: slideUp12 220ms ease-out 1; }

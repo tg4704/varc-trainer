@@ -38,14 +38,17 @@ export default {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        periwinkle: "var(--periwinkle)",
+        info: "var(--info)",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        card: "16px",
       },
       fontFamily: {
-        sans: ['"Inter"', "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ['"Instrument Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
         display: ['"Newsreader"', "Georgia", "serif"],
         reading: ['"Source Serif 4"', "Georgia", "Cambria", "Times New Roman", "serif"],
         mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
