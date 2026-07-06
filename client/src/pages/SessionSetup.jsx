@@ -93,7 +93,7 @@ export default function SessionSetup() {
 
       <div className="glass mt-8 p-6 md:p-7">
         <div className="grid sm:grid-cols-2 gap-5">
-          <Section title="Practice mode">
+          <Section title="Practice mode" flush>
             <SquareToggle options={PRACTICE_MODES} value={practiceMode} onChange={setPracticeMode} />
             <p className="mt-2 text-xs muted">
               {PRACTICE_MODES.find((m) => m.value === practiceMode)?.desc}
@@ -104,7 +104,7 @@ export default function SessionSetup() {
               type), or the inference-only toggle. Inference is ~50% of real CAT
               RC and the single highest-leverage skill, so it gets a dedicated
               mode rather than being diluted into the general shuffle. */}
-          <Section title="Focus">
+          <Section title="Focus" flush>
             {deepLinkValid ? (
               <div
                 className="flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
@@ -237,9 +237,12 @@ export default function SessionSetup() {
   );
 }
 
-function Section({ title, children }) {
+// `flush` removes the top margin — used for the two Sections that sit inside
+// the top 2-column grid (the grid handles their placement). Standalone
+// Sections below keep the mt-8 rhythm.
+function Section({ title, children, flush = false }) {
   return (
-    <section className="mt-8 first:mt-0 sm:[&:nth-child(2)]:mt-0">
+    <section className={flush ? "" : "mt-8"}>
       <h2 className="eyebrow">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
