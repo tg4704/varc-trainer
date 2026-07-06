@@ -181,6 +181,7 @@ async function handle(req, res, next) {
         selectedTrap: a.selected_trap === 1,
         skipped: a.skipped === 1,
         trapType: a.trap_type,
+        reasoningText: a.reasoning_text,
         reasoningScore: a.reasoning_score,
         reasoningFeedback: a.reasoning_feedback,
         correctExplanation: a.correct_explanation,
@@ -256,12 +257,12 @@ router.get("/trend", authenticate, async (req, res, next) => {
 router.get("/heatmap", authenticate, async (req, res, next) => {
   try {
     const rows = await db.all(
-      `SELECT DATE(a.created_at) AS day, COUNT(*) AS count
+      `SELECT DATE(a.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
        FROM attempts a
        JOIN sessions s ON a.session_id = s.id
        WHERE s.user_id = $1 AND a.skipped = 0
          AND a.created_at >= NOW() - INTERVAL '35 days'
-       GROUP BY DATE(a.created_at)`,
+       GROUP BY DATE(a.created_at AT TIME ZONE 'UTC')`,
       [req.userId]
     );
     const byDate = {};

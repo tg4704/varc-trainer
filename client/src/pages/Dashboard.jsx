@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../auth.jsx";
 import { getActiveCoachSessionId } from "../coachSession.js";
 import TopicBadge from "../components/TopicBadge.jsx";
+import FeedbackSections from "../components/FeedbackSections.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -119,16 +120,14 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   return (
     <div className="max-w-[1240px] mx-auto px-4 pt-9 pb-14 md:px-11">
       {headerSlot}
-      <div className="flex flex-wrap items-end justify-between gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-5">
         <div>
           <h1 className="display text-[34px] leading-[1.1]">
             {greeting}, <span className="italic" style={{ color: "var(--teal)" }}>{greetName}.</span>
           </h1>
           <p className="mt-2 muted text-sm">{today} · lifetime stats across all your sessions.</p>
         </div>
-        <Link to="/setup" className="btn btn-primary fx-sheen flex-none">
-          New session
-        </Link>
+        {tab === "practice" && <WeeklyHeatmap />}
       </div>
 
       {/* Tab switcher — segmented pill */}
@@ -175,12 +174,10 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
             <TopicAccuracy byTopic={data.byTopic} />
           </div>
 
-          <div className="mt-6 grid gap-[18px] lg:grid-cols-[1.5fr_1fr]">
+          <div className="mt-6">
             <RecentAttempts attempts={data.recentAttempts} />
-            <WeeklyHeatmap />
           </div>
 
-          <WeakestArea data={data} />
           {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
             <IntuitionStats stats={data.intuitionStats} />
           )}
@@ -287,21 +284,20 @@ function CoachTab({ stats, loading }) {
 // ── KPI row ──────────────────────────────────────────────
 function HeaderStats({ data }) {
   const avg = data.avgReasoningScore != null ? `${Number(data.avgReasoningScore).toFixed(1)}/5` : "—";
+  // [label, value, valueColor] — accuracy keeps its threshold colour, the rest
+  // are neutral. (Status dots removed per the user's request.)
   const cards = [
-    ["Questions answered", String(data.answeredCount), "var(--teal)"],
+    ["Questions answered", String(data.answeredCount), "var(--text)"],
     ["Accuracy", pct(data.accuracy), accuracyColor(data.accuracy)],
-    ["Trap pick rate", pct(data.trapPickRate), "var(--trap)"],
-    ["Avg reasoning score", avg, "var(--periwinkle)"],
+    ["Trap pick rate", pct(data.trapPickRate), "var(--text)"],
+    ["Avg reasoning score", avg, "var(--text)"],
   ];
   return (
     <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-      {cards.map(([label, value, dot]) => (
+      {cards.map(([label, value, valueColor]) => (
         <div key={label} className="glass glasscard p-[18px_19px]">
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">{label}</span>
-            <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: dot }} />
-          </div>
-          <div className="mono mt-3 text-[30px] leading-none" style={{ color: dot === "var(--teal)" || dot === accuracyColor(data.accuracy) ? dot : "var(--text)" }}>
+          <span className="eyebrow">{label}</span>
+          <div className="mono mt-3 text-[30px] leading-none" style={{ color: valueColor }}>
             {value}
           </div>
         </div>
@@ -480,7 +476,9 @@ function WeeklyHeatmap() {
   }, []);
 
   const days = heatmap?.days || [];
-  const total = days.reduce((s, d) => s + d.count, 0);
+  // `days` is oldest-first (35 entries); the last 7 are the current week, so
+  // the caption reflects real recent activity instead of the 35-day sum.
+  const weekTotal = days.slice(-7).reduce((s, d) => s + d.count, 0);
   const cols = Array.from({ length: 7 }, () => []);
   days.forEach((d) => {
     const jsDay = new Date(`${d.date}T00:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
@@ -489,8 +487,8 @@ function WeeklyHeatmap() {
   });
 
   return (
-    <div className="glass p-[20px_22px]">
-      <div className="eyebrow">This week · {total} questions</div>
+    <div className="glass flex-none p-[18px_20px]">
+      <div className="eyebrow">This week · {weekTotal} questions</div>
       <div className="mt-4 flex gap-1">
         {cols.map((col, ci) => (
           <div key={ci} className="flex flex-col items-center gap-1">
@@ -569,29 +567,6 @@ function TopicAccuracy({ byTopic }) {
   );
 }
 
-// ── Weakest-area callout ────────────────────────────────────
-function WeakestArea({ data }) {
-  if (!data.weakestType) return null;
-  const t = (data.byType || {})[data.weakestType];
-  const avg = t?.avgReasoningScore != null ? `${Number(t.avgReasoningScore).toFixed(1)}/5` : "not yet scored";
-  return (
-    <section className="glass mt-6 border-l-[3px] p-5" style={{ borderLeftColor: "var(--amber)" }}>
-      <p className="text-sm leading-relaxed text-foreground">
-        Your weakest area is <span className="font-semibold">{TYPE_LABELS[data.weakestType] || data.weakestType}</span>{" "}
-        questions. You picked the trap <span className="font-semibold">{t?.trapPicked ?? 0}</span> out of{" "}
-        <span className="font-semibold">{t?.attempts ?? 0}</span> times, and your average reasoning score here is{" "}
-        <span className="font-semibold">{avg}</span>.
-        {data.mostDangerousTrap && (
-          <> Your most dangerous trap type is <span className="font-semibold">{trapLabel(data.mostDangerousTrap)}</span>.</>
-        )}
-      </p>
-      <Link to={`/setup?type=${encodeURIComponent(data.weakestType)}`} className="btn btn-primary fx-sheen mt-4 inline-flex">
-        Drill {TYPE_LABELS[data.weakestType] || data.weakestType} questions
-      </Link>
-    </section>
-  );
-}
-
 // ── Intuition stats ────────────────────────────────────────
 function IntuitionStats({ stats }) {
   const elimAcc = stats.eliminationAccuracy != null ? `${Math.round(stats.eliminationAccuracy * 100)}%` : "—";
@@ -639,25 +614,33 @@ function relativeDate(iso) {
 }
 
 function RecentAttempts({ attempts }) {
+  const [openIdx, setOpenIdx] = useState(null);
   if (!attempts || attempts.length === 0) return null;
   return (
     <div className="glass p-[20px_22px]">
       <SectionTitle>Recent attempts</SectionTitle>
       <div className="mt-3">
-        {attempts.map((a, i) => <RecentAttemptRow key={i} attempt={a} first={i === 0} />)}
+        {attempts.map((a, i) => (
+          <RecentAttemptRow key={i} attempt={a} first={i === 0} onClick={() => setOpenIdx(i)} />
+        ))}
       </div>
+      {openIdx != null && (
+        <RecentAttemptModal attempt={attempts[openIdx]} onClose={() => setOpenIdx(null)} />
+      )}
     </div>
   );
 }
 
-function RecentAttemptRow({ attempt, first }) {
+function RecentAttemptRow({ attempt, first, onClick }) {
   const color = TYPE_DOT_COLORS[attempt.type] || "#9AA3B8";
   const statusColor = attempt.skipped ? "var(--text-2)" : attempt.isCorrect ? "var(--green)" : "var(--red)";
   const statusLabel = attempt.skipped ? "Skipped" : attempt.isCorrect ? "Correct" : "Incorrect";
   const topicLabel = attempt.topic ? attempt.topic.charAt(0).toUpperCase() + attempt.topic.slice(1) : "";
   return (
-    <div
-      className="flex items-center gap-3.5 rounded-[10px] px-2.5 py-3 transition-colors hover:bg-white/[0.04]"
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3.5 rounded-[10px] px-2.5 py-3 text-left transition-colors hover:bg-white/[0.04]"
       style={!first ? { borderTop: "1px solid rgba(255,255,255,0.05)" } : undefined}
     >
       <span
@@ -676,6 +659,41 @@ function RecentAttemptRow({ attempt, first }) {
         {statusLabel}
       </span>
       <span className="w-[60px] flex-none text-right text-[10.5px] dim">{relativeDate(attempt.createdAt)}</span>
+    </button>
+  );
+}
+
+// Click-to-open detail for a recent attempt: the question + the full
+// FeedbackSections review (your answer vs correct, your reasoning echo, and
+// the AI explanation when it was captured).
+function RecentAttemptModal({ attempt, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10" onClick={onClose}>
+      <div className="glass-floating w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <TopicBadge topic={attempt.topic} />
+            <span className="mono text-[11px] uppercase tracking-wide dim">
+              {TYPE_LABELS[attempt.type] || attempt.type}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-none rounded-[8px] px-2.5 py-1 text-sm transition-colors hover:bg-white/[0.06]"
+            style={{ color: "var(--text-2)" }}
+          >
+            ✕
+          </button>
+        </div>
+        {attempt.paragraph && (
+          <p className="serif-read mb-4 text-[14px] leading-[1.75] muted">{attempt.paragraph}</p>
+        )}
+        {attempt.question && (
+          <h2 className="display mb-4 text-[19px] leading-[1.4]">{attempt.question}</h2>
+        )}
+        <FeedbackSections attempt={attempt} />
+      </div>
     </div>
   );
 }

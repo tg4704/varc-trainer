@@ -45,13 +45,13 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
   return (
     <div className="fixed left-5 top-1/2 z-[70] hidden -translate-y-1/2 md:block">
       <div
-        className="flex flex-col gap-1.5 rounded-[16px] p-1.5"
+        className="flex flex-col items-center gap-1.5 rounded-[16px] p-1.5"
         style={{
           background: "rgba(255,255,255,0.05)",
           backdropFilter: "blur(18px) saturate(140%)",
           WebkitBackdropFilter: "blur(18px) saturate(140%)",
           border: "1px solid rgba(255,255,255,0.1)",
-          boxShadow: "0 14px 40px rgba(0,0,0,0.4)",
+          boxShadow: "0 1px 0 rgba(255,255,255,0.08) inset, 0 14px 40px rgba(0,0,0,0.4)",
         }}
       >
         {prevIdx >= 0 && (
@@ -61,19 +61,30 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
         <div className="relative" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
           <StepBtn n={currentIdx + 1} style={styleFor(stateFor(questionStates[currentIdx] || {}), true)} current />
           {hover && (
-            <div className="absolute left-[calc(100%+5px)] top-1/2 -translate-y-1/2">
+            <div className="absolute left-full top-1/2 -translate-y-1/2 pl-3">
               <div
-                className="rounded-[16px] p-3.5"
+                className="relative rounded-[16px] p-3.5"
                 style={{
-                  background: "rgba(20,23,31,0.92)",
-                  backdropFilter: "blur(20px) saturate(150%)",
-                  WebkitBackdropFilter: "blur(20px) saturate(150%)",
+                  background: "rgba(20,23,31,0.86)",
+                  backdropFilter: "blur(22px) saturate(150%)",
+                  WebkitBackdropFilter: "blur(22px) saturate(150%)",
                   border: "1px solid rgba(255,255,255,0.13)",
-                  boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+                  boxShadow: "0 1px 0 rgba(255,255,255,0.12) inset, 0 20px 50px rgba(0,0,0,0.55)",
                 }}
               >
-                <div className="mono mb-2.5 text-center text-[9.5px] uppercase tracking-wide dim">All questions</div>
-                <div className="grid grid-cols-4 gap-2">
+                {/* arrow pointer back toward the stepper */}
+                <span
+                  className="absolute top-1/2 h-3 w-3"
+                  style={{
+                    left: -6,
+                    transform: "translateY(-50%) rotate(45deg)",
+                    background: "rgba(20,23,31,0.86)",
+                    borderLeft: "1px solid rgba(255,255,255,0.13)",
+                    borderBottom: "1px solid rgba(255,255,255,0.13)",
+                  }}
+                />
+                <div className="mono mb-2.5 text-center text-[9.5px] uppercase tracking-[0.12em] dim">All questions</div>
+                <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(4, 32px)" }}>
                   {Array.from({ length: total }, (_, i) => (
                     <StepBtn
                       key={i}
@@ -81,15 +92,14 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
                       style={styleFor(stateFor(questionStates[i] || {}), i === currentIdx)}
                       onClick={i === currentIdx ? undefined : () => onJump(i)}
                       current={i === currentIdx}
-                      small
                     />
                   ))}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 pt-2.5" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                  <Legend color="var(--green)" label="Correct" />
-                  <Legend color="var(--red)" label="Incorrect" />
-                  <Legend color="var(--amber)" label="Seen" />
-                  <Legend color="rgba(255,255,255,0.25)" label="Not seen" />
+                  <Legend color="#4ADE80" label="Correct" />
+                  <Legend color="#F87171" label="Incorrect" />
+                  <Legend color="#FBBF24" label="Seen" />
+                  <Legend color="rgba(255,255,255,0.18)" label="Not seen" />
                 </div>
               </div>
             </div>
@@ -104,14 +114,14 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
   );
 }
 
-function StepBtn({ n, style, onClick, current = false, small = false }) {
+function StepBtn({ n, style, onClick, current = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={current}
       className="mono flex flex-none items-center justify-center rounded-[9px] text-[12.5px] font-semibold transition-transform hover:scale-[1.08]"
-      style={{ width: small ? 30 : 32, height: small ? 30 : 32, cursor: current ? "default" : "pointer", ...style }}
+      style={{ width: 32, height: 32, cursor: current ? "default" : "pointer", ...style }}
     >
       {n}
     </button>

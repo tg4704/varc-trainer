@@ -136,20 +136,32 @@ export default function SessionSetup() {
           </Section>
         </div>
 
-        {/* Number of questions */}
+        {/* Number of questions — value bubble rides the thumb */}
         <Section title="How many questions?">
-          <div className="flex items-center gap-4">
+          <div className="relative pt-8">
+            {/* Value bubble positioned above the thumb. 16px ≈ native thumb width. */}
+            <div
+              className="pointer-events-none absolute top-0"
+              style={{
+                left: `calc(${((numQuestions - 1) / 24) * 100}% + ${8 - ((numQuestions - 1) / 24) * 16}px)`,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <span
+                className="mono inline-flex items-center justify-center rounded-[8px] px-2 py-0.5 text-sm font-bold tabular-nums"
+                style={{ background: "var(--teal)", color: "#07130E" }}
+              >
+                {numQuestions}
+              </span>
+            </div>
             <input
               type="range"
               min={1}
               max={25}
               value={numQuestions}
               onChange={(e) => setNumQuestions(Number(e.target.value))}
-              className="flex-1 h-2 rounded-full accent-primary cursor-pointer"
+              className="w-full h-2 rounded-full accent-primary cursor-pointer"
             />
-            <span className="w-10 text-center text-lg font-bold text-foreground tabular-nums">
-              {numQuestions}
-            </span>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground mt-1 px-0.5">
             <span>1</span>

@@ -146,6 +146,7 @@ app.use((req, res, next) => {
         selectedOptionIndex: a.selected_option_index, correctOptionIndex: a.correct_option_index,
         trapOptionIndex: a.trap_option_index, isCorrect: a.is_correct === 1,
         selectedTrap: a.selected_trap === 1, skipped: a.skipped === 1, trapType: a.trap_type,
+        reasoningText: a.reasoning_text,
         reasoningScore: a.reasoning_score, reasoningFeedback: a.reasoning_feedback,
         correctExplanation: a.correct_explanation, trapExplanation: a.trap_explanation,
         keyTakeaway: a.key_takeaway, timeTakenSeconds: a.time_taken_seconds,
@@ -207,13 +208,16 @@ app.use((req, res, next) => {
 
   app.get("/api/dashboard/heatmap", authenticate, async (req, res, next) => {
     try {
+      // Bucket by UTC date explicitly so the server's date grouping always
+      // matches the client's UTC date-building, regardless of the Postgres
+      // session timezone (otherwise a non-UTC server TZ shifts cells).
       const rows = await db.all(
-        `SELECT DATE(a.created_at) AS day, COUNT(*) AS count
+        `SELECT DATE(a.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
          FROM attempts a
          JOIN sessions s ON a.session_id = s.id
          WHERE s.user_id = $1 AND a.skipped = 0
            AND a.created_at >= NOW() - INTERVAL '35 days'
-         GROUP BY DATE(a.created_at)`,
+         GROUP BY DATE(a.created_at AT TIME ZONE 'UTC')`,
         [req.userId]
       );
       const byDate = {};

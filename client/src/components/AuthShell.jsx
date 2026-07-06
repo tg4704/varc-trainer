@@ -41,15 +41,13 @@ export function BrandMark({ size = 38 }) {
   const inner = Math.round(size * 0.33);
   const outerRadius = Math.round(size * 0.3);
   const innerRadius = Math.max(2, Math.round(size * 0.1));
-  const shadowY = Math.round((size * 4) / 30);
-  const shadowBlur = Math.round((size * 16) / 30);
+  // No drop-shadow — the soft teal glow read as "smudgy" at small nav size.
   return (
     <div
       className="flex items-center justify-center"
       style={{
         width: size, height: size, borderRadius: outerRadius,
         background: "linear-gradient(140deg, var(--teal), var(--periwinkle))",
-        boxShadow: `0 ${shadowY}px ${shadowBlur}px rgba(93,202,165,0.35)`,
       }}
     >
       <div style={{ width: inner, height: inner, borderRadius: innerRadius, background: "var(--bg)" }} />
