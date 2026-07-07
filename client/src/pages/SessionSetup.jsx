@@ -289,12 +289,15 @@ function ToggleSwitch({ active, onClick, label, desc }) {
       <button
         type="button"
         onClick={onClick}
-        className="fx-ring relative h-6 w-11 flex-none rounded-full transition-colors"
-        style={{ background: active ? "var(--teal)" : "rgba(255,255,255,0.14)" }}
+        aria-pressed={active}
+        className="fx-ring relative flex-none rounded-full transition-colors"
+        style={{ width: 44, height: 24, background: active ? "var(--teal)" : "rgba(255,255,255,0.14)" }}
       >
+        {/* explicit top/left keeps the knob inside the 44x24 track: 20px knob,
+            2px margins -> left 2 (off) / 22 (on), right edge 42 < 44. */}
         <span
-          className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
-          style={{ transform: active ? "translateX(22px)" : "translateX(2px)" }}
+          className="absolute rounded-full bg-white"
+          style={{ width: 20, height: 20, top: 2, left: active ? 22 : 2, transition: "left .18s ease" }}
         />
       </button>
     </div>
