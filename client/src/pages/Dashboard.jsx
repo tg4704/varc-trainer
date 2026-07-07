@@ -120,14 +120,11 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   return (
     <div className="max-w-[1240px] mx-auto px-4 pt-9 pb-14 md:px-11">
       {headerSlot}
-      <div className="flex flex-wrap items-start justify-between gap-5">
-        <div>
-          <h1 className="display text-[34px] leading-[1.1]">
-            {greeting}, <span className="italic" style={{ color: "var(--teal)" }}>{greetName}.</span>
-          </h1>
-          <p className="mt-2 muted text-sm">{today} · lifetime stats across all your sessions.</p>
-        </div>
-        {tab === "practice" && <WeeklyHeatmap />}
+      <div>
+        <h1 className="display text-[34px] leading-[1.1]">
+          {greeting}, <span className="italic" style={{ color: "var(--teal)" }}>{greetName}.</span>
+        </h1>
+        <p className="mt-2 muted text-sm">{today} · lifetime stats across all your sessions.</p>
       </div>
 
       {/* Tab switcher — segmented pill */}
@@ -160,6 +157,10 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
             </div>
           )}
           <HeaderStats data={data} />
+
+          <div className="mt-6">
+            <WeeklyHeatmap />
+          </div>
 
           <div className="mt-6 grid gap-[18px] lg:grid-cols-[1.5fr_1fr]">
             <div className="flex flex-col gap-5">
@@ -462,11 +463,47 @@ function heatLevel(count) {
   return 4;
 }
 
-// Mockup groups the 35-day heatmap as 7 columns (one per weekday, Mon-first)
-// of 5 cells each — the transpose of the old 5-columns-of-7 (calendar week)
-// layout. Same underlying data from GET /api/dashboard/heatmap, just
-// regrouped client-side by weekday instead of by calendar week.
-const HEAT_DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+// GitHub-style contribution graph: weeks as columns (Sun-top rows), ~26 weeks
+// (6 months) of history, month labels along the top, Mon/Wed/Fri row labels,
+// and a Less-More legend. Data from GET /api/dashboard/heatmap (183 days).
+const HEAT_WEEKS = 26;
+const HEAT_CELL = 13;
+const HEAT_GAP = 3;
+const WEEKDAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""]; // rows Sun..Sat
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function buildHeatGrid(days) {
+  const map = {};
+  days.forEach((d) => { map[d.date] = d.count; });
+
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const currentSunday = new Date(todayUTC);
+  currentSunday.setUTCDate(todayUTC.getUTCDate() - todayUTC.getUTCDay());
+  const start = new Date(currentSunday);
+  start.setUTCDate(currentSunday.getUTCDate() - (HEAT_WEEKS - 1) * 7);
+
+  const cols = [];
+  const monthLabels = [];
+  let lastMonth = -1;
+  for (let w = 0; w < HEAT_WEEKS; w++) {
+    const col = [];
+    for (let r = 0; r < 7; r++) {
+      const d = new Date(start);
+      d.setUTCDate(start.getUTCDate() + w * 7 + r);
+      if (d > todayUTC) { col.push(null); continue; }
+      const iso = d.toISOString().slice(0, 10);
+      col.push({ date: iso, count: map[iso] || 0, month: d.getUTCMonth() });
+    }
+    const firstCell = col.find(Boolean);
+    if (firstCell && firstCell.month !== lastMonth) {
+      monthLabels.push({ col: w, label: MONTH_ABBR[firstCell.month] });
+      lastMonth = firstCell.month;
+    }
+    cols.push(col);
+  }
+  return { cols, monthLabels };
+}
 
 function WeeklyHeatmap() {
   const [heatmap, setHeatmap] = useState(null);
@@ -476,33 +513,67 @@ function WeeklyHeatmap() {
   }, []);
 
   const days = heatmap?.days || [];
-  // `days` is oldest-first (35 entries); the last 7 are the current week, so
-  // the caption reflects real recent activity instead of the 35-day sum.
-  const weekTotal = days.slice(-7).reduce((s, d) => s + d.count, 0);
-  const cols = Array.from({ length: 7 }, () => []);
-  days.forEach((d) => {
-    const jsDay = new Date(`${d.date}T00:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
-    const mondayFirst = (jsDay + 6) % 7; // 0=Mon..6=Sun
-    cols[mondayFirst].push(d);
-  });
+  const total = days.reduce((s, d) => s + d.count, 0);
+  const { cols, monthLabels } = buildHeatGrid(days);
 
   return (
-    <div className="glass flex-none p-[18px_20px]">
-      <div className="eyebrow">This week · {weekTotal} questions</div>
-      <div className="mt-4 flex gap-1">
-        {cols.map((col, ci) => (
-          <div key={ci} className="flex flex-col items-center gap-1">
-            {col.map((d) => (
-              <span
-                key={d.date}
-                title={d.count === 0 ? "No practice" : `${d.count} question${d.count === 1 ? "" : "s"}`}
-                className="block rounded-[3.5px] transition-transform hover:scale-[1.28]"
-                style={{ width: 15, height: 15, background: heatColor(heatLevel(d.count)) }}
-              />
-            ))}
-            <span className="mt-0.5 text-[9px] dim">{HEAT_DAY_LABELS[ci]}</span>
+    <div className="glass p-[20px_22px]">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <SectionTitle>Practice activity</SectionTitle>
+        <span className="text-xs dim">{total} question{total === 1 ? "" : "s"} in the last 6 months</span>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {/* weekday row labels (aligned below the month-label strip) */}
+        <div className="flex flex-none flex-col" style={{ gap: HEAT_GAP, paddingTop: 16 }}>
+          {WEEKDAY_LABELS.map((lbl, r) => (
+            <span key={r} className="flex items-center text-[9px] leading-none dim" style={{ height: HEAT_CELL }}>
+              {lbl}
+            </span>
+          ))}
+        </div>
+
+        <div>
+          {/* month labels */}
+          <div className="flex" style={{ gap: HEAT_GAP, height: 16 }}>
+            {cols.map((_, w) => {
+              const ml = monthLabels.find((m) => m.col === w);
+              return (
+                <span key={w} className="text-[9px] leading-none dim" style={{ width: HEAT_CELL, whiteSpace: "nowrap", overflow: "visible" }}>
+                  {ml ? ml.label : ""}
+                </span>
+              );
+            })}
           </div>
+          {/* grid */}
+          <div className="flex" style={{ gap: HEAT_GAP }}>
+            {cols.map((col, w) => (
+              <div key={w} className="flex flex-col" style={{ gap: HEAT_GAP }}>
+                {col.map((cell, r) =>
+                  cell === null ? (
+                    <span key={r} style={{ width: HEAT_CELL, height: HEAT_CELL }} />
+                  ) : (
+                    <span
+                      key={r}
+                      title={cell.count === 0 ? `No practice · ${cell.date}` : `${cell.count} question${cell.count === 1 ? "" : "s"} · ${cell.date}`}
+                      className="rounded-[2px] transition-transform hover:scale-[1.2]"
+                      style={{ width: HEAT_CELL, height: HEAT_CELL, background: heatColor(heatLevel(cell.count)) }}
+                    />
+                  )
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* legend */}
+      <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] dim">
+        Less
+        {[0, 1, 2, 3, 4].map((l) => (
+          <span key={l} className="rounded-[2px]" style={{ width: 11, height: 11, background: heatColor(l) }} />
         ))}
+        More
       </div>
     </div>
   );

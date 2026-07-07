@@ -211,19 +211,20 @@ app.use((req, res, next) => {
       // Bucket by UTC date explicitly so the server's date grouping always
       // matches the client's UTC date-building, regardless of the Postgres
       // session timezone (otherwise a non-UTC server TZ shifts cells).
+      // ~6 months of history for the GitHub-style contribution graph.
       const rows = await db.all(
         `SELECT DATE(a.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
          FROM attempts a
          JOIN sessions s ON a.session_id = s.id
          WHERE s.user_id = $1 AND a.skipped = 0
-           AND a.created_at >= NOW() - INTERVAL '35 days'
+           AND a.created_at >= NOW() - INTERVAL '183 days'
          GROUP BY DATE(a.created_at AT TIME ZONE 'UTC')`,
         [req.userId]
       );
       const byDate = {};
       rows.forEach((r) => { byDate[String(r.day).slice(0, 10)] = Number(r.count); });
       const out = [];
-      for (let i = 34; i >= 0; i--) {
+      for (let i = 182; i >= 0; i--) {
         const d = new Date();
         d.setUTCDate(d.getUTCDate() - i);
         const iso = d.toISOString().slice(0, 10);

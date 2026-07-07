@@ -252,8 +252,8 @@ router.get("/trend", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/dashboard/heatmap — raw per-day answered counts for the last 35
-// days (5 weeks). Client buckets counts into intensity levels for the grid.
+// GET /api/dashboard/heatmap — raw per-day answered counts for the last ~6
+// months (183 days). Client lays them out as a GitHub-style contribution grid.
 router.get("/heatmap", authenticate, async (req, res, next) => {
   try {
     const rows = await db.all(
@@ -261,17 +261,17 @@ router.get("/heatmap", authenticate, async (req, res, next) => {
        FROM attempts a
        JOIN sessions s ON a.session_id = s.id
        WHERE s.user_id = $1 AND a.skipped = 0
-         AND a.created_at >= NOW() - INTERVAL '35 days'
+         AND a.created_at >= NOW() - INTERVAL '183 days'
        GROUP BY DATE(a.created_at AT TIME ZONE 'UTC')`,
       [req.userId]
     );
     const byDate = {};
     rows.forEach((r) => { byDate[String(r.day).slice(0, 10)] = parseInt(r.count, 10); });
 
-    // Build the last 35 calendar days (oldest first) so the client can lay
-    // out a stable 5x7 grid regardless of which days have zero activity.
+    // Dense oldest-first array of the last 183 days so the client can lay out
+    // a stable weekday-row grid regardless of which days have zero activity.
     const out = [];
-    for (let i = 34; i >= 0; i--) {
+    for (let i = 182; i >= 0; i--) {
       const d = new Date();
       d.setUTCDate(d.getUTCDate() - i);
       const iso = d.toISOString().slice(0, 10);
