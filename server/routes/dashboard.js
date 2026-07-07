@@ -256,17 +256,31 @@ router.get("/trend", authenticate, async (req, res, next) => {
 // months (183 days). Client lays them out as a GitHub-style contribution grid.
 router.get("/heatmap", authenticate, async (req, res, next) => {
   try {
+    // Drills (attempts) + Coach (coach_attempts), bucketed by UTC date as a
+    // 'YYYY-MM-DD' STRING (a real date column comes back as a JS Date whose
+    // String() form never matches the client's ISO keys — the reason the
+    // heatmap always read 0). See the authoritative copy in server/index.js.
     const rows = await db.all(
-      `SELECT DATE(a.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
-       FROM attempts a
-       JOIN sessions s ON a.session_id = s.id
-       WHERE s.user_id = $1 AND a.skipped = 0
-         AND a.created_at >= NOW() - INTERVAL '183 days'
-       GROUP BY DATE(a.created_at AT TIME ZONE 'UTC')`,
+      `SELECT day, SUM(cnt) AS count FROM (
+         SELECT to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*) AS cnt
+         FROM attempts a
+         JOIN sessions s ON a.session_id = s.id
+         WHERE s.user_id = $1 AND a.skipped = 0
+           AND a.created_at >= NOW() - INTERVAL '183 days'
+         GROUP BY 1
+         UNION ALL
+         SELECT to_char(ca.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*) AS cnt
+         FROM coach_attempts ca
+         JOIN coach_sessions cs ON ca.coach_session_id = cs.id
+         WHERE cs.user_id = $1
+           AND ca.created_at >= NOW() - INTERVAL '183 days'
+         GROUP BY 1
+       ) t
+       GROUP BY day`,
       [req.userId]
     );
     const byDate = {};
-    rows.forEach((r) => { byDate[String(r.day).slice(0, 10)] = parseInt(r.count, 10); });
+    rows.forEach((r) => { byDate[r.day] = Number(r.count); });
 
     // Dense oldest-first array of the last 183 days so the client can lay out
     // a stable weekday-row grid regardless of which days have zero activity.

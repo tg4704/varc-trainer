@@ -208,21 +208,32 @@ app.use((req, res, next) => {
 
   app.get("/api/dashboard/heatmap", authenticate, async (req, res, next) => {
     try {
-      // Bucket by UTC date explicitly so the server's date grouping always
-      // matches the client's UTC date-building, regardless of the Postgres
-      // session timezone (otherwise a non-UTC server TZ shifts cells).
-      // ~6 months of history for the GitHub-style contribution graph.
+      // Combine Drills (attempts) + Coach (coach_attempts) activity, bucketed
+      // by UTC date as a 'YYYY-MM-DD' STRING via to_char. Returning a real
+      // date column makes pg hand back a JS Date whose String() form ("Tue
+      // Jul 07…") never matches the client's ISO keys — the long-standing
+      // reason the heatmap always read 0. ~6 months for the contribution graph.
       const rows = await db.all(
-        `SELECT DATE(a.created_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS count
-         FROM attempts a
-         JOIN sessions s ON a.session_id = s.id
-         WHERE s.user_id = $1 AND a.skipped = 0
-           AND a.created_at >= NOW() - INTERVAL '183 days'
-         GROUP BY DATE(a.created_at AT TIME ZONE 'UTC')`,
+        `SELECT day, SUM(cnt) AS count FROM (
+           SELECT to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*) AS cnt
+           FROM attempts a
+           JOIN sessions s ON a.session_id = s.id
+           WHERE s.user_id = $1 AND a.skipped = 0
+             AND a.created_at >= NOW() - INTERVAL '183 days'
+           GROUP BY 1
+           UNION ALL
+           SELECT to_char(ca.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*) AS cnt
+           FROM coach_attempts ca
+           JOIN coach_sessions cs ON ca.coach_session_id = cs.id
+           WHERE cs.user_id = $1
+             AND ca.created_at >= NOW() - INTERVAL '183 days'
+           GROUP BY 1
+         ) t
+         GROUP BY day`,
         [req.userId]
       );
       const byDate = {};
-      rows.forEach((r) => { byDate[String(r.day).slice(0, 10)] = Number(r.count); });
+      rows.forEach((r) => { byDate[r.day] = Number(r.count); });
       const out = [];
       for (let i = 182; i >= 0; i--) {
         const d = new Date();

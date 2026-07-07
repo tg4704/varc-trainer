@@ -1,19 +1,25 @@
 // Structured logger — writes to console always, and to BetterStack Logtail
 // when BETTERSTACK_SOURCE_TOKEN is set (production).
 // Usage: const logger = require("./logger"); logger.info("msg", { ctx });
+// Return null (not false) when there's no Logtail, so callers' `getLogtail()?.`
+// optional chaining short-circuits. `false?.info()` does NOT short-circuit — it
+// throws "info is not a function", which crashed startup on every run without a
+// token (i.e. local dev).
 let _logtail = null;
+let _checked = false;
 
 function getLogtail() {
-  if (_logtail !== null) return _logtail;
+  if (_checked) return _logtail;
+  _checked = true;
   if (!process.env.BETTERSTACK_SOURCE_TOKEN) {
-    _logtail = false; // mark as checked — no token
-    return false;
+    _logtail = null;
+    return null;
   }
   try {
     const { Logtail } = require("@logtail/node");
     _logtail = new Logtail(process.env.BETTERSTACK_SOURCE_TOKEN);
   } catch {
-    _logtail = false;
+    _logtail = null;
   }
   return _logtail;
 }
