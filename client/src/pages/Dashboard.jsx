@@ -7,7 +7,6 @@ import {
 import { useAuth } from "../auth.jsx";
 import { getActiveCoachSessionId } from "../coachSession.js";
 import TopicBadge from "../components/TopicBadge.jsx";
-import FeedbackSections from "../components/FeedbackSections.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -124,7 +123,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
         <h1 className="display text-[34px] leading-[1.1]">
           {greeting}, <span className="italic" style={{ color: "var(--teal)" }}>{greetName}.</span>
         </h1>
-        <p className="mt-2 muted text-sm">{today} · lifetime stats across all your sessions.</p>
+        <p className="mt-2 muted text-sm">{today}. Lifetime stats across all your sessions.</p>
       </div>
 
       {/* Tab switcher — segmented pill */}
@@ -176,7 +175,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
           </div>
 
           <div className="mt-6">
-            <RecentAttempts attempts={data.recentAttempts} />
+            <RecentSessions sessions={data.recentSessions} />
           </div>
 
           {data.intuitionStats && data.intuitionStats.totalAttempts > 0 && (
@@ -266,7 +265,8 @@ function CoachTab({ stats, loading }) {
                     {s.article_title || "Untitled passage"}
                   </p>
                   <p className="text-xs muted">
-                    {new Date(s.created_at).toLocaleDateString()} ·{" "}
+                    {new Date(s.created_at).toLocaleDateString()}
+                    {", "}
                     {s.attempted ? `${s.correct}/${s.attempted} correct` : "in progress"}
                   </p>
                 </div>
@@ -323,7 +323,7 @@ function ResumeCoachCard({ session, onStartFresh }) {
       <div className="eyebrow" style={{ color: "var(--teal)" }}>Pick up where you left off</div>
       <div className="display mt-2 text-[25px]">{session.passage?.title || "Untitled passage"}</div>
       <div className="mt-1.5 text-[13px]" style={{ color: "var(--text)" }}>
-        {total ? `Set of ${total} · ${attempted} of ${total} answered` : "Reading map in progress"}
+        {total ? `Set of ${total}, ${attempted} of ${total} answered` : "Reading map in progress"}
       </div>
       <div className="mt-4 flex gap-2.5">
         <Link to={`/coach/practice?sessionId=${session.id}`} className="btn btn-primary fx-sheen inline-flex">
@@ -374,7 +374,7 @@ function AccuracyTrendChart() {
           <div className="mt-0.5 text-xs muted">
             now <span className="font-semibold" style={{ color: "var(--teal)" }}>{cur}</span>
             {days.length >= 2 && (
-              <> · <span style={{ color: delta >= 0 ? "var(--green)" : "var(--red)" }}>{delta >= 0 ? "+" : ""}{delta} pts</span> over range</>
+              <>{", "}<span style={{ color: delta >= 0 ? "var(--green)" : "var(--red)" }}>{delta >= 0 ? "+" : ""}{delta} pts</span> over range</>
             )}
           </div>
         </div>
@@ -555,7 +555,7 @@ function WeeklyHeatmap() {
                   ) : (
                     <span
                       key={r}
-                      title={cell.count === 0 ? `No practice · ${cell.date}` : `${cell.count} question${cell.count === 1 ? "" : "s"} · ${cell.date}`}
+                      title={cell.count === 0 ? `No practice on ${cell.date}` : `${cell.count} question${cell.count === 1 ? "" : "s"} on ${cell.date}`}
                       className="rounded-[2px] transition-transform hover:scale-[1.2]"
                       style={{ width: HEAT_CELL, height: HEAT_CELL, background: heatColor(heatLevel(cell.count)) }}
                     />
@@ -662,16 +662,9 @@ function IntuitionStats({ stats }) {
   );
 }
 
-// ── Recent attempts (flat rows, matching the mockup exactly) ──────────────
-// Colours are scoped to this row only (not the shared TypeBadge/TopicBadge
-// components used elsewhere) so they can match the mockup's colored-initial
-// badge treatment without affecting any other page.
-const TYPE_DOT_COLORS = {
-  inference: "#6FA0E8", tone: "#B388FF", title: "#5DCAA5", detail: "#FBBF24",
-  application: "#F0A868", main_idea: "#5DCAA5", function: "#B388FF",
-  concept_set: "#8B9DFF", vocab_in_context: "#8B9DFF", weaken_strengthen: "#F87171",
-};
-
+// ── Recent sessions ──────────────────────────────────────────────────────
+// A flat list of the user's most recent sessions. Clicking one opens its
+// Results screen — the same recap shown right after completing a Drills run.
 function relativeDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -684,87 +677,50 @@ function relativeDate(iso) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function RecentAttempts({ attempts }) {
-  const [openIdx, setOpenIdx] = useState(null);
-  if (!attempts || attempts.length === 0) return null;
+function RecentSessions({ sessions }) {
+  if (!sessions || sessions.length === 0) return null;
   return (
     <div className="glass p-[20px_22px]">
-      <SectionTitle>Recent attempts</SectionTitle>
+      <SectionTitle>Recent sessions</SectionTitle>
       <div className="mt-3">
-        {attempts.map((a, i) => (
-          <RecentAttemptRow key={i} attempt={a} first={i === 0} onClick={() => setOpenIdx(i)} />
+        {sessions.map((s, i) => (
+          <RecentSessionRow key={s.id} session={s} first={i === 0} />
         ))}
       </div>
-      {openIdx != null && (
-        <RecentAttemptModal attempt={attempts[openIdx]} onClose={() => setOpenIdx(null)} />
-      )}
     </div>
   );
 }
 
-function RecentAttemptRow({ attempt, first, onClick }) {
-  const color = TYPE_DOT_COLORS[attempt.type] || "#9AA3B8";
-  const statusColor = attempt.skipped ? "var(--text-2)" : attempt.isCorrect ? "var(--green)" : "var(--red)";
-  const statusLabel = attempt.skipped ? "Skipped" : attempt.isCorrect ? "Correct" : "Incorrect";
-  const topicLabel = attempt.topic ? attempt.topic.charAt(0).toUpperCase() + attempt.topic.slice(1) : "";
+function RecentSessionRow({ session, first }) {
+  const answered = Number(session.answered) || 0;
+  const correct = Number(session.correct) || 0;
+  const acc = answered ? correct / answered : 0;
+  const inProgress = session.status !== "completed";
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      to={`/results?sessionId=${session.id}`}
       className="flex w-full items-center gap-3.5 rounded-[10px] px-2.5 py-3 text-left transition-colors hover:bg-white/[0.04]"
       style={!first ? { borderTop: "1px solid rgba(255,255,255,0.05)" } : undefined}
     >
       <span
-        className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[9px] text-[13px] font-bold"
-        style={{ color, background: `${color}22`, border: `1px solid ${color}44` }}
+        className="mono flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[10px] text-[13px] font-bold"
+        style={{ color: "var(--teal)", background: "rgba(93,202,165,0.12)", border: "1px solid rgba(93,202,165,0.28)" }}
       >
-        {(TYPE_LABELS[attempt.type] || attempt.type || "?").charAt(0).toUpperCase()}
+        {session.numQuestions}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] font-medium text-foreground">{attempt.questionSnippet}</p>
-        <p className="mt-0.5 text-[11px] dim">
-          {TYPE_LABELS[attempt.type] || attempt.type}{topicLabel ? ` · ${topicLabel}` : ""}
+        <p className="truncate text-[13.5px] font-medium text-foreground">
+          {answered} of {session.numQuestions} answered{inProgress ? " (in progress)" : ""}
         </p>
+        <p className="mt-0.5 text-[11px] dim">{relativeDate(session.createdAt)}</p>
       </div>
-      <span className="mono flex-none text-[13px] font-semibold" style={{ color: statusColor }}>
-        {statusLabel}
-      </span>
-      <span className="w-[60px] flex-none text-right text-[10.5px] dim">{relativeDate(attempt.createdAt)}</span>
-    </button>
-  );
-}
-
-// Click-to-open detail for a recent attempt: the question + the full
-// FeedbackSections review (your answer vs correct, your reasoning echo, and
-// the AI explanation when it was captured).
-function RecentAttemptModal({ attempt, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10" onClick={onClose}>
-      <div className="glass-floating w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <TopicBadge topic={attempt.topic} />
-            <span className="mono text-[11px] uppercase tracking-wide dim">
-              {TYPE_LABELS[attempt.type] || attempt.type}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-none rounded-[8px] px-2.5 py-1 text-sm transition-colors hover:bg-white/[0.06]"
-            style={{ color: "var(--text-2)" }}
-          >
-            ✕
-          </button>
+      <div className="flex-none text-right">
+        <div className="mono text-[15px] font-semibold" style={{ color: accuracyColor(acc) }}>
+          {answered ? pct(acc) : "—"}
         </div>
-        {attempt.paragraph && (
-          <p className="serif-read mb-4 text-[14px] leading-[1.75] muted">{attempt.paragraph}</p>
-        )}
-        {attempt.question && (
-          <h2 className="display mb-4 text-[19px] leading-[1.4]">{attempt.question}</h2>
-        )}
-        <FeedbackSections attempt={attempt} />
+        <div className="text-[10.5px] dim">{correct}/{answered} correct</div>
       </div>
-    </div>
+      <span className="flex-none dim" style={{ fontSize: 18, lineHeight: 1 }}>›</span>
+    </Link>
   );
 }

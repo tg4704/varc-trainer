@@ -10,6 +10,7 @@
 // In-session pages (/practice, /coach/practice) get their own minimal
 // session bar (Exit / progress / timer) instead of this — see App.jsx.
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { useNavGuard } from "../navGuard.jsx";
@@ -30,9 +31,21 @@ export default function TopNav() {
   const [showResetData, setShowResetData] = useState(false);
   const practiceRef = useRef(null);
   const userRef = useRef(null);
+  // The dropdown menus are portaled to <body> so they escape this nav's
+  // backdrop-filter — a backdrop-filter nested inside another backdrop-filter
+  // renders as a flat translucent panel (no visible blur). Their positions are
+  // measured from the trigger buttons on open.
+  const practiceMenuRef = useRef(null);
+  const userMenuRef = useRef(null);
+  const [practiceRect, setPracticeRect] = useState(null);
+  const [userRect, setUserRect] = useState(null);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 8);
+      setPracticeOpen(false);
+      setUserOpen(false);
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -41,12 +54,39 @@ export default function TopNav() {
   useEffect(() => {
     if (!practiceOpen && !userOpen) return;
     function onDocClick(e) {
-      if (practiceRef.current && !practiceRef.current.contains(e.target)) setPracticeOpen(false);
-      if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false);
+      const inPractice = practiceRef.current?.contains(e.target) || practiceMenuRef.current?.contains(e.target);
+      const inUser = userRef.current?.contains(e.target) || userMenuRef.current?.contains(e.target);
+      if (!inPractice) setPracticeOpen(false);
+      if (!inUser) setUserOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [practiceOpen, userOpen]);
+
+  function togglePractice() {
+    setUserOpen(false);
+    setPracticeOpen((o) => {
+      const next = !o;
+      if (next && practiceRef.current) setPracticeRect(practiceRef.current.getBoundingClientRect());
+      return next;
+    });
+  }
+  function toggleUser() {
+    setPracticeOpen(false);
+    setUserOpen((o) => {
+      const next = !o;
+      if (next && userRef.current) setUserRect(userRef.current.getBoundingClientRect());
+      return next;
+    });
+  }
+
+  const MENU_GLASS = {
+    background: "var(--glass-floating)",
+    backdropFilter: "blur(26px) saturate(150%)",
+    WebkitBackdropFilter: "blur(26px) saturate(150%)",
+    border: "1px solid var(--glass-border-hi)",
+    boxShadow: "0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 60px rgba(0,0,0,0.55)",
+  };
 
   const guarded = (to) => (e) => { if (!attemptNav(to)) e.preventDefault(); };
   const isActive = (to) => pathname === to || (to !== "/" && pathname.startsWith(to));
@@ -87,7 +127,7 @@ export default function TopNav() {
           >
             <div className="relative" ref={practiceRef}>
               <button
-                onClick={() => setPracticeOpen((o) => !o)}
+                onClick={togglePractice}
                 className="fx-ring flex items-center gap-1 rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
                 style={
                   practiceOpen || practiceActive
@@ -98,16 +138,11 @@ export default function TopNav() {
                 Practice
                 <Icon name="chevD" size={11} style={{ opacity: 0.7 }} />
               </button>
-              {practiceOpen && (
+              {practiceOpen && practiceRect && createPortal(
                 <div
-                  className="absolute left-0 top-[calc(100%+10px)] min-w-[184px] rounded-[14px] p-1.5"
-                  style={{
-                    background: "var(--glass-floating)",
-                    backdropFilter: "blur(26px) saturate(150%)",
-                    WebkitBackdropFilter: "blur(26px) saturate(150%)",
-                    border: "1px solid var(--glass-border-hi)",
-                    boxShadow: "0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 60px rgba(0,0,0,0.55)",
-                  }}
+                  ref={practiceMenuRef}
+                  className="min-w-[184px] rounded-[14px] p-1.5"
+                  style={{ position: "fixed", top: practiceRect.bottom + 10, left: practiceRect.left, zIndex: 60, ...MENU_GLASS }}
                 >
                   <DropdownItem to="/setup" onClick={() => setPracticeOpen(false)} icon="book" iconColor="#8B93A7">
                     Trainer
@@ -115,7 +150,8 @@ export default function TopNav() {
                   <DropdownItem to="/coach" onClick={() => setPracticeOpen(false)} icon="spark" iconColor="var(--periwinkle)" glow>
                     AI Coach
                   </DropdownItem>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
 
@@ -134,7 +170,7 @@ export default function TopNav() {
 
             <div className="relative" ref={userRef}>
               <button
-                onClick={() => setUserOpen((o) => !o)}
+                onClick={toggleUser}
                 className="fx-ring flex items-center gap-2 rounded-[9px] py-1.5 pl-1.5 pr-3 text-[13.5px] font-semibold"
                 style={{ background: userOpen ? "rgba(255,255,255,0.08)" : "transparent", color: "var(--text)" }}
               >
@@ -148,16 +184,11 @@ export default function TopNav() {
                 <Icon name="chevD" size={12} style={{ opacity: 0.7 }} />
               </button>
 
-              {userOpen && (
+              {userOpen && userRect && createPortal(
                 <div
-                  className="absolute right-0 top-[calc(100%+10px)] min-w-[196px] rounded-[14px] p-1.5"
-                  style={{
-                    background: "var(--glass-floating)",
-                    backdropFilter: "blur(26px) saturate(150%)",
-                    WebkitBackdropFilter: "blur(26px) saturate(150%)",
-                    border: "1px solid var(--glass-border-hi)",
-                    boxShadow: "0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 60px rgba(0,0,0,0.55)",
-                  }}
+                  ref={userMenuRef}
+                  className="min-w-[196px] rounded-[14px] p-1.5"
+                  style={{ position: "fixed", top: userRect.bottom + 10, right: Math.max(8, window.innerWidth - userRect.right), zIndex: 60, ...MENU_GLASS }}
                 >
                   <div className="mono px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wide dim">{user.email}</div>
                   <DropdownItem to="/profile" onClick={() => setUserOpen(false)}>Profile</DropdownItem>
@@ -181,7 +212,8 @@ export default function TopNav() {
                   >
                     Log out
                   </button>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           </div>

@@ -117,13 +117,13 @@ export default function CoachSummary() {
               <p className="text-sm text-foreground font-medium mb-2">{q.question}</p>
               <p className="text-xs muted">
                 Your answer: {LETTERS[a.selected_option_index]}
-                {!a.is_correct && <> · Correct: {LETTERS[a.correct_option_index]}</>}
+                {!a.is_correct && <>, Correct: {LETTERS[a.correct_option_index]}</>}
               </p>
               {a.key_takeaway && (
                 <p className="mt-2 text-xs muted italic">&ldquo;{a.key_takeaway}&rdquo;</p>
               )}
               {a.exchange_count > 0 && (
-                <p className="mt-1 text-xs muted">Discussed · {a.exchange_count} exchange{a.exchange_count !== 1 ? "s" : ""}</p>
+                <p className="mt-1 text-xs muted">Discussed in {a.exchange_count} exchange{a.exchange_count !== 1 ? "s" : ""}</p>
               )}
             </div>
           );

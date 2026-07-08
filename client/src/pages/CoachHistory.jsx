@@ -74,8 +74,8 @@ export default function CoachHistory() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {fmtDate(s.created_at)} · {score}
-                    {s.avg_reasoning_score ? ` · avg reasoning ${Number(s.avg_reasoning_score).toFixed(1)}/5` : ""}
+                    {fmtDate(s.created_at)}, {score}
+                    {s.avg_reasoning_score ? `, avg reasoning ${Number(s.avg_reasoning_score).toFixed(1)}/5` : ""}
                   </p>
                 </div>
                 <div className="flex-none">

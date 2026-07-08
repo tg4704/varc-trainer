@@ -104,7 +104,7 @@ export default function CoachLanding() {
               </div>
               <h2 className="font-bold text-foreground mb-1 leading-snug">{p.title || "Untitled passage"}</h2>
               <p className="text-xs text-muted-foreground mb-4">
-                {p.wordCount?.toLocaleString()} words · {p.questionCount} question{p.questionCount === 1 ? "" : "s"}
+                {p.wordCount?.toLocaleString()} words, {p.questionCount} question{p.questionCount === 1 ? "" : "s"}
               </p>
               <button
                 className={cn("btn btn-primary fx-sheen mt-auto", startingId === p.id && "opacity-60")}

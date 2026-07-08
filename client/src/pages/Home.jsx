@@ -334,7 +334,7 @@ export default function Home() {
         </p>
         <div className="flex flex-col gap-6 md:flex-row">
           <ProductCard
-            step="01 · READ" name="Reading" italic="Lounge" comingSoon
+            step="01 READ" name="Reading" italic="Lounge" comingSoon
             desc="Curated real articles across CAT genres. Build the habit and kill topic-unfamiliarity before it costs you marks."
             bullets={[
               "Real long-form writing, not AI-generated text.",
@@ -343,7 +343,7 @@ export default function Home() {
             ]}
           />
           <ProductCard
-            step="02 · COMPREHEND" name="" italic="Coach" cta="Open Coach" to="/coach"
+            step="02 COMPREHEND" name="" italic="Coach" cta="Open Coach" to="/coach"
             desc="Full CAT-style passages. Map the argument before you see any question, and the AI grades how you read, not just what you answer."
             bullets={[
               "Reading-map graded before questions are revealed.",
@@ -352,7 +352,7 @@ export default function Home() {
             ]}
           />
           <ProductCard
-            step="03 · SOLVE" name="" italic="Drills" cta="Start Drills" to="/setup"
+            step="03 SOLVE" name="" italic="Drills" cta="Start Drills" to="/setup"
             desc="Short paragraph, one question, fast reps. Builds the trap-recognition reflex, the close 50/50 that decides your percentile."
             bullets={[
               "Pick an answer, then defend your reasoning.",

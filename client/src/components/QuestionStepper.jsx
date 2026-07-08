@@ -10,7 +10,7 @@ import { useState } from "react";
 export function stateFor(s) {
   if (s.feedback) return s.feedback.isCorrect ? "correct" : "incorrect";
   if (s.skipped) return "skipped";
-  if (s.locked) return "seen";
+  if (s.locked || s.visited) return "seen";
   return "unseen";
 }
 

@@ -154,11 +154,28 @@ app.use((req, res, next) => {
       };
     }));
 
+    // Recent sessions (most recent first) with per-session answered/correct so the
+    // dashboard can list them and link each to its Results screen.
+    const recentSessionRows = await db.all(
+      `SELECT s.id, s.created_at, s.completed_at, s.status, s.num_questions,
+              COUNT(a.id) FILTER (WHERE a.skipped = 0) AS answered,
+              COALESCE(SUM(a.is_correct), 0) AS correct
+       FROM sessions s JOIN attempts a ON a.session_id = s.id
+       WHERE s.user_id = $1
+       GROUP BY s.id
+       ORDER BY s.id DESC
+       LIMIT 8`, [userId]);
+    const recentSessions = recentSessionRows.map((s) => ({
+      id: s.id, createdAt: s.created_at, completedAt: s.completed_at, status: s.status,
+      numQuestions: Number(s.num_questions), answered: Number(s.answered), correct: Number(s.correct),
+    }));
+
     return {
       totalAttempts: Number(totals.totalAttempts), answeredCount: answered,
       correctCount: Number(totals.correctCount), skippedCount: Number(totals.skippedCount),
       accuracy, trapPickRate, avgReasoningScore: totals.avgReasoningScore,
-      byType, byTopic, byTrapType, weakestType, mostDangerousTrap, recentAttempts, intuitionStats,
+      byType, byTopic, byTrapType, weakestType, mostDangerousTrap,
+      recentAttempts, recentSessions, intuitionStats,
     };
   }
 

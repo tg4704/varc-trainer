@@ -61,6 +61,7 @@ function defaultQState() {
     feedback: null,
     isSkipping: false,
     skipped: false,
+    visited: false,          // has this question ever been the current one
     eliminated: [],          // intuition mode: eliminated option indices
   };
 }
@@ -101,9 +102,22 @@ export default function Practice() {
     try { localStorage.setItem(FONT_PREFS_KEY, JSON.stringify(fontPrefs)); } catch {}
   }, [fontPrefs]);
 
-  // Per-question timer-pause bookkeeping (pre-lock only)
-  const pauseAccumRef = useRef({});
-  const pauseStartRef = useRef({});
+  // Per-question active-time bookkeeping. A per-question timer must only count
+  // time actually spent ON that question — it pauses when you navigate away (or
+  // manually pause) and resumes when you return, and freezes at lock. Per-session
+  // timers ignore all of this and run continuously off sessionStartRef.
+  //   activeAccumRef[idx] = committed active ms for that question
+  //   activeSinceRef      = ms when the current question's clock started running,
+  //                         or null while paused / frozen / on a resolved question
+  const activeAccumRef = useRef({});
+  const activeSinceRef = useRef(null);
+
+  const commitActive = useCallback((idx) => {
+    if (activeSinceRef.current != null) {
+      activeAccumRef.current[idx] = (activeAccumRef.current[idx] || 0) + (Date.now() - activeSinceRef.current);
+      activeSinceRef.current = null;
+    }
+  }, []);
 
   // Mobile paragraph toggle (per-question, reset on nav)
   const [paragraphOpen, setParagraphOpen] = useState(true);
@@ -167,6 +181,37 @@ export default function Practice() {
 
   // Reset autoActedRef when moving to a new question
   useEffect(() => { autoActedRef.current = false; }, [currentIdx]);
+
+  // Mark a question as "visited" the first time it becomes current, so the
+  // stepper can show visited-but-unanswered questions as "seen".
+  useEffect(() => {
+    if (!questions) return;
+    setQuestionStates((prev) => {
+      if (prev[currentIdx]?.visited) return prev;
+      const arr = [...prev];
+      arr[currentIdx] = { ...(arr[currentIdx] || defaultQState()), visited: true };
+      return arr;
+    });
+  }, [currentIdx, questions]);
+
+  // Drive the per-question active clock: start it when a fresh (unresolved,
+  // unlocked, unpaused) question becomes current; commit the elapsed time when
+  // we leave it. Deliberately does NOT depend on questionStates — lock/pause
+  // freeze the clock via commitActive() directly, so re-running here on every
+  // keystroke would be wrong. Per-session timers don't use this at all.
+  useEffect(() => {
+    if (!questions || !session) return;
+    const perQuestion = session.timerMode !== "untimed" && session.timerScope === "per_question";
+    const st = questionStates[currentIdx] || defaultQState();
+    if (perQuestion && !st.feedback && !st.skipped && !st.locked && !st.pausedTimer) {
+      activeSinceRef.current = Date.now();
+    } else {
+      activeSinceRef.current = null;
+    }
+    const leavingIdx = currentIdx;
+    return () => { commitActive(leavingIdx); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIdx, questions, session]);
 
   // ── Text selection: Highlight / Underline / Note / Quote ─────────────────
   // Highlight/underline/note are available any time while reading. Quote is
@@ -241,6 +286,7 @@ export default function Practice() {
   const { registerGuard, clearGuard, attemptNav } = useNavGuard();
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [leaveAction, setLeaveAction] = useState(null); // 'end' | 'discard' — which is in progress
   const leavePendingRef = useRef(null);
   const inProgressRef = useRef(false);
   useEffect(() => {
@@ -268,6 +314,7 @@ export default function Practice() {
   async function endSessionAndLeave() {
     if (leaving || !session || !questions) return;
     setLeaving(true);
+    setLeaveAction("end");
     const to = leavePendingRef.current || "/dashboard";
     try {
       for (let i = 0; i < questions.length; i++) {
@@ -298,6 +345,7 @@ export default function Practice() {
   async function discardSessionAndLeave() {
     if (leaving || !session) return;
     setLeaving(true);
+    setLeaveAction("discard");
     const to = leavePendingRef.current || "/dashboard";
     try { await deleteSession(session.id); } catch {}
     endedRef.current = true;
@@ -384,6 +432,7 @@ export default function Practice() {
   // Lock the current answer (Analysis mode "Submit Answer" button)
   function lockAnswer() {
     if (cs.tentativeSelected === null || cs.locked) return;
+    commitActive(currentIdx); // freeze the per-question timer at lock time
     patchCS(currentIdx, {
       locked: true,
       lockedSelected: cs.tentativeSelected,
@@ -395,12 +444,10 @@ export default function Practice() {
   function togglePause() {
     const idx = currentIdx;
     if (cs.pausedTimer) {
-      const startedAt = pauseStartRef.current[idx];
-      if (startedAt) pauseAccumRef.current[idx] = (pauseAccumRef.current[idx] || 0) + (Date.now() - startedAt);
-      delete pauseStartRef.current[idx];
+      activeSinceRef.current = Date.now(); // resume the active clock
       patchCS(idx, { pausedTimer: false });
     } else {
-      pauseStartRef.current[idx] = Date.now();
+      commitActive(idx); // freeze accumulated active time
       patchCS(idx, { pausedTimer: true });
     }
   }
@@ -523,17 +570,17 @@ export default function Practice() {
     if (!session || session.practiceMode === "intuition") return null;
     if (session.timerMode === "untimed") return null;
     const perSession = session.timerScope === "per_session";
-    const base = perSession ? sessionStartRef.current : (questionStartTimesRef.current[currentIdx] || Date.now());
-    let nowPoint = tick;
-    if (!perSession && cs.lockTime) nowPoint = cs.lockTime; // frozen at lock
-    let pausedMs = 0;
-    if (!perSession) {
-      pausedMs = pauseAccumRef.current[currentIdx] || 0;
-      if (cs.pausedTimer && pauseStartRef.current[currentIdx]) {
-        pausedMs += tick - pauseStartRef.current[currentIdx];
-      }
+    let elapsed;
+    if (perSession) {
+      // One continuous clock for the whole run, off the session start anchor.
+      elapsed = (tick - sessionStartRef.current) / 1000;
+    } else {
+      // Only the active time actually spent on THIS question (frozen at lock,
+      // paused while on another question or manually paused).
+      const accum = activeAccumRef.current[currentIdx] || 0;
+      const running = activeSinceRef.current != null ? tick - activeSinceRef.current : 0;
+      elapsed = (accum + running) / 1000;
     }
-    const elapsed = (nowPoint - base - pausedMs) / 1000;
     if (session.timerMode === "count_up") return { text: formatTime(elapsed), tone: "neutral", remaining: elapsed, total: null };
     const remaining = session.timerSeconds - elapsed;
     return {
@@ -605,9 +652,9 @@ export default function Practice() {
       if (remaining <= 0) finishSession(session);
     } else {
       if (cs.locked || cs.feedback || cs.submitting || cs.isSkipping || cs.pausedTimer) return;
-      const pausedMs = pauseAccumRef.current[currentIdx] || 0;
-      const start = questionStartTimesRef.current[currentIdx] || Date.now();
-      const remaining = session.timerSeconds - (Date.now() - start - pausedMs) / 1000;
+      const accum = activeAccumRef.current[currentIdx] || 0;
+      const running = activeSinceRef.current != null ? Date.now() - activeSinceRef.current : 0;
+      const remaining = session.timerSeconds - (accum + running) / 1000;
       if (remaining <= 0 && !autoActedRef.current) doSkip(session, currentIdx, true);
     }
   }, [tick, currentIdx, session, questions, cs.locked, cs.feedback, cs.submitting, cs.isSkipping, cs.pausedTimer, finishSession, doSkip]);
@@ -651,7 +698,7 @@ export default function Practice() {
         <div className="flex flex-col md:flex-row gap-8">
           <div className="md:w-[55%]">
             <div className="flex items-center justify-between mb-4">
-              {fb ? <TopicBadge topic={question.topic} /> : <span className="opacity-0 text-xs">·</span>}
+              {fb ? <TopicBadge topic={question.topic} /> : <span className="opacity-0 text-xs">{" "}</span>}
               <div className="flex items-center gap-3">
                 <span className="text-xs muted">Q{currentIdx + 1} of {questions.length}</span>
                 <button type="button" onClick={() => setFlagModal({ questionId: question.id })}
@@ -742,7 +789,7 @@ export default function Practice() {
           onSuccess={() => { setFlagModal(null); setFlagToast("Reported, thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
         {flagToast && <div className="glass-floating fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-5 py-3 text-sm text-foreground">{flagToast}</div>}
         {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
-        {showLeaveModal && <LeaveSessionModal busy={leaving} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
+        {showLeaveModal && <LeaveSessionModal busy={leaving} action={leaveAction} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
       </div>
       </>
     );
@@ -1072,7 +1119,7 @@ export default function Practice() {
     )}
 
     {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
-    {showLeaveModal && <LeaveSessionModal busy={leaving} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
+    {showLeaveModal && <LeaveSessionModal busy={leaving} action={leaveAction} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
     </>
   );
 }
@@ -1158,7 +1205,7 @@ function EndSessionModal({ onConfirm, onCancel }) {
 // ── Leave-session modal (nav away mid-practice) ───────────────────────────────
 // Practice sessions aren't resumable: End (counts answered, skips the rest) or
 // Discard (deletes the session entirely — as if it never happened).
-function LeaveSessionModal({ busy, onEnd, onDiscard, onStay }) {
+function LeaveSessionModal({ busy, action, onEnd, onDiscard, onStay }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="glass-floating w-full max-w-sm p-6">
@@ -1170,10 +1217,10 @@ function LeaveSessionModal({ busy, onEnd, onDiscard, onStay }) {
         </p>
         <div className="flex flex-col gap-2">
           <Button className="fx-sheen w-full" disabled={busy} onClick={onEnd}>
-            {busy ? "Ending…" : "End session"}
+            {action === "end" ? "Ending…" : "End session"}
           </Button>
           <Button variant="destructive" className="w-full" disabled={busy} onClick={onDiscard}>
-            {busy ? "Discarding…" : "Discard session"}
+            {action === "discard" ? "Discarding…" : "Discard session"}
           </Button>
           <Button variant="outline" className="w-full" disabled={busy} onClick={onStay}>
             Stay
@@ -1233,7 +1280,7 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, reasoningTe
       )}
       <FeedbackSections attempt={attempt} />
       <button className="btn btn-primary fx-sheen mt-6 w-full" onClick={isLast ? onEnd : onNext}>
-        {isLast ? "Finish · See your results" : "Next question →"}
+        {isLast ? "Finish and see your results" : "Next question →"}
       </button>
     </div>
   );

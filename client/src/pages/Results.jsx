@@ -204,7 +204,7 @@ export default function Results() {
         </div>
 
         <div className="glass p-5">
-          <h2 className="eyebrow mb-4">Review · tap to revisit</h2>
+          <h2 className="eyebrow mb-4">Review, tap to revisit</h2>
           <div className="grid grid-cols-5 gap-2">
             {attempts.map((a, i) => {
               const status = a.skipped === 1 ? "skipped" : a.is_correct === 1 ? "correct" : "incorrect";

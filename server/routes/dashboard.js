@@ -192,6 +192,24 @@ async function handle(req, res, next) {
       };
     }));
 
+    // ── Recent sessions (most recent first) — mirror of the copy in index.js ──
+    const recentSessionRows = await db.all(
+      `SELECT s.id, s.created_at, s.completed_at, s.status, s.num_questions,
+              COUNT(a.id) FILTER (WHERE a.skipped = 0) AS answered,
+              COALESCE(SUM(a.is_correct), 0) AS correct
+       FROM sessions s JOIN attempts a ON a.session_id = s.id
+       WHERE s.user_id = $1
+       GROUP BY s.id
+       ORDER BY s.id DESC
+       LIMIT 8`,
+      [userId]
+    );
+    const recentSessions = recentSessionRows.map((s) => ({
+      id: s.id, createdAt: s.created_at, completedAt: s.completed_at, status: s.status,
+      numQuestions: parseInt(s.num_questions, 10),
+      answered: parseInt(s.answered, 10), correct: parseInt(s.correct, 10),
+    }));
+
     const responseData = {
       totalAttempts: parseInt(totals.totalAttempts, 10),
       answeredCount: answered,
@@ -206,6 +224,7 @@ async function handle(req, res, next) {
       weakestType,
       mostDangerousTrap,
       recentAttempts,
+      recentSessions,
       intuitionStats,
     };
 

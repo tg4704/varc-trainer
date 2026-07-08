@@ -362,7 +362,7 @@ export default function CoachPractice() {
         <div className="lg:w-[55%] flex flex-col gap-5">
           <div className="glass p-5">
             <div className="flex items-center justify-between mb-3">
-              {verdictShown ? <TypeBadge type={question.type} /> : <span className="text-xs text-transparent select-none">·</span>}
+              {verdictShown ? <TypeBadge type={question.type} /> : <span className="text-xs text-transparent select-none">{" "}</span>}
             </div>
             <h2 className="font-bold text-foreground mb-4" style={{ fontSize: 16 }}>{question.question}</h2>
             <div className="space-y-2">
