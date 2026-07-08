@@ -566,23 +566,51 @@ export default function Practice() {
   // Timer helpers — returns text/tone for display, plus numeric remaining/total
   // for the donut ring. Accounts for a pre-lock pause (elapsed freezes while
   // cs.pausedTimer is true) and the existing freeze-at-lock behavior.
-  function timerInfo() {
+  // ── Timers ──────────────────────────────────────────────────────────────────
+  // Two independent timers, shown in two places so they're never confused:
+  //   • Session timer — the whole run — lives in the top bar (labeled "Session").
+  //   • Question timer — only the current question — lives in the passage-panel
+  //     donut (labeled "Question"), and ONLY exists in per_question scope.
+  // Rules:
+  //   count_up + per_question  → session counts up; question counts up (active only)
+  //   count_up + per_session   → session counts up; no question timer
+  //   countdown + per_question → session counts up (whole time); question counts down
+  //   countdown + per_session  → session counts down; no question timer
+
+  // Whole-session elapsed, in seconds, off the session start anchor.
+  function sessionElapsed() {
+    return (tick - sessionStartRef.current) / 1000;
+  }
+
+  function sessionTimerInfo() {
     if (!session || session.practiceMode === "intuition") return null;
     if (session.timerMode === "untimed") return null;
-    const perSession = session.timerScope === "per_session";
-    let elapsed;
-    if (perSession) {
-      // One continuous clock for the whole run, off the session start anchor.
-      elapsed = (tick - sessionStartRef.current) / 1000;
-    } else {
-      // Only the active time actually spent on THIS question (frozen at lock,
-      // paused while on another question or manually paused).
-      const accum = activeAccumRef.current[currentIdx] || 0;
-      const running = activeSinceRef.current != null ? tick - activeSinceRef.current : 0;
-      elapsed = (accum + running) / 1000;
+    const elapsed = sessionElapsed();
+    // Session counts DOWN only for a per_session countdown; otherwise it counts up.
+    if (session.timerMode === "countdown" && session.timerScope === "per_session") {
+      const remaining = session.timerSeconds - elapsed;
+      return {
+        text: formatTime(remaining),
+        tone: remaining <= 10 ? "danger" : remaining <= 30 ? "warn" : "neutral",
+        remaining, total: session.timerSeconds,
+      };
     }
-    if (session.timerMode === "count_up") return { text: formatTime(elapsed), tone: "neutral", remaining: elapsed, total: null };
-    const remaining = session.timerSeconds - elapsed;
+    return { text: formatTime(elapsed), tone: "neutral", remaining: elapsed, total: null };
+  }
+
+  function questionTimerInfo() {
+    if (!session || session.practiceMode === "intuition") return null;
+    if (session.timerMode === "untimed") return null;
+    if (session.timerScope !== "per_question") return null; // one-timer for per_session
+    // Active time actually spent on THIS question (frozen at lock, paused while
+    // on another question or manually paused).
+    const accum = activeAccumRef.current[currentIdx] || 0;
+    const running = activeSinceRef.current != null ? tick - activeSinceRef.current : 0;
+    const active = (accum + running) / 1000;
+    if (session.timerMode === "count_up") {
+      return { text: formatTime(active), tone: "neutral", remaining: active, total: null };
+    }
+    const remaining = session.timerSeconds - active;
     return {
       text: formatTime(remaining),
       tone: remaining <= 10 ? "danger" : remaining <= 20 ? "warn" : "ok",
@@ -622,6 +650,14 @@ export default function Practice() {
     })();
     return () => { cancelled = true; };
   }, [navigate]);
+
+  // Leave fullscreen when the practice screen unmounts (session ended, exited,
+  // discarded). Fullscreen is entered from the SessionSetup "Begin" gesture.
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+  }, []);
 
   // Timer tick
   useEffect(() => {
@@ -691,7 +727,7 @@ export default function Practice() {
 
     return (
       <>
-      <SessionTopBar current={currentIdx + 1} total={questions.length} modeLabel="Intuition" onExit={requestExit} />
+      <SessionTopBar current={currentIdx + 1} total={questions.length} onExit={requestExit} />
       <QuestionStepper total={questions.length} currentIdx={currentIdx} questionStates={questionStates} onJump={navigateTo} />
       <div className="max-w-6xl mx-auto px-4 py-8">
         <MobileQuestionDots questions={questions} currentIdx={currentIdx} questionStates={questionStates} onJump={navigateTo} />
@@ -796,7 +832,8 @@ export default function Practice() {
   }
 
   // ── Analysis mode ──────────────────────────────────────────────────────────
-  const timer = timerInfo();
+  const sTimer = sessionTimerInfo();
+  const qTimer = questionTimerInfo();
   const REASONING_MAX = 500;
   const reasoningLen = cs.reasoning.trim().length;
   const fb = cs.feedback;
@@ -812,9 +849,9 @@ export default function Practice() {
     <SessionTopBar
       current={currentIdx + 1}
       total={questions.length}
-      timerText={timer?.text}
-      timerTone={timer?.tone}
-      modeLabel="Analysis"
+      timerText={sTimer?.text}
+      timerTone={sTimer?.tone}
+      timerLabel={sTimer ? "Session" : undefined}
       onExit={requestExit}
     />
     <QuestionStepper total={questions.length} currentIdx={currentIdx} questionStates={questionStates} onJump={navigateTo} />
@@ -856,17 +893,22 @@ export default function Practice() {
                 annotationCount={cs.annotations.length}
                 onClearAnnotations={() => patchCS(currentIdx, { annotations: [] })}
               />
-              {timer && (
-                <TimerRing
-                  seconds={Math.max(0, timer.remaining)}
-                  totalSeconds={timer.total}
-                  paused={!!cs.pausedTimer}
-                  onTogglePause={
-                    !cs.locked && session.timerMode === "countdown" && session.timerScope === "per_question"
-                      ? togglePause
-                      : undefined
-                  }
-                />
+              {qTimer && (
+                <div className="flex flex-col items-center gap-1">
+                  <TimerRing
+                    seconds={Math.max(0, qTimer.remaining)}
+                    totalSeconds={qTimer.total}
+                    paused={!!cs.pausedTimer}
+                    onTogglePause={
+                      !cs.locked && session.timerMode === "countdown"
+                        ? togglePause
+                        : undefined
+                    }
+                  />
+                  <span className="mono text-[8px] uppercase tracking-[0.1em]" style={{ color: "var(--text-2)" }}>
+                    Question
+                  </span>
+                </div>
               )}
               <button type="button" onClick={() => setParagraphOpen((o) => !o)}
                 className="md:hidden text-xs muted hover:text-foreground">
@@ -1203,25 +1245,45 @@ function EndSessionModal({ onConfirm, onCancel }) {
 }
 
 // ── Leave-session modal (nav away mid-practice) ───────────────────────────────
-// Practice sessions aren't resumable: End (counts answered, skips the rest) or
-// Discard (deletes the session entirely — as if it never happened).
+// Practice sessions aren't resumable. Discard sits above End (destructive-first
+// per the redesign); what each does is shown on hover rather than in a wall of
+// body copy.
+function HoverHint({ hint, children }) {
+  return (
+    <div className="group relative">
+      {children}
+      <div
+        className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-max max-w-[280px] -translate-x-1/2 rounded-[10px] px-3 py-2 text-[12px] leading-snug opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+        style={{
+          background: "rgba(20,23,31,0.97)",
+          border: "1px solid var(--glass-border-hi)",
+          color: "var(--text-2)",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+        }}
+      >
+        {hint}
+      </div>
+    </div>
+  );
+}
+
 function LeaveSessionModal({ busy, action, onEnd, onDiscard, onStay }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="glass-floating w-full max-w-sm p-6">
-        <h2 className="text-base font-bold text-foreground mb-2">Leave this session?</h2>
-        <p className="text-sm text-muted-foreground mb-5">
-          Practice sessions can't be resumed. <strong>End</strong> keeps your answered
-          questions (the rest count as skipped). <strong>Discard</strong> deletes the
-          session entirely, as if it never happened.
-        </p>
+        <h2 className="text-base font-bold text-foreground mb-1">Leave this session?</h2>
+        <p className="text-xs dim mb-5">Hover an option to see what it does.</p>
         <div className="flex flex-col gap-2">
-          <Button className="fx-sheen w-full" disabled={busy} onClick={onEnd}>
-            {action === "end" ? "Ending…" : "End session"}
-          </Button>
-          <Button variant="destructive" className="w-full" disabled={busy} onClick={onDiscard}>
-            {action === "discard" ? "Discarding…" : "Discard session"}
-          </Button>
+          <HoverHint hint="Deletes this session and every answer in it, as if it never happened. Nothing is saved.">
+            <Button variant="destructive" className="w-full" disabled={busy} onClick={onDiscard}>
+              {action === "discard" ? "Discarding…" : "Discard session"}
+            </Button>
+          </HoverHint>
+          <HoverHint hint="Keeps the questions you've answered and counts the rest as skipped. You'll go straight to your results.">
+            <Button className="fx-sheen w-full" disabled={busy} onClick={onEnd}>
+              {action === "end" ? "Ending…" : "End session"}
+            </Button>
+          </HoverHint>
           <Button variant="outline" className="w-full" disabled={busy} onClick={onStay}>
             Stay
           </Button>

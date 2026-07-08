@@ -1,9 +1,11 @@
-// Minimal in-session bar for Drills practice: Exit / progress / timer / mode
-// pill. Replaces the app-level TopNav while a session is active — this is
-// the "in-session minimal top bar" deferred from the v2 redesign pass.
+// Minimal in-session bar for Drills practice: Exit / progress / session timer.
+// Replaces the app-level TopNav while a session is active — this is the
+// "in-session minimal top bar" deferred from the v2 redesign pass. The mode
+// pill (Analysis/Intuition) was removed; the timer carries an optional label
+// ("Session") so it's never confused with the per-question donut timer.
 import Icon from "./Icon.jsx";
 
-export default function SessionTopBar({ current, total, timerText, timerTone = "neutral", modeLabel, onExit }) {
+export default function SessionTopBar({ current, total, timerText, timerTone = "neutral", timerLabel, onExit }) {
   const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
   const timerColor = timerTone === "danger" ? "var(--red)" : timerTone === "warn" ? "var(--amber)" : "var(--text)";
 
@@ -37,17 +39,16 @@ export default function SessionTopBar({ current, total, timerText, timerTone = "
 
       <div className="flex items-center gap-3">
         {timerText && (
-          <span className="mono flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: timerColor }}>
+          <span className="flex items-center gap-1.5">
             <Icon name="clock" size={14} style={{ color: "var(--text-2)" }} />
-            {timerText}
-          </span>
-        )}
-        {modeLabel && (
-          <span
-            className="rounded-full px-3 py-[5px] text-[12px] font-semibold"
-            style={{ color: "var(--teal)", background: "rgba(93,202,165,0.12)", border: "1px solid rgba(93,202,165,0.3)" }}
-          >
-            {modeLabel}
+            {timerLabel && (
+              <span className="mono text-[9px] uppercase tracking-[0.12em]" style={{ color: "var(--text-2)" }}>
+                {timerLabel}
+              </span>
+            )}
+            <span className="mono text-[13px] font-semibold tabular-nums" style={{ color: timerColor }}>
+              {timerText}
+            </span>
           </span>
         )}
       </div>

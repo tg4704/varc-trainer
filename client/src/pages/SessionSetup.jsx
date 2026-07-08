@@ -52,6 +52,14 @@ export default function SessionSetup() {
   const [feedbackMode, setFeedbackMode] = useState("instant");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // "Begin" on the confirmation screen: go fullscreen (distraction-free) from
+  // this user gesture, then create the session and enter practice.
+  async function beginSession() {
+    try { await document.documentElement.requestFullscreen?.(); } catch {}
+    await handleStart();
+  }
 
   async function handleStart() {
     setBusy(true);
@@ -225,13 +233,92 @@ export default function SessionSetup() {
 
         {error && <p className="mt-6 text-sm text-destructive">{error}</p>}
 
-        <Button onClick={handleStart} disabled={busy} className="fx-sheen mt-8 w-full" size="lg">
-          {busy
-            ? "Starting…"
-            : `Start ${numQuestions}-question${
-                deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : inferenceOnly ? " inference" : ""
-              } session`}
+        <Button
+          onClick={() => { setError(null); setShowConfirm(true); }}
+          disabled={busy}
+          className="fx-sheen mt-8 w-full"
+          size="lg"
+        >
+          {`Review ${numQuestions}-question${
+            deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : inferenceOnly ? " inference" : ""
+          } session`}
         </Button>
+      </div>
+
+      {showConfirm && (
+        <ConfirmStartModal
+          rows={buildSummary({
+            practiceMode, numQuestions, inferenceOnly, deepLinkValid, deepLinkType,
+            timerMode, timerScope, perQuestionSeconds, perSessionMinutes, feedbackMode,
+          })}
+          busy={busy}
+          error={error}
+          onBack={() => setShowConfirm(false)}
+          onBegin={beginSession}
+        />
+      )}
+    </div>
+  );
+}
+
+// Human-readable summary of everything the user configured, for the
+// pre-start confirmation screen.
+function buildSummary(s) {
+  const focus = s.deepLinkValid
+    ? TYPE_LABELS[s.deepLinkType]
+    : s.inferenceOnly ? "Inference-focused" : "Mixed (all types)";
+  const rows = [
+    ["Mode", PRACTICE_MODES.find((m) => m.value === s.practiceMode)?.title],
+    ["Questions", String(s.numQuestions)],
+    ["Focus", focus],
+    ["Timer", TIMER_MODES.find((m) => m.value === s.timerMode)?.title],
+  ];
+  if (s.timerMode !== "untimed") {
+    rows.push(["Applies to", s.timerScope === "per_question" ? "Per question" : "Whole session"]);
+    if (s.timerMode === "countdown") {
+      rows.push([
+        "Duration",
+        s.timerScope === "per_question" ? `${s.perQuestionSeconds}s per question` : `${s.perSessionMinutes} min total`,
+      ]);
+    }
+  } else if (s.practiceMode === "analysis") {
+    rows.push(["Feedback", s.feedbackMode === "instant" ? "Instant, after each answer" : "After the whole session"]);
+  }
+  return rows;
+}
+
+function ConfirmStartModal({ rows, busy, error, onBack, onBegin }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={busy ? undefined : onBack}>
+      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="display text-[22px]">Ready to begin?</h2>
+        <p className="mt-1 text-xs dim">
+          Starting opens a distraction-free fullscreen. Press Esc any time to exit.
+        </p>
+
+        <div className="mt-5">
+          {rows.map(([label, value], i) => (
+            <div
+              key={label}
+              className="flex items-center justify-between py-2.5"
+              style={i > 0 ? { borderTop: "1px solid var(--glass-border-lo)" } : undefined}
+            >
+              <span className="text-xs uppercase tracking-wide" style={{ color: "var(--text-2)" }}>{label}</span>
+              <span className="text-sm font-semibold text-foreground">{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
+
+        <div className="mt-6 flex gap-2.5">
+          <Button onClick={onBegin} disabled={busy} className="fx-sheen flex-1" size="lg">
+            {busy ? "Starting…" : "Begin session"}
+          </Button>
+          <Button variant="outline" onClick={onBack} disabled={busy} size="lg">
+            Back
+          </Button>
+        </div>
       </div>
     </div>
   );
