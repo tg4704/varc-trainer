@@ -650,4 +650,97 @@ router.get("/costs", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── GET /api/admin/api-calls ────────────────────────────────────────────────
+// Row-level browser over api_calls for diagnosing a specific failure (e.g.
+// "AI feedback unavailable") — the /costs endpoint above only returns
+// aggregates, this returns individual calls with their persisted error
+// message (see logApiCall in server/ai/apiLog.js), filterable by date range,
+// user, token count, surface (which product the call came from), and status.
+const SURFACE_ROUTE_PATTERNS = {
+  drills: ["/api/attempts/evaluate", "/api/sessions/batch-evaluate"],
+  coach: ["/api/coach/"],
+  my_questions: ["/api/my-questions/"],
+};
+
+function surfaceWhereClause(surface, paramIndex) {
+  const patterns = SURFACE_ROUTE_PATTERNS[surface];
+  if (!patterns) return null;
+  // Routes are either exact matches (Drills) or prefixes (Coach/My Questions) —
+  // build an OR of `route = $n` / `route LIKE $n` accordingly.
+  const clauses = [];
+  const values = [];
+  let i = paramIndex;
+  for (const p of patterns) {
+    if (p.endsWith("/")) {
+      clauses.push(`c.route LIKE $${i}`);
+      values.push(`${p}%`);
+    } else {
+      clauses.push(`c.route = $${i}`);
+      values.push(p);
+    }
+    i++;
+  }
+  return { sql: `(${clauses.join(" OR ")})`, values };
+}
+
+router.get("/api-calls", async (req, res, next) => {
+  try {
+    const {
+      from, to, userId, minTokens, maxTokens, surface, status,
+      page = 1, pageSize = 50,
+    } = req.query;
+
+    const where = [];
+    const params = [];
+    let i = 1;
+
+    if (from) { where.push(`c.created_at >= $${i++}`); params.push(from); }
+    if (to) { where.push(`c.created_at < ($${i++}::date + INTERVAL '1 day')`); params.push(to); }
+    if (userId) { where.push(`c.user_id = $${i++}`); params.push(Number(userId)); }
+    if (minTokens) { where.push(`(c.input_tokens + c.output_tokens) >= $${i++}`); params.push(Number(minTokens)); }
+    if (maxTokens) { where.push(`(c.input_tokens + c.output_tokens) <= $${i++}`); params.push(Number(maxTokens)); }
+    if (status === "ok" || status === "error") { where.push(`c.status = $${i++}`); params.push(status); }
+    if (surface && surface !== "other") {
+      const clause = surfaceWhereClause(surface, i);
+      if (clause) { where.push(clause.sql); params.push(...clause.values); i += clause.values.length; }
+    } else if (surface === "other") {
+      // Not Drills, not Coach, not My Questions — everything else (currently none, but future-proof).
+      const allPatterns = Object.values(SURFACE_ROUTE_PATTERNS).flat();
+      const clauses = allPatterns.map((p) => {
+        const c = p.endsWith("/") ? `c.route LIKE $${i}` : `c.route = $${i}`;
+        params.push(p.endsWith("/") ? `${p}%` : p);
+        i++;
+        return c;
+      });
+      where.push(`NOT (${clauses.join(" OR ")})`);
+    }
+
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const limit = Math.min(200, Math.max(1, Number(pageSize) || 50));
+    const offset = (Math.max(1, Number(page) || 1) - 1) * limit;
+
+    const totalRow = await db.get(
+      `SELECT COUNT(*) AS total FROM api_calls c ${whereSql}`,
+      params
+    );
+
+    const rows = await db.all(
+      `SELECT c.id, c.user_id AS "userId", u.username, u.email,
+              c.route, c.provider, c.model,
+              c.input_tokens AS "inputTokens", c.output_tokens AS "outputTokens",
+              (c.input_tokens + c.output_tokens) AS "totalTokens",
+              c.est_cost_usd AS "costUsd", c.status, c.error_message AS "errorMessage",
+              c.created_at AS "createdAt"
+       FROM api_calls c
+       LEFT JOIN users u ON u.id = c.user_id
+       ${whereSql}
+       ORDER BY c.created_at DESC
+       LIMIT $${i} OFFSET $${i + 1}`,
+      [...params, limit, offset]
+    );
+
+    res.json({ rows, total: Number(totalRow.total), page: Number(page) || 1, pageSize: limit });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

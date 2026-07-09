@@ -9,7 +9,7 @@ const db = require("../db");
 const { authenticate } = require("../auth");
 const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL } = require("../ai/provider");
+const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 
 router.use(authenticate);
 
@@ -268,6 +268,7 @@ Schema:
       provider: "openrouter",
       model: DEFAULT_MODEL,
       status: "error",
+      errorMessage: describeError(e),
     });
     console.error("AI draft error:", e.message);
     res.status(502).json({

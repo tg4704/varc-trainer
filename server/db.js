@@ -394,6 +394,14 @@ async function schemaIsStale() {
     await db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL"
     );
+    // Admin Logs page: the actual provider error (rate limit, timeout, bad JSON
+    // from the model, etc.) was previously only console.error'd and lost —
+    // logApiCall() now persists it here so a failed call is diagnosable after
+    // the fact instead of only in transient server logs.
+    await ensureColumn("api_calls", "error_message", "TEXT");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_api_calls_created_at ON api_calls(created_at DESC)");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_api_calls_user_id ON api_calls(user_id)");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_api_calls_status ON api_calls(status)");
     await seedQuestions();
     await bootstrapAdmins();
     console.log("[db] Database initialised.");

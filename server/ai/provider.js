@@ -52,4 +52,16 @@ async function callModel({ model = DEFAULT_MODEL, system, messages, maxTokens = 
   };
 }
 
-module.exports = { callModel, DEFAULT_MODEL };
+// OpenRouter often nests the actually-useful diagnostic (e.g. "model X is
+// temporarily rate-limited upstream, add your own key to accumulate your
+// rate limits") under error.metadata.raw — the openai SDK's err.message
+// only surfaces the generic "429 Provider returned error" wrapper. Routes
+// use this instead of err.message when logging to api_calls so the admin
+// Logs page shows the actionable detail, not just the HTTP status wrapper.
+function describeError(err) {
+  const base = err?.message || String(err);
+  const raw = err?.error?.metadata?.raw;
+  return raw && raw !== base ? `${base}: ${raw}` : base;
+}
+
+module.exports = { callModel, DEFAULT_MODEL, describeError };

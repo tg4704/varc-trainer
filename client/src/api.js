@@ -214,6 +214,12 @@ export const admin = {
 
   costs: () => request("/api/admin/costs"),
 
+  apiCalls: (filters = {}) => {
+    const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "" && v != null));
+    const qs = new URLSearchParams(clean).toString();
+    return request(`/api/admin/api-calls${qs ? `?${qs}` : ""}`);
+  },
+
   importContent: (payload) =>
     request("/api/admin/import", { method: "POST", body: JSON.stringify(payload) }),
 

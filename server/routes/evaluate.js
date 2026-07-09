@@ -4,7 +4,7 @@ const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL } = require("../ai/provider");
+const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 
@@ -208,6 +208,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
       provider: "openrouter",
       model: DEFAULT_MODEL,
       status: "error",
+      errorMessage: describeError(err),
     });
     return res.json({
       ...base,

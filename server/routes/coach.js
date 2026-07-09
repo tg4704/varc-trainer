@@ -7,7 +7,7 @@ const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL } = require("../ai/provider");
+const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { clearCache: clearDashCache } = require("./dashboard");
 
@@ -203,7 +203,7 @@ ${studentMapText}`;
         grade = extractJSON(response.text);
       } catch (err) {
         console.error(`Reading-map grade attempt ${attempt + 1} failed:`, err.message);
-        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, status: "error", errorMessage: describeError(err) });
       }
     }
 
@@ -366,7 +366,7 @@ ${reasoningText.trim()}`;
         keyTakeaway: evalResult.keyTakeaway,
       });
     } catch (err) {
-      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, status: "error", errorMessage: describeError(err) });
       await db.run("UPDATE coach_attempts SET reasoning_text = $1 WHERE id = $2", [reasoningText.trim(), attemptId]);
       return res.json({ ...base, attemptId, aiError: true, aiErrorMessage: "AI feedback unavailable. Your attempt was saved." });
     }
@@ -422,7 +422,7 @@ Respond as the coach to the student's latest message.`;
       await db.run("UPDATE coach_attempts SET discuss_conversation_json = $1, exchange_count = $2 WHERE id = $3", [JSON.stringify(conversation), newCount, attempt.id]);
       res.json({ reply, exchangeCount: newCount, limitReached: newCount >= MAX_DISCUSS_EXCHANGES });
     } catch (err) {
-      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
+      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: DEFAULT_MODEL, status: "error", errorMessage: describeError(err) });
       res.status(502).json({ error: "Coach unavailable right now. Try again." });
     }
   } catch (e) { next(e); }

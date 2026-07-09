@@ -6,6 +6,7 @@ import {
   BookOpen,
   Upload,
   CircleDollarSign,
+  ScrollText,
   Flag,
 } from "lucide-react";
 import { cn } from "../../lib/utils.js";
@@ -17,6 +18,7 @@ const NAV = [
   { to: "/admin/passages",  label: "Passages",  icon: BookOpen },
   { to: "/admin/import",    label: "Import",    icon: Upload },
   { to: "/admin/costs",     label: "AI Costs",  icon: CircleDollarSign },
+  { to: "/admin/logs",      label: "API Logs",  icon: ScrollText },
   { to: "/admin/flags",     label: "Flags",     icon: Flag },
 ];
 

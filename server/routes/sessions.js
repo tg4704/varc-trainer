@@ -4,7 +4,7 @@ const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL } = require("../ai/provider");
+const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { VALID_TYPES } = require("../lib/validateQuestion");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
@@ -358,6 +358,7 @@ async function evaluateOneAttempt(attempt, userId) {
       provider: "openrouter",
       model: DEFAULT_MODEL,
       status: "error",
+      errorMessage: describeError(err),
     });
     return { attemptId: attempt.id, aiError: true, aiErrorMessage: "AI feedback unavailable." };
   }
@@ -420,6 +421,7 @@ router.post("/:id/batch-evaluate", authenticate, async (req, res, next) => {
         provider: "openrouter",
         model: DEFAULT_MODEL,
         status: "error",
+        errorMessage: describeError(batchErr),
       });
       // Fall through to per-question fallback below
     }
