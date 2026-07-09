@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getSession } from "../api.js";
+import { getSessionReview } from "../api.js";
+import { useAuth } from "../auth.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
+import FeedbackSections from "../components/FeedbackSections.jsx";
+import ShareResultsModal from "../components/ShareResultsModal.jsx";
 import { trapLabel } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -10,6 +13,7 @@ const TYPE_LABELS = {
   application: "Application", main_idea: "Main idea", function: "Function",
   concept_set: "Concept set", vocab_in_context: "Vocab", weaken_strengthen: "Weaken/Strengthen",
 };
+const LETTERS = ["A", "B", "C", "D"];
 
 function formatTime(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds || 0));
@@ -24,14 +28,15 @@ function accuracyColor(acc) {
 }
 
 export default function Results() {
+  const { user } = useAuth();
   const [params] = useSearchParams();
   const sessionId = params.get("sessionId");
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [shared, setShared] = useState(false);
-  const rowRefs = useRef({});
+  const [showShare, setShowShare] = useState(false);
+  const [openIdx, setOpenIdx] = useState(null); // index into attempts, or null
 
   useEffect(() => {
     if (!sessionId) {
@@ -41,7 +46,7 @@ export default function Results() {
     }
     (async () => {
       try {
-        setData(await getSession(sessionId));
+        setData(await getSessionReview(sessionId));
       } catch (e) {
         setError(e.message);
       } finally {
@@ -57,7 +62,7 @@ export default function Results() {
     return <div className="max-w-3xl mx-auto px-4 py-16 text-center text-destructive">{error}</div>;
   }
 
-  const { session, attempts } = data;
+  const { attempts } = data;
   const answered = attempts.filter((a) => a.skipped === 0);
   const correct = answered.filter((a) => a.is_correct === 1).length;
   const trapPicked = answered.filter((a) => a.selected_trap === 1).length;
@@ -68,10 +73,10 @@ export default function Results() {
   // By-question-type breakdown
   const byType = {};
   for (const a of answered) {
-    const t = byType[a.question_type] || { attempts: 0, correct: 0 };
+    const t = byType[a.type] || { attempts: 0, correct: 0 };
     t.attempts++;
     if (a.is_correct === 1) t.correct++;
-    byType[a.question_type] = t;
+    byType[a.type] = t;
   }
   const typeRows = Object.entries(byType)
     .map(([type, s]) => ({ type, acc: s.attempts ? s.correct / s.attempts : 0, ...s }))
@@ -107,26 +112,11 @@ export default function Results() {
 
   const headline = accuracyPct >= 80 ? "Sharp session." : accuracyPct >= 60 ? "Solid work." : "Room to sharpen up.";
 
-  function revisit(i) {
-    const el = rowRefs.current[i];
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.style.transition = "background 0.15s ease";
-    el.style.background = "rgba(93,202,165,0.12)";
-    setTimeout(() => { el.style.background = ""; }, 1200);
-  }
-
-  function handleShare() {
-    const text = `I just scored ${accuracyPct}% on a Graspr Drills session (${correct}/${answered.length} correct).`;
-    navigator.clipboard?.writeText(text).then(() => {
-      setShared(true);
-      setTimeout(() => setShared(false), 2000);
-    });
-  }
-
   const r = 50;
   const circumference = 2 * Math.PI * r;
   const offset = circumference * (1 - accuracyPct / 100);
+
+  const today = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
@@ -160,8 +150,8 @@ export default function Results() {
           <Link to="/setup" className="btn btn-primary fx-sheen">Start new session</Link>
           <div className="flex gap-2">
             <Link to="/dashboard" className="btn btn-glass fx-ring flex-1 justify-center">Dashboard</Link>
-            <button onClick={handleShare} className="btn btn-glass fx-ring flex-1 justify-center">
-              {shared ? "Copied ✓" : "Share"}
+            <button onClick={() => setShowShare(true)} className="btn btn-glass fx-ring flex-1 justify-center">
+              Share
             </button>
           </div>
         </div>
@@ -204,7 +194,7 @@ export default function Results() {
         </div>
 
         <div className="glass p-5">
-          <h2 className="eyebrow mb-4">Review, tap to revisit</h2>
+          <h2 className="eyebrow mb-4">Review, tap to open</h2>
           <div className="grid grid-cols-5 gap-2">
             {attempts.map((a, i) => {
               const status = a.skipped === 1 ? "skipped" : a.is_correct === 1 ? "correct" : "incorrect";
@@ -216,7 +206,7 @@ export default function Results() {
               return (
                 <button
                   key={i}
-                  onClick={() => revisit(i)}
+                  onClick={() => setOpenIdx(i)}
                   className="mono flex aspect-square items-center justify-center rounded-[11px] text-[15px] font-semibold transition-transform hover:scale-[1.06]"
                   style={style}
                 >
@@ -247,15 +237,15 @@ export default function Results() {
         <h2 className="eyebrow">Question by question</h2>
         <div className="glass mt-3">
           {attempts.map((a, i) => (
-            <div
+            <button
               key={i}
-              ref={(el) => { rowRefs.current[i] = el; }}
-              className="flex items-center justify-between gap-3 px-4 py-3"
+              onClick={() => setOpenIdx(i)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
               style={i > 0 ? { borderTop: "1px solid var(--glass-border-lo)" } : undefined}
             >
               <div className="flex items-center gap-2">
                 <span className="text-sm dim w-6 mono">{i + 1}</span>
-                <TypeBadge type={a.question_type} />
+                <TypeBadge type={a.type} />
                 <TopicBadge topic={a.topic} />
               </div>
               <div className="flex items-center gap-3">
@@ -264,10 +254,29 @@ export default function Results() {
                 </span>
                 <ResultBadge attempt={a} />
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </section>
+
+      {openIdx != null && (
+        <QuestionReviewModal
+          attempts={attempts}
+          index={openIdx}
+          onNavigate={setOpenIdx}
+          onClose={() => setOpenIdx(null)}
+        />
+      )}
+
+      {showShare && (
+        <ShareResultsModal
+          data={{
+            accuracyPct, correct, total: answered.length, trapPicked, dateLabel: today, headline,
+            displayName: user?.name || (user?.username ? `@${user.username}` : null),
+          }}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   );
 }
@@ -291,5 +300,92 @@ function ResultBadge({ attempt }) {
       style={{ color: "var(--red)", background: "rgba(248,113,113,0.12)" }}>
       Incorrect
     </span>
+  );
+}
+
+// ── Question review modal: full detail (paragraph, options, your answer vs
+// correct, reasoning, AI feedback) with prev/next navigation across the
+// whole session so a mistake review flows without closing and reopening. ──
+function QuestionReviewModal({ attempts, index, onNavigate, onClose }) {
+  const a = attempts[index];
+  const total = attempts.length;
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft" && index > 0) onNavigate(index - 1);
+      else if (e.key === "ArrowRight" && index < total - 1) onNavigate(index + 1);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [index, total, onNavigate, onClose]);
+
+  const feedbackAttempt = {
+    options: a.options,
+    correctOptionIndex: a.correct_option_index,
+    selectedOptionIndex: a.selected_option_index,
+    trapOptionIndex: a.trap_option_index,
+    isCorrect: Boolean(a.is_correct),
+    skipped: Boolean(a.skipped),
+    trapType: a.trap_type,
+    reasoningScore: a.reasoning_score,
+    reasoningFeedback: a.reasoning_feedback,
+    correctExplanation: a.correct_explanation,
+    trapExplanation: a.trap_explanation,
+    keyTakeaway: a.key_takeaway,
+    reasoningText: a.reasoning_text,
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10" onClick={onClose}>
+      <div className="glass-floating w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="mono text-[11px] uppercase tracking-wide dim">Q{index + 1} of {total}</span>
+            {a.topic && <TopicBadge topic={a.topic} />}
+            {a.type && <span className="mono text-[11px] uppercase tracking-wide dim">{TYPE_LABELS[a.type] || a.type}</span>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-none rounded-[8px] px-2.5 py-1 text-sm transition-colors hover:bg-white/[0.06]"
+            style={{ color: "var(--text-2)" }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {a.paragraph && (
+          <p className="serif-read mb-4 text-[14px] leading-[1.75] muted">{a.paragraph}</p>
+        )}
+        {a.questionText && (
+          <h2 className="display mb-4 text-[19px] leading-[1.4]">{a.questionText}</h2>
+        )}
+
+        {a.skipped === 1 ? (
+          <p className="text-sm dim italic">This question was skipped.</p>
+        ) : (
+          <FeedbackSections attempt={feedbackAttempt} />
+        )}
+
+        <div className="mt-6 flex items-center justify-between gap-3" style={{ borderTop: "1px solid var(--glass-border-lo)", paddingTop: 16 }}>
+          <button
+            onClick={() => onNavigate(index - 1)}
+            disabled={index === 0}
+            className="btn btn-glass fx-ring disabled:opacity-40"
+          >
+            ← Previous
+          </button>
+          <span className="mono text-[11px] dim">{index + 1} / {total}</span>
+          <button
+            onClick={() => onNavigate(index + 1)}
+            disabled={index === total - 1}
+            className="btn btn-glass fx-ring disabled:opacity-40"
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

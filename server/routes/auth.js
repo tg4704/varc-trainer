@@ -39,9 +39,32 @@ function publicUser(u) {
     username: u.username,
     email: u.email,
     name: u.name || null,
+    avatarId: u.avatar_id || null,
+    favoriteTopic: u.favorite_topic || null,
+    bio: u.bio || null,
     role: u.role || "user",
     createdAt: u.created_at,
   };
+}
+
+// Keep in sync with AVATAR_IDS in client/src/lib/avatars.js.
+// Keep in sync with client/src/lib/avatars.js.
+const VALID_GRADIENT_IDS = ["teal", "periwinkle", "amber", "coral", "violet", "sky", "rose", "lime"];
+const VALID_ICON_NAMES = ["book", "target", "spark", "flame", "send", "link", "flag", "pencil"];
+const VALID_TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+
+// Validates the "kind:value[:bg]" encoded avatar string (or a bare legacy
+// gradient id with no colon). Icons/gradients are checked against the fixed
+// allowlists above; emoji just gets a generous length cap (multi-codepoint
+// emoji can be several UTF-16 units) rather than a synced allowlist.
+function isValidAvatarId(raw) {
+  if (typeof raw !== "string" || !raw) return false;
+  if (!raw.includes(":")) return VALID_GRADIENT_IDS.includes(raw);
+  const [kind, value, bg] = raw.split(":");
+  if (kind === "grad") return VALID_GRADIENT_IDS.includes(value);
+  if (kind === "icon") return VALID_ICON_NAMES.includes(value) && (bg == null || VALID_GRADIENT_IDS.includes(bg));
+  if (kind === "emoji") return value.length > 0 && value.length <= 8;
+  return false;
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -448,6 +471,53 @@ router.patch("/name", authenticate, async (req, res, next) => {
       return res.status(400).json({ error: "Name must be 60 characters or fewer" });
     }
     await db.run("UPDATE users SET name = $1 WHERE id = $2", [raw || null, req.userId]);
+    const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
+    res.json({ user: publicUser(user) });
+  } catch (e) { next(e); }
+});
+
+// ── PATCH /api/auth/avatar ────────────────────────────────────────────────────
+router.patch("/avatar", authenticate, async (req, res, next) => {
+  try {
+    const { avatarId } = req.body || {};
+    if (!isValidAvatarId(avatarId)) {
+      return res.status(400).json({ error: "Invalid avatar" });
+    }
+    await db.run("UPDATE users SET avatar_id = $1 WHERE id = $2", [avatarId, req.userId]);
+    const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
+    res.json({ user: publicUser(user) });
+  } catch (e) { next(e); }
+});
+
+// ── PATCH /api/auth/profile — Student Profile card (favorite topic + bio) ──
+router.patch("/profile", authenticate, async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const hasTopic = Object.prototype.hasOwnProperty.call(body, "favoriteTopic");
+    const hasBio = Object.prototype.hasOwnProperty.call(body, "bio");
+
+    if (hasTopic && body.favoriteTopic != null && !VALID_TOPICS.includes(body.favoriteTopic)) {
+      return res.status(400).json({ error: "Invalid favoriteTopic" });
+    }
+    let trimmedBio;
+    if (hasBio) {
+      trimmedBio = (body.bio ?? "").toString().trim();
+      if (trimmedBio.length > 240) {
+        return res.status(400).json({ error: "Bio must be 240 characters or fewer" });
+      }
+    }
+
+    // Only the field(s) actually sent are touched — each Student Profile row
+    // (favorite topic, bio) saves independently, and a PATCH that omits one
+    // must not wipe the other back to null.
+    const current = await db.get("SELECT favorite_topic, bio FROM users WHERE id = $1", [req.userId]);
+    const nextTopic = hasTopic ? (body.favoriteTopic || null) : current.favorite_topic;
+    const nextBio = hasBio ? (trimmedBio || null) : current.bio;
+
+    await db.run(
+      "UPDATE users SET favorite_topic = $1, bio = $2 WHERE id = $3",
+      [nextTopic, nextBio, req.userId]
+    );
     const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
     res.json({ user: publicUser(user) });
   } catch (e) { next(e); }

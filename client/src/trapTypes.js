@@ -3,11 +3,11 @@
 export const TRAP_TYPES = {
   too_extreme: {
     label: "Too extreme",
-    description: "Too extreme — used absolute language the passage doesn't support",
+    description: "Too extreme: used absolute language the passage doesn't support",
   },
   out_of_scope: {
     label: "Out of scope",
-    description: "Out of scope — introduced an idea not discussed in the paragraph",
+    description: "Out of scope: introduced an idea not discussed in the paragraph",
   },
   real_but_unstated: {
     label: "True but unstated",
@@ -15,7 +15,7 @@ export const TRAP_TYPES = {
   },
   partially_correct: {
     label: "Partially correct",
-    description: "Partially right — but misses a key qualification the author makes",
+    description: "Partially right, but misses a key qualification the author makes",
   },
 };
 

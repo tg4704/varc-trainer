@@ -16,7 +16,7 @@ export default function AdminImport() {
     try {
       payload = JSON.parse(text);
     } catch (e) {
-      setError("Invalid JSON — check for a stray comma or unquoted value. " + e.message);
+      setError("Invalid JSON: check for a stray comma or unquoted value. " + e.message);
       return;
     }
     const items = Array.isArray(payload) ? payload : [payload];
@@ -44,9 +44,9 @@ export default function AdminImport() {
         <p className="text-sm text-muted-foreground mt-1">
           Paste JSON generated in Claude chat (Opus 4.8) using the prompts in{" "}
           <code className="text-xs">content-pipeline/GENERATION_KIT.md</code>. Items are imported{" "}
-          <strong>inactive</strong> — review drills under{" "}
+          <strong>inactive</strong>, review drills under{" "}
           <a href="/admin/questions?active=0" className="text-primary underline">Questions (inactive)</a>.
-          For <code>passage_set</code> imports, activating the questions is not enough — the{" "}
+          For <code>passage_set</code> imports, activating the questions is not enough: the{" "}
           <strong>passage itself</strong> also gates whether it shows up in Coach; activate it
           separately under{" "}
           <a href="/admin/passages?active=0" className="text-primary underline">Passages (inactive)</a>.

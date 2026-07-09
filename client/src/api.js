@@ -52,6 +52,12 @@ export function changeUsername(username) {
 export function changeName(name) {
   return request("/api/auth/name", { method: "PATCH", body: JSON.stringify({ name }) });
 }
+export function changeAvatar(avatarId) {
+  return request("/api/auth/avatar", { method: "PATCH", body: JSON.stringify({ avatarId }) });
+}
+export function updateStudentProfile({ favoriteTopic, bio }) {
+  return request("/api/auth/profile", { method: "PATCH", body: JSON.stringify({ favoriteTopic, bio }) });
+}
 export function verifyEmail(payload) {
   return request("/api/auth/verify-email", { method: "POST", body: JSON.stringify(payload) });
 }
@@ -124,6 +130,9 @@ export function flagQuestion(questionId, reason, note) {
 // ── Account ───────────────────────────────────────────
 export function resetAccount() {
   return request("/api/account/reset", { method: "DELETE" });
+}
+export function deleteAccount() {
+  return request("/api/account", { method: "DELETE" });
 }
 
 // ── My Questions (Phase 10) ───────────────────────────

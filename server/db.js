@@ -382,6 +382,14 @@ async function schemaIsStale() {
     await createTables();
     // Additive migration for existing (pre-name-field) live databases.
     await ensureColumn("users", "name", "TEXT");
+    // Preset avatar picker (Profile customization). Encodes one of three kinds
+    // as "kind:value" (or "kind:value:bg" for icons) — see parseAvatar() in
+    // client/src/lib/avatars.js. Bare strings with no colon are the original
+    // gradient-only format ("teal") and still parse as kind=grad.
+    await ensureColumn("users", "avatar_id", "TEXT");
+    // Student Profile card (Profile page): favorite RC topic + short bio.
+    await ensureColumn("users", "favorite_topic", "TEXT");
+    await ensureColumn("users", "bio", "TEXT");
     // Unique partial index on google_id (allows multiple NULLs for non-Google users).
     await db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL"

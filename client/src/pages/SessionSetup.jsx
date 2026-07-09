@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { createSession } from "../api.js";
 import { saveActiveSession } from "../session.js";
 import { Button } from "../components/ui/button.jsx";
+import Tooltip from "../components/Tooltip.jsx";
 
 const TYPE_LABELS = {
   inference: "Inference", tone: "Tone", title: "Title", detail: "Detail",
@@ -42,7 +43,6 @@ export default function SessionSetup() {
   const deepLinkValid = deepLinkType && TYPE_LABELS[deepLinkType];
 
   const [practiceMode, setPracticeMode] = useState("analysis");
-  const [inferenceOnly, setInferenceOnly] = useState(false);
   const [numQuestions, setNumQuestions] = useState(10);
   const [timerMode, setTimerMode] = useState("untimed");
   const [timerScope, setTimerScope] = useState("per_question");
@@ -67,7 +67,6 @@ export default function SessionSetup() {
 
     const config = { numQuestions, timerMode };
     if (deepLinkValid) config.typeFilter = deepLinkType;
-    else if (inferenceOnly) config.typeFilter = "inference";
 
     if (timerMode !== "untimed") {
       config.timerScope = timerScope;
@@ -100,49 +99,33 @@ export default function SessionSetup() {
       <p className="mt-2 muted">Set the shape of your practice. You can change this any time.</p>
 
       <div className="glass mt-8 p-6 md:p-7">
-        <div className="grid sm:grid-cols-2 gap-5">
-          <Section title="Practice mode" flush>
-            <SquareToggle options={PRACTICE_MODES} value={practiceMode} onChange={setPracticeMode} />
-            <p className="mt-2 text-xs muted">
-              {PRACTICE_MODES.find((m) => m.value === practiceMode)?.desc}
-            </p>
-          </Section>
+        <Section title="Practice mode" flush>
+          <SquareToggle options={PRACTICE_MODES} value={practiceMode} onChange={setPracticeMode} />
+        </Section>
 
-          {/* Focus — either a deep-link from Dashboard's "Drill →" CTAs (any weak
-              type), or the inference-only toggle. Inference is ~50% of real CAT
-              RC and the single highest-leverage skill, so it gets a dedicated
-              mode rather than being diluted into the general shuffle. */}
-          <Section title="Focus" flush>
-            {deepLinkValid ? (
-              <div
-                className="flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
-                style={{ background: "rgba(139,157,255,0.08)", border: "1px solid rgba(139,157,255,0.3)" }}
-              >
-                <div>
-                  <div className="text-sm font-semibold text-foreground">
-                    Drilling: {TYPE_LABELS[deepLinkType]}
-                  </div>
-                  <div className="mt-0.5 text-xs muted">From your Dashboard.</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSearchParams({}, { replace: true })}
-                  className="fx-underline flex-none text-xs font-semibold"
-                  style={{ color: "var(--periwinkle)" }}
-                >
-                  Clear
-                </button>
-              </div>
-            ) : (
-              <ToggleSwitch
-                active={inferenceOnly}
-                onClick={() => setInferenceOnly((v) => !v)}
-                label="Inference-focused drills"
-                desc="~50% of real CAT RC. Off for a mixed shuffle across all types."
-              />
-            )}
-          </Section>
-        </div>
+        {/* Deep-link from Dashboard's "Drill →" CTAs (?type=<weak type>) still
+            silently filters the session; it just no longer has a Focus control
+            here — the on-page focus toggle was removed by request. A slim
+            inline note lets the user clear it if they arrived via that link. */}
+        {deepLinkValid && (
+          <div
+            className="mt-5 flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
+            style={{ background: "rgba(139,157,255,0.08)", border: "1px solid rgba(139,157,255,0.3)" }}
+          >
+            <div className="text-sm font-semibold text-foreground">
+              Drilling {TYPE_LABELS[deepLinkType]} questions
+              <span className="ml-2 text-xs muted font-normal">from your Dashboard</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSearchParams({}, { replace: true })}
+              className="fx-underline flex-none text-xs font-semibold"
+              style={{ color: "var(--periwinkle)" }}
+            >
+              Clear
+            </button>
+          </div>
+        )}
 
         {/* Number of questions — value bubble rides the thumb */}
         <Section title="How many questions?">
@@ -180,9 +163,6 @@ export default function SessionSetup() {
         {/* Timer mode */}
         <Section title="Timer">
           <SquareToggle options={TIMER_MODES} value={timerMode} onChange={setTimerMode} />
-          <p className="mt-2 text-xs muted">
-            {TIMER_MODES.find((m) => m.value === timerMode)?.desc}
-          </p>
         </Section>
 
         {/* Conditional row: timer options (scope + countdown duration) when timed,
@@ -240,7 +220,7 @@ export default function SessionSetup() {
           size="lg"
         >
           {`Review ${numQuestions}-question${
-            deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : inferenceOnly ? " inference" : ""
+            deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : ""
           } session`}
         </Button>
       </div>
@@ -248,7 +228,7 @@ export default function SessionSetup() {
       {showConfirm && (
         <ConfirmStartModal
           rows={buildSummary({
-            practiceMode, numQuestions, inferenceOnly, deepLinkValid, deepLinkType,
+            practiceMode, numQuestions, deepLinkValid, deepLinkType,
             timerMode, timerScope, perQuestionSeconds, perSessionMinutes, feedbackMode,
           })}
           busy={busy}
@@ -264,13 +244,11 @@ export default function SessionSetup() {
 // Human-readable summary of everything the user configured, for the
 // pre-start confirmation screen.
 function buildSummary(s) {
-  const focus = s.deepLinkValid
-    ? TYPE_LABELS[s.deepLinkType]
-    : s.inferenceOnly ? "Inference-focused" : "Mixed (all types)";
   const rows = [
     ["Mode", PRACTICE_MODES.find((m) => m.value === s.practiceMode)?.title],
     ["Questions", String(s.numQuestions)],
-    ["Focus", focus],
+    // Focus row only appears for a Dashboard deep-link; there's no on-page focus control.
+    ...(s.deepLinkValid ? [["Focus", TYPE_LABELS[s.deepLinkType]]] : []),
     ["Timer", TIMER_MODES.find((m) => m.value === s.timerMode)?.title],
   ];
   if (s.timerMode !== "untimed") {
@@ -336,57 +314,33 @@ function Section({ title, children, flush = false }) {
   );
 }
 
+// Descriptions live in a hover tooltip per option (rather than one always-
+// visible line below the group) so picking between 2-3 short-labeled options
+// doesn't cost a full paragraph of body copy up front.
 function SquareToggle({ options, value, onChange }) {
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
       {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className="fx-ring rounded-[12px] px-3 py-3 text-center transition-colors"
-          style={
-            value === o.value
-              ? { background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.5)" }
-              : { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }
-          }
-        >
-          <span
-            className="text-sm font-semibold"
-            style={{ color: value === o.value ? "var(--teal)" : "var(--text)" }}
+        <Tooltip key={o.value} label={o.desc} wrapperClassName="w-full">
+          <button
+            type="button"
+            onClick={() => onChange(o.value)}
+            className="fx-ring flex w-full min-h-[68px] items-center justify-center rounded-[12px] px-3 py-3 text-center transition-colors"
+            style={
+              value === o.value
+                ? { background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.5)" }
+                : { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }
+            }
           >
-            {o.title}
-          </span>
-        </button>
+            <span
+              className="text-sm font-semibold"
+              style={{ color: value === o.value ? "var(--teal)" : "var(--text)" }}
+            >
+              {o.title}
+            </span>
+          </button>
+        </Tooltip>
       ))}
-    </div>
-  );
-}
-
-function ToggleSwitch({ active, onClick, label, desc }) {
-  return (
-    <div
-      className="flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
-      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }}
-    >
-      <div>
-        <div className="text-sm font-semibold text-foreground">{label}</div>
-        {desc && <div className="mt-0.5 text-xs muted">{desc}</div>}
-      </div>
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={active}
-        className="fx-ring relative flex-none rounded-full transition-colors"
-        style={{ width: 44, height: 24, background: active ? "var(--teal)" : "rgba(255,255,255,0.14)" }}
-      >
-        {/* explicit top/left keeps the knob inside the 44x24 track: 20px knob,
-            2px margins -> left 2 (off) / 22 (on), right edge 42 < 44. */}
-        <span
-          className="absolute rounded-full bg-white"
-          style={{ width: 20, height: 20, top: 2, left: active ? 22 : 2, transition: "left .18s ease" }}
-        />
-      </button>
     </div>
   );
 }

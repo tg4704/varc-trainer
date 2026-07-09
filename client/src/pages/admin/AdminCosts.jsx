@@ -130,7 +130,7 @@ export default function AdminCosts() {
             )}
             {byUser.map(r => (
               <tr key={r.userId ?? "null"} className="border-t border-border">
-                <td className="px-3 py-2">{r.username || <span className="text-muted-foreground">— deleted —</span>}</td>
+                <td className="px-3 py-2">{r.username || <span className="text-muted-foreground">(deleted)</span>}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.calls)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{fmtUsd(r.costUsd)}</td>
               </tr>

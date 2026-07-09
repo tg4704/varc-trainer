@@ -215,8 +215,8 @@ ${studentMapText}`;
         thesis: "partial",
         structure: "partial",
         caught_the_turn: false,
-        what_you_missed: "We couldn't grade your reading this time — the AI feedback service had a hiccup. Your notes were saved; continue to the questions.",
-        one_technique: "Re-check your notes against the passage before answering — did you capture what each paragraph is doing, not just what it's about?",
+        what_you_missed: "We couldn't grade your reading this time: the AI feedback service had a hiccup. Your notes were saved; continue to the questions.",
+        one_technique: "Re-check your notes against the passage before answering. Did you capture what each paragraph is doing, not just what it's about?",
         verdict_line: "Reading feedback unavailable this time.",
         ungraded: true,
       };
@@ -368,7 +368,7 @@ ${reasoningText.trim()}`;
     } catch (err) {
       await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, status: "error" });
       await db.run("UPDATE coach_attempts SET reasoning_text = $1 WHERE id = $2", [reasoningText.trim(), attemptId]);
-      return res.json({ ...base, attemptId, aiError: true, aiErrorMessage: "AI feedback unavailable — your attempt was saved." });
+      return res.json({ ...base, attemptId, aiError: true, aiErrorMessage: "AI feedback unavailable. Your attempt was saved." });
     }
   } catch (e) { next(e); }
 });

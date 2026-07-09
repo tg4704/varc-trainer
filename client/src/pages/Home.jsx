@@ -212,12 +212,35 @@ function DemoCard() {
   );
 }
 
-function HowStep({ n, children }) {
+// Flowchart-style "how it works" — bold circular step numbers connected by a
+// fading gradient line, echoing a process diagram rather than a bare 3-column
+// text list. Steps collapse to a vertical stack on mobile (no connector).
+function FlowSection({ title, steps, accent }) {
   return (
-    <div className="flex-1">
-      <div className="mono text-[13px]" style={{ color: "var(--teal)" }}>0{n}</div>
-      <p className="mt-3 text-[15.5px] leading-[1.6] text-foreground">{children}</p>
-    </div>
+    <section className="mx-auto max-w-[1000px] px-7 py-14">
+      <h2 className="display text-[30px]">{title}</h2>
+      <div className="mt-10 flex flex-col gap-8 md:flex-row md:items-start md:gap-0">
+        {steps.map((s, i) => (
+          <div key={i} className="flex flex-1 items-start">
+            <div className="flex-1">
+              <span
+                className="flex h-12 w-12 items-center justify-center rounded-full text-[17px] font-black"
+                style={{ background: `color-mix(in srgb, ${accent} 14%, transparent)`, border: `1.5px solid color-mix(in srgb, ${accent} 45%, transparent)`, color: accent }}
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <p className="mt-4 max-w-[260px] text-[15px] leading-[1.6] text-foreground">{s}</p>
+            </div>
+            {i < steps.length - 1 && (
+              <div
+                className="mx-4 mt-6 hidden h-px flex-1 md:block"
+                style={{ background: `linear-gradient(90deg, color-mix(in srgb, ${accent} 50%, transparent), transparent)` }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -237,12 +260,19 @@ function FeatureRow({ color, path, children }) {
   );
 }
 
-function ProductCard({ step, name, italic, desc, bullets, to, cta, comingSoon = false }) {
+function ProductCard({ num, label, name, italic, desc, bullets, to, cta, comingSoon = false }) {
   return (
     <div className={`glass glasscard flex flex-1 flex-col gap-5 p-7 ${comingSoon ? "opacity-60" : ""}`}>
       <div>
-        {step && (
-          <div className="mono text-[12px] mb-1.5" style={{ color: "var(--teal)" }}>{step}</div>
+        {num && (
+          <div className="mb-3 flex items-baseline gap-2.5">
+            <span className="font-black leading-none tracking-tight" style={{ fontSize: 34, color: "var(--teal)", fontFamily: '"Instrument Sans", sans-serif' }}>
+              {num}
+            </span>
+            {label && (
+              <span className="mono text-[11px] font-semibold uppercase tracking-[0.14em] dim">{label}</span>
+            )}
+          </div>
         )}
         <h3 className="display text-[25px]">{name} <span className="italic" style={{ color: "var(--teal)" }}>{italic}</span></h3>
         <p className="mt-2 text-[14.5px] leading-relaxed muted">{desc}</p>
@@ -269,10 +299,19 @@ export default function Home() {
   const { user } = useAuth();
   const hasActive = Boolean(loadActiveSession());
 
+  // Lets the logged-out nav's "Toolkit" link work from any other page —
+  // it navigates to "/#toolkit", and this scrolls to the anchor once the
+  // page (and its content above the anchor) has actually mounted.
+  useEffect(() => {
+    if (window.location.hash === "#toolkit") {
+      document.getElementById("toolkit")?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
   return (
     <div>
       {/* hero */}
-      <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-10 md:grid-cols-[0.82fr_1.18fr] md:gap-14 md:pt-[52px]">
+      <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-4 md:grid-cols-[0.82fr_1.18fr] md:gap-14 md:pt-[21px]">
         <div>
           <h1 className="display text-[44px] leading-[1.02] tracking-[-0.01em] sm:text-[56px]">
             Stop picking the<br />
@@ -316,25 +355,15 @@ export default function Home() {
         </div>
       </section>
 
-      {/* how it works */}
-      <section className="mx-auto max-w-[1000px] px-7 py-14">
-        <h2 className="display text-[30px]">How Drills works</h2>
-        <div className="mt-10 flex flex-col gap-8 md:flex-row md:gap-12">
-          <HowStep n={1}>Read a short paragraph and pick an answer.</HowStep>
-          <HowStep n={2}>Write a line or two explaining your reasoning.</HowStep>
-          <HowStep n={3}>Get feedback on exactly where your thinking went wrong, not just whether you were right.</HowStep>
-        </div>
-      </section>
-
       {/* three-stage journey */}
-      <section className="mx-auto max-w-[1000px] px-7 py-4">
+      <section id="toolkit" className="mx-auto max-w-[1000px] px-7 py-14">
         <h2 className="display text-[30px] mb-2">Read widely. Comprehend deeply. Solve fast.</h2>
         <p className="max-w-xl text-[14.5px] leading-relaxed muted mb-8">
           Three tools, three different jobs, not the same drill in different lengths.
         </p>
         <div className="flex flex-col gap-6 md:flex-row">
           <ProductCard
-            step="01 READ" name="Reading" italic="Lounge" comingSoon
+            num="01" label="READ" name="Reading" italic="Lounge" comingSoon
             desc="Curated real articles across CAT genres. Build the habit and kill topic-unfamiliarity before it costs you marks."
             bullets={[
               "Real long-form writing, not AI-generated text.",
@@ -343,7 +372,7 @@ export default function Home() {
             ]}
           />
           <ProductCard
-            step="02 COMPREHEND" name="" italic="Coach" cta="Open Coach" to="/coach"
+            num="02" label="COMPREHEND" name="" italic="Coach" cta="Open Coach" to="/coach"
             desc="Full CAT-style passages. Map the argument before you see any question, and the AI grades how you read, not just what you answer."
             bullets={[
               "Reading-map graded before questions are revealed.",
@@ -352,7 +381,7 @@ export default function Home() {
             ]}
           />
           <ProductCard
-            step="03 SOLVE" name="" italic="Drills" cta="Start Drills" to="/setup"
+            num="03" label="SOLVE" name="" italic="Drills" cta="Start Drills" to="/setup"
             desc="Short paragraph, one question, fast reps. Builds the trap-recognition reflex, the close 50/50 that decides your percentile."
             bullets={[
               "Pick an answer, then defend your reasoning.",
@@ -362,6 +391,26 @@ export default function Home() {
           />
         </div>
       </section>
+
+      {/* how it works — flowchart-style, sits below the three product cards */}
+      <FlowSection
+        accent="var(--teal)"
+        title="How Drills works"
+        steps={[
+          "Read a short paragraph and pick an answer.",
+          "Write a line or two explaining your reasoning.",
+          "Get feedback on exactly where your thinking went wrong, not just whether you were right.",
+        ]}
+      />
+      <FlowSection
+        accent="var(--periwinkle)"
+        title="How Coach helps you"
+        steps={[
+          "Map the argument, paragraph by paragraph, before any question is revealed.",
+          "Answer full CAT-style questions on the same passage.",
+          "Get pushed by a Socratic debrief before the AI ever hands you the answer.",
+        ]}
+      />
 
       {/* closing CTA — only for logged-out visitors */}
       {!user && (

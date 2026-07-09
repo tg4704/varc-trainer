@@ -38,7 +38,7 @@ export default function AdminPassages() {
           <h1 className="text-2xl font-bold text-foreground">Passages (② Coach)</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {data ? `${data.total} matching` : "—"}. Activating a passage here is what makes it
-            appear in the Coach picker — separate from activating its questions.
+            appear in the Coach picker, separate from activating its questions.
           </p>
         </div>
       </div>

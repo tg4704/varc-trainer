@@ -1,12 +1,14 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import TopNav from "./components/TopNav.jsx";
-import { AuthProvider, useAuth } from "./auth.jsx";
-import { NavGuardProvider, useNavGuard } from "./navGuard.jsx";
+import { AuthProvider } from "./auth.jsx";
+import { NavGuardProvider } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import AdminRoute from "./components/AdminRoute.jsx";
 import Home from "./pages/Home.jsx";
+import Pricing from "./pages/Pricing.jsx";
+import Blog from "./pages/Blog.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
@@ -18,8 +20,9 @@ import Practice from "./pages/Practice.jsx";
 import Results from "./pages/Results.jsx";
 import SessionReview from "./pages/SessionReview.jsx";
 import Profile from "./pages/Profile.jsx";
-import MyQuestions from "./pages/MyQuestions.jsx";
-import MyQuestionEditor from "./pages/MyQuestionEditor.jsx";
+import ProfileCustomize from "./pages/ProfileCustomize.jsx";
+// My Questions is temporarily disabled (see routes below) — imports dropped
+// so its chunk isn't pulled into the main bundle. Re-add when re-enabling.
 import CoachLanding from "./pages/CoachLanding.jsx";
 import CoachPractice from "./pages/CoachPractice.jsx";
 import CoachSummary from "./pages/CoachSummary.jsx";
@@ -59,62 +62,6 @@ const AdminImport         = lazyWithReload(() => import("./pages/admin/AdminImpo
 const AdminCosts          = lazyWithReload(() => import("./pages/admin/AdminCosts.jsx"));
 const AdminFlags          = lazyWithReload(() => import("./pages/admin/AdminFlags.jsx"));
 
-// Temporary bridge bar for the two in-session routes (/practice,
-// /coach/practice) until Phase 5 gives them their own minimal session bar
-// (Exit / progress / timer, per the RC Trainer redesign). Every other
-// logged-in route uses the universal TopNav instead.
-function SessionNavBar() {
-  const { pathname } = useLocation();
-  const { user } = useAuth();
-  const { attemptNav } = useNavGuard();
-
-  const guarded = (to) => (e) => { if (!attemptNav(to)) e.preventDefault(); };
-
-  const link = (to, label) => (
-    <Link
-      to={to}
-      onClick={guarded(to)}
-      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-        pathname === to || (to !== "/" && pathname.startsWith(to))
-          ? "bg-foreground text-background"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-
-  return (
-    <header className="border-b border-border bg-card">
-      <nav className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link
-          to="/"
-          onClick={guarded("/")}
-          className="font-display text-xl tracking-tight text-foreground inline-flex items-baseline"
-        >
-          graspr<span className="text-primary">.</span>
-        </Link>
-        <div className="flex items-center gap-1">
-          {user ? (
-            <>
-              {link("/coach", "Coach")}
-              {link("/setup", "Drills")}
-              {link("/dashboard", "Dashboard")}
-              {user.role === "admin" && link("/admin", "Admin")}
-              {link("/profile", user.username)}
-            </>
-          ) : (
-            <>
-              {link("/login", "Log in")}
-              {link("/register", "Sign up")}
-            </>
-          )}
-        </div>
-      </nav>
-    </header>
-  );
-}
-
 const DashboardSkeleton = (
   <div className="max-w-6xl mx-auto px-4 py-8 space-y-6 animate-pulse">
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -132,22 +79,18 @@ const AdminLoading = (
 
 // One universal top nav (TopNav) for every logged-in, non-session page — no
 // persistent nav on the auth family (AuthShell shows its own brand mark).
-// /practice renders its own SessionTopBar internally (see Practice.jsx).
-// /coach/practice keeps the temporary bridge bar — Coach's debrief-exchange
-// flow doesn't map onto the Trainer's question-by-question progress/timer
-// model, so it's deliberately left on its own reskin rather than retrofitting
-// the RC Trainer session bar onto it.
+// /practice and /coach/practice each render their own minimal in-session top
+// bar internally (SessionTopBar / CoachSessionTopBar) — Exit + progress,
+// no persistent app nav while a session is in progress.
 const NO_NAV_ROUTES = [
   "/login", "/register", "/verify-email", "/forgot-password", "/reset-password",
   "/choose-username", "/oauth-callback",
-  "/practice", // renders its own SessionTopBar internally — see Practice.jsx
+  "/practice", "/coach/practice",
 ];
-const SESSION_ROUTES = ["/coach/practice"];
 
 function AppNav() {
   const { pathname } = useLocation();
   if (NO_NAV_ROUTES.includes(pathname)) return null;
-  if (SESSION_ROUTES.includes(pathname)) return <SessionNavBar />;
   return <TopNav />;
 }
 
@@ -160,6 +103,8 @@ function AppShell() {
         <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/pricing" element={<Pricing />} />
+          <Route path="/blog" element={<Blog />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
@@ -179,9 +124,12 @@ function AppShell() {
             }
           />
           <Route path="/profile"         element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/my-questions"     element={<ProtectedRoute><MyQuestions /></ProtectedRoute>} />
-          <Route path="/my-questions/new" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
-          <Route path="/my-questions/:id" element={<ProtectedRoute><MyQuestionEditor /></ProtectedRoute>} />
+          <Route path="/profile/customize" element={<ProtectedRoute><ProfileCustomize /></ProtectedRoute>} />
+          {/* My Questions temporarily disabled — routes redirect to Dashboard
+              rather than 404ing on any old bookmarked/shared links. */}
+          <Route path="/my-questions"     element={<Navigate to="/dashboard" replace />} />
+          <Route path="/my-questions/new" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/my-questions/:id" element={<Navigate to="/dashboard" replace />} />
 
           {/* ── VARC Coach ──────────────────────────────────────────── */}
           <Route path="/coach"          element={<ProtectedRoute><CoachLanding /></ProtectedRoute>} />

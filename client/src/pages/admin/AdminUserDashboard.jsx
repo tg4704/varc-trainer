@@ -22,7 +22,7 @@ export default function AdminUserDashboard() {
       <div className="flex items-center gap-2 text-warning">
         <Eye className="h-4 w-4" />
         <span className="text-sm font-semibold">
-          Viewing as {username || `user #${id}`} — read-only
+          Viewing as {username || `user #${id}`} (read-only)
         </span>
       </div>
       <Link to={`/admin/users/${id}`} className="text-xs text-warning underline">

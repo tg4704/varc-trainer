@@ -249,13 +249,19 @@
      OFF the passage/reasoning reading text (readability + mobile GPU cost).
      `.glass-solid-fallback` swaps to a solid bg when backdrop-filter is
      unsupported so panels never render fully transparent. */
+  /* Content cards (`.glass`) sit on the solid dark canvas, not over meaningful
+     content — so backdrop-filter buys no real frost here, it only introduced a
+     Chromium banding artifact: faint horizontal seam lines across the card that
+     flash into view whenever another backdrop-filter layer (a dropdown / modal)
+     mounts and forces the compositor to re-tile every blur region. Rendering
+     these as a SOLID surface looks all but identical on the dark page and kills
+     the seams for good. True frost-over-content is kept on `.glass-floating`
+     (dropdowns, modals) where it actually reads as glass. */
   .glass {
-    background: var(--glass);
-    backdrop-filter: blur(18px) saturate(140%);
-    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    background: var(--surface);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-card);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 40px rgba(0,0,0,0.45);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 40px rgba(0,0,0,0.45);
   }
   .glass-recessed {
     background: var(--glass-recessed);
@@ -315,6 +321,7 @@
   .accent-card { background: var(--surface); border: 1px solid var(--border-subtle); border-left-width: 3px; border-radius: 0 var(--r-default) var(--r-default) 0; padding: 16px 18px; }
   .accent-teal  { border-left-color: var(--teal); }
   .accent-amber { border-left-color: var(--amber); }
+  .accent-periwinkle { border-left-color: var(--periwinkle); }
   .accent-callout { background: var(--surface-2); }
 
   .fb-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 8px; }

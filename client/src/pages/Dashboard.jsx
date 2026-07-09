@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../auth.jsx";
 import { getActiveCoachSessionId } from "../coachSession.js";
 import TopicBadge from "../components/TopicBadge.jsx";
+import { InfoDot } from "../components/Tooltip.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -505,8 +506,14 @@ function buildHeatGrid(days) {
   return { cols, monthLabels };
 }
 
+function formatHeatDate(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
 function WeeklyHeatmap() {
   const [heatmap, setHeatmap] = useState(null);
+  const [hover, setHover] = useState(null); // { x, y, date, count } | null
 
   useEffect(() => {
     getDashboardHeatmap().then(setHeatmap).catch(() => {});
@@ -555,7 +562,11 @@ function WeeklyHeatmap() {
                   ) : (
                     <span
                       key={r}
-                      title={cell.count === 0 ? `No practice on ${cell.date}` : `${cell.count} question${cell.count === 1 ? "" : "s"} on ${cell.date}`}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHover({ x: rect.left + rect.width / 2, y: rect.top, date: cell.date, count: cell.count });
+                      }}
+                      onMouseLeave={() => setHover(null)}
                       className="rounded-[2px] transition-transform hover:scale-[1.2]"
                       style={{ width: HEAT_CELL, height: HEAT_CELL, background: heatColor(heatLevel(cell.count)) }}
                     />
@@ -575,6 +586,18 @@ function WeeklyHeatmap() {
         ))}
         More
       </div>
+
+      {hover && (
+        <div
+          className="pointer-events-none fixed z-[90] -translate-x-1/2 -translate-y-[calc(100%+9px)] rounded-[10px] px-3 py-2 text-center"
+          style={{ left: hover.x, top: hover.y, background: "rgba(18,20,27,0.96)", border: "1px solid var(--glass-border-hi)", boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}
+        >
+          <div className="mono text-[13px] font-semibold text-foreground">
+            {hover.count} question{hover.count === 1 ? "" : "s"}
+          </div>
+          <div className="mt-0.5 text-[10.5px] dim">{formatHeatDate(hover.date)}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -597,10 +620,12 @@ function TrapWeakness({ byTrapType, mostDangerousTrap }) {
           return (
             <div key={type}>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">{trapLabel(type)}</span>
+                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  {trapLabel(type)}
+                  <InfoDot label={trapDescription(type)} size={14} />
+                </span>
                 <span className="text-xs muted">fell for {s.fell_for} of {s.encountered}</span>
               </div>
-              <p className="text-xs dim">{trapDescription(type)}</p>
               <div className="mt-1.5 h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.07)" }}>
                 <div className="h-2 rounded-full" style={{ width: `${Math.max(2, rate * 100)}%`, backgroundColor: rate > 0 ? "var(--red)" : "var(--glass-border-lo)" }} />
               </div>

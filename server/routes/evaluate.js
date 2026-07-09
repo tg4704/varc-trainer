@@ -212,7 +212,7 @@ router.post("/evaluate", authenticate, async (req, res) => {
     return res.json({
       ...base,
       aiError: true,
-      aiErrorMessage: "AI feedback unavailable — your attempt was saved.",
+      aiErrorMessage: "AI feedback unavailable. Your attempt was saved.",
     });
   }
 });

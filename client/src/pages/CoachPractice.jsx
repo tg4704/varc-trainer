@@ -11,12 +11,32 @@ import { saveActiveCoachSession, clearActiveCoachSession } from "../coachSession
 import OptionCard from "../components/OptionCard.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
+import CoachSessionTopBar from "../components/CoachSessionTopBar.jsx";
+import QuestionStepper, { stateFor } from "../components/QuestionStepper.jsx";
+import Tooltip, { InfoDot } from "../components/Tooltip.jsx";
+import VoiceMicButton from "../components/VoiceMicButton.jsx";
+import PassageFontMenu, { PASSAGE_FONTS, LINE_SPACINGS } from "../components/PassageFontMenu.jsx";
+import Icon from "../components/Icon.jsx";
+import { useVoiceInput } from "../hooks/useVoiceInput.js";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 import { coach } from "../api.js";
 
+const TONE_HINT = "Common tones to reach for: analytical, critical, ironic, skeptical, sympathetic, celebratory, elegiac, polemical, detached, urgent.";
+
 const LETTERS = ["A", "B", "C", "D"];
 const MAX_DISCUSS = 4;
+
+// Shared with Practice.jsx (Drills) so a reading preference set in one place
+// carries over to the other.
+const FONT_PREFS_KEY = "varc_passage_font_prefs";
+function loadFontPrefs() {
+  try {
+    const raw = localStorage.getItem(FONT_PREFS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { fontId: "newsreader", fontSize: 17, spacingId: "normal" };
+}
 
 export default function CoachPractice() {
   const [params] = useSearchParams();
@@ -29,28 +49,87 @@ export default function CoachPractice() {
   const [loading, setLoading] = useState(!location.state?.coachSession);
   const [error, setError] = useState(null);
 
+  // Reading helpers — shared "Aa" typeface/size/spacing menu, and a way to
+  // collapse the map/question column so the passage can take the full width
+  // (handy once you're deep in a long passage and just want to reread it).
+  const [fontPrefs, setFontPrefs] = useState(loadFontPrefs);
+  useEffect(() => {
+    try { localStorage.setItem(FONT_PREFS_KEY, JSON.stringify(fontPrefs)); } catch {}
+  }, [fontPrefs]);
+  const [mapCollapsed, setMapCollapsed] = useState(false);
+
   // Reading-map form state — row counts are derived from the passage's actual
   // paragraph count (split on blank lines) so the student maps exactly as many
-  // paragraphs as the passage has, no more, no fewer.
-  const [mapMode, setMapMode] = useState("quick");
+  // paragraphs as the passage has, no more, no fewer. mapMode starts unset so
+  // the student makes an explicit Quick/Full choice before any fields appear.
+  const [mapMode, setMapMode] = useState(null);
   const [cruxRows, setCruxRows] = useState([]);
   const [mainPoint, setMainPoint] = useState("");
   const [tone, setTone] = useState("");
   const [structureRows, setStructureRows] = useState([]);
-  const [theTurn, setTheTurn] = useState("");
   const [gradingMap, setGradingMap] = useState(false);
+
+  // Voice input for the "Main point" field (Full-summary mode)
+  const [mainPointInterim, setMainPointInterim] = useState("");
+  const mainPointRef = useRef("");
+  useEffect(() => { mainPointRef.current = mainPoint; }, [mainPoint]);
+  const handleMainPointFinal = useCallback((text) => {
+    const current = mainPointRef.current;
+    const sep = current && !current.endsWith(" ") ? " " : "";
+    const next = current + sep + text;
+    setMainPoint(next);
+    mainPointRef.current = next;
+    setMainPointInterim("");
+  }, []);
+  const {
+    isRecording: mainPointRecording, isSupported: voiceSupported, error: voiceError,
+    toggle: toggleMainPointVoice,
+  } = useVoiceInput({ onFinalTranscript: handleMainPointFinal, onInterimTranscript: setMainPointInterim });
 
   // Question phase state
   const [qIdx, setQIdx] = useState(0);
   const [selected, setSelected] = useState(null);
   const [reasoningText, setReasoningText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Indices actually landed on — NOT "every index below current" (jumping
+  // straight from Q1 to Q4 must not retroactively mark Q2/Q3 as seen).
+  const [visitedIndices, setVisitedIndices] = useState(() => new Set([0]));
+  useEffect(() => { setVisitedIndices((prev) => new Set(prev).add(qIdx)); }, [qIdx]);
 
   // Discuss chat state (per current question)
   const [discussOpen, setDiscussOpen] = useState(false);
   const [discussInput, setDiscussInput] = useState("");
   const [discussSending, setDiscussSending] = useState(false);
   const chatEndRef = useRef(null);
+
+  // Leave-session modal — Coach sessions are resumable (unlike Drills), so
+  // "leaving" isn't just End/Discard: the safe default is Resume later,
+  // which does nothing but navigate away (the session stays active and
+  // reappears in the Dashboard's "pick up where you left off" card).
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveAction, setLeaveAction] = useState(null); // 'end' | 'discard' | null
+
+  function resumeLater() {
+    setShowLeaveModal(false);
+    navigate("/dashboard");
+  }
+  async function endAndSummarize() {
+    if (leaving || !coachSession) return;
+    setLeaving(true);
+    setLeaveAction("end");
+    try { await coach.completeSession(coachSession.id); } catch { /* non-fatal */ }
+    clearActiveCoachSession();
+    navigate(`/coach/summary?sessionId=${coachSession.id}`);
+  }
+  async function discardSession() {
+    if (leaving || !coachSession) return;
+    setLeaving(true);
+    setLeaveAction("discard");
+    try { await coach.deleteSession(coachSession.id); } catch { /* non-fatal */ }
+    clearActiveCoachSession();
+    navigate("/coach");
+  }
 
   useEffect(() => {
     if (sessionId) saveActiveCoachSession(sessionId);
@@ -124,7 +203,7 @@ export default function CoachPractice() {
     try {
       const body = mapMode === "quick"
         ? { mode: "quick", crux: cruxRows }
-        : { mode: "full", mainPoint, tone, structure: structureRows, theTurn };
+        : { mode: "full", mainPoint, tone, structure: structureRows };
       const { readingMap, readingGrade } = await coach.submitReadingMap(coachSession.id, body);
       setCoachSession((s) => ({ ...s, readingMap, readingGrade }));
     } catch (e) {
@@ -215,97 +294,180 @@ export default function CoachPractice() {
 
   const { passage, questions, readingGrade } = coachSession;
   const inReadingPhase = !readingGrade;
+  const currentFont = PASSAGE_FONTS.find((f) => f.id === fontPrefs.fontId) || PASSAGE_FONTS[0];
+  const currentSpacing = (LINE_SPACINGS.find((s) => s.id === fontPrefs.spacingId) || LINE_SPACINGS[1]).value;
 
   // ── Reading phase ────────────────────────────────────────────────────────
   if (inReadingPhase) {
     return (
+      <>
+      <CoachSessionTopBar phase="reading" onExit={() => setShowLeaveModal(true)} />
       <div className="max-w-5xl mx-auto px-4 py-6 md:px-9">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Passage — plain canvas, no glass, maximum reading legibility */}
-          <div className="lg:w-[55%]">
-            <div className="lg:border-r lg:pr-8" style={{ borderColor: "var(--glass-border-lo)" }}>
-              <div className="eyebrow mb-2">Passage</div>
+          <div className={mapCollapsed ? "lg:w-full" : "lg:w-[55%]"}>
+            <div className={mapCollapsed ? "" : "lg:border-r lg:pr-8"} style={{ borderColor: "var(--glass-border-lo)" }}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="eyebrow">Passage</div>
+                <div className="flex items-center gap-2">
+                  <PassageFontMenu
+                    fontId={fontPrefs.fontId}
+                    onFontChange={(id) => setFontPrefs((p) => ({ ...p, fontId: id }))}
+                    fontSize={fontPrefs.fontSize}
+                    onFontSizeChange={(sz) => setFontPrefs((p) => ({ ...p, fontSize: sz }))}
+                    spacingId={fontPrefs.spacingId}
+                    onSpacingChange={(id) => setFontPrefs((p) => ({ ...p, spacingId: id }))}
+                  />
+                  {mapCollapsed && (
+                    <button
+                      type="button"
+                      onClick={() => setMapCollapsed(false)}
+                      className="fx-ring flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-xs font-semibold"
+                      style={{ background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.4)", color: "var(--teal)" }}
+                    >
+                      <Icon name="chevL" size={14} stroke={2.4} /> Map the argument
+                    </button>
+                  )}
+                </div>
+              </div>
               {passage.title && <h2 className="mb-4 display text-[24px] italic leading-tight">{passage.title}</h2>}
-              <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 16, lineHeight: 1.9, color: "#C9D0E0" }}>
+              <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontFamily: currentFont.family, fontSize: fontPrefs.fontSize, lineHeight: currentSpacing, color: "#C9D0E0" }}>
                 {passage.body}
               </p>
             </div>
           </div>
 
+          {!mapCollapsed && (
           <div className="lg:w-[45%]">
             <div className="glass-floating sticky top-4 p-6">
-              <h3 className="font-bold text-foreground mb-1">Map the argument first</h3>
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <h3 className="font-bold text-foreground">Map the argument first</h3>
+                <button
+                  type="button"
+                  onClick={() => setMapCollapsed(true)}
+                  title="Move this aside to read full width"
+                  className="fx-ring flex flex-none items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-semibold transition-colors"
+                  style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-border-hi)", color: "var(--text)" }}
+                >
+                  Hide <Icon name="chevR" size={14} stroke={2.4} />
+                </button>
+              </div>
               <p className="text-xs muted mb-4">
                 Before you see any question, what is each paragraph doing? Write in any
                 language, including your own words or mother tongue. Grammar doesn't matter;
                 understanding does.
               </p>
 
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setMapMode("quick")}
-                  className="rounded-[999px] px-3 py-1 text-xs font-semibold transition-colors"
-                  style={mapMode === "quick" ? { background: "var(--teal)", color: "#07130E" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-2)", border: "1px solid var(--glass-border-lo)" }}
-                >Quick (crux words)</button>
-                <button
-                  onClick={() => setMapMode("full")}
-                  className="rounded-[999px] px-3 py-1 text-xs font-semibold transition-colors"
-                  style={mapMode === "full" ? { background: "var(--teal)", color: "#07130E" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-2)", border: "1px solid var(--glass-border-lo)" }}
-                >Full summary</button>
-              </div>
-
-              {mapMode === "quick" ? (
-                <div className="space-y-2">
-                  {cruxRows.map((val, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs muted w-6 flex-none">¶{i + 1}</span>
-                      <input
-                        value={val}
-                        onChange={(e) => setCruxRow(i, e.target.value)}
-                        placeholder="4-5 words: this paragraph's crux"
-                        className="input"
-                        style={{ padding: "8px 12px", fontSize: 13.5 }}
-                      />
-                    </div>
-                  ))}
+              {!mapMode ? (
+                // No mode chosen yet — a clear, centered decision point before any
+                // form appears, rather than defaulting silently into Quick.
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <p className="text-xs muted max-w-[220px]">How do you want to map it?</p>
+                  <div className="flex flex-col gap-2 w-full max-w-[220px]">
+                    <button
+                      onClick={() => setMapMode("quick")}
+                      className="fx-ring rounded-[12px] px-4 py-3 text-sm font-semibold transition-colors"
+                      style={{ background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.4)", color: "var(--teal)" }}
+                    >
+                      Quick <span className="block text-[11px] font-normal dim">crux words per paragraph</span>
+                    </button>
+                    <button
+                      onClick={() => setMapMode("full")}
+                      className="fx-ring rounded-[12px] px-4 py-3 text-sm font-semibold transition-colors"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)", color: "var(--text)" }}
+                    >
+                      Full summary <span className="block text-[11px] font-normal dim">main point, tone, structure</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="field-label">Main point</label>
-                    <textarea value={mainPoint} onChange={(e) => setMainPoint(e.target.value)} rows={2} className="input" style={{ resize: "vertical" }} />
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setMapMode("quick")}
+                        className="rounded-[999px] px-3 py-1 text-xs font-semibold transition-colors"
+                        style={mapMode === "quick" ? { background: "var(--teal)", color: "#07130E" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-2)", border: "1px solid var(--glass-border-lo)" }}
+                      >Quick (crux words)</button>
+                      <button
+                        onClick={() => setMapMode("full")}
+                        className="rounded-[999px] px-3 py-1 text-xs font-semibold transition-colors"
+                        style={mapMode === "full" ? { background: "var(--teal)", color: "#07130E" } : { background: "rgba(255,255,255,0.04)", color: "var(--text-2)", border: "1px solid var(--glass-border-lo)" }}
+                      >Full summary</button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="field-label">Tone</label>
-                    <input value={tone} onChange={(e) => setTone(e.target.value)} className="input" />
-                  </div>
-                  <div>
-                    <label className="field-label">Structure (what each paragraph does)</label>
+
+                  {mapMode === "quick" ? (
                     <div className="space-y-2">
-                      {structureRows.map((val, i) => (
+                      {cruxRows.map((val, i) => (
                         <div key={i} className="flex items-center gap-2">
                           <span className="text-xs muted w-6 flex-none">¶{i + 1}</span>
-                          <input value={val} onChange={(e) => setStructureRow(i, e.target.value)} className="input" style={{ padding: "8px 12px", fontSize: 13.5 }} />
+                          <input
+                            value={val}
+                            onChange={(e) => setCruxRow(i, e.target.value)}
+                            placeholder="4-5 words: this paragraph's crux"
+                            className="input"
+                            style={{ padding: "8px 12px", fontSize: 13.5 }}
+                          />
                         </div>
                       ))}
                     </div>
-                  </div>
-                  <div>
-                    <label className="field-label">The turn <span className="dim font-normal">(optional)</span></label>
-                    <input value={theTurn} onChange={(e) => setTheTurn(e.target.value)} className="input" />
-                  </div>
-                </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <label className="field-label mb-0">Main point</label>
+                          {voiceSupported && (
+                            <VoiceMicButton isRecording={mainPointRecording} onClick={toggleMainPointVoice} />
+                          )}
+                        </div>
+                        <textarea value={mainPoint} onChange={(e) => setMainPoint(e.target.value)} rows={2} className="input mt-1" style={{ resize: "vertical" }} />
+                        {mainPointInterim && <p className="mt-1 text-xs italic dim truncate">🎙 {mainPointInterim}</p>}
+                        {voiceError && <p className="mt-1 text-xs text-destructive">{voiceError}</p>}
+                      </div>
+                      <div>
+                        <label className="field-label flex items-center gap-1.5">
+                          Tone <InfoDot label={TONE_HINT} size={14} />
+                        </label>
+                        <input value={tone} onChange={(e) => setTone(e.target.value)} className="input" />
+                      </div>
+                      <div>
+                        <label className="field-label">Structure (what each paragraph does)</label>
+                        <div className="space-y-2">
+                          {structureRows.map((val, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <span className="text-xs muted w-6 flex-none">¶{i + 1}</span>
+                              <input value={val} onChange={(e) => setStructureRow(i, e.target.value)} className="input" style={{ padding: "8px 12px", fontSize: 13.5 }} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+
+                  <button className="btn btn-primary fx-sheen btn-block mt-4" disabled={gradingMap} onClick={submitReadingMap}>
+                    {gradingMap ? "Grading your reading…" : <>Grade my reading <span className="arrow inline-block">→</span></>}
+                  </button>
+                </>
               )}
-
-              {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-
-              <button className="btn btn-primary fx-sheen btn-block mt-4" disabled={gradingMap} onClick={submitReadingMap}>
-                {gradingMap ? "Grading your reading…" : <>Grade my reading <span className="arrow inline-block">→</span></>}
-              </button>
             </div>
           </div>
+          )}
         </div>
       </div>
+      {showLeaveModal && (
+        <CoachLeaveModal
+          busy={leaving}
+          action={leaveAction}
+          onResume={resumeLater}
+          onEnd={endAndSummarize}
+          onDiscard={discardSession}
+          onStay={() => setShowLeaveModal(false)}
+        />
+      )}
+      </>
     );
   }
 
@@ -314,7 +476,22 @@ export default function CoachPractice() {
   const verdictShown = !!attempt;
   const isLastQuestion = qIdx === questions.length - 1;
 
+  // Free navigation between questions, same model as Drills' QuestionStepper —
+  // "seen" (visited, no verdict yet) vs "correct"/"incorrect" (answered).
+  const coachQuestionStates = questions.map((q, i) => {
+    const a = attempts[q.id];
+    return {
+      feedback: a ? { isCorrect: a.isCorrect } : null,
+      skipped: false,
+      locked: !!a,
+      visited: visitedIndices.has(i) || !!a,
+    };
+  });
+
   return (
+    <>
+    <CoachSessionTopBar phase="questions" qIndex={qIdx + 1} qTotal={questions.length} onExit={() => setShowLeaveModal(true)} />
+    <QuestionStepper total={questions.length} currentIdx={qIdx} questionStates={coachQuestionStates} onJump={setQIdx} />
     <div className="max-w-7xl mx-auto px-4 py-6 md:px-9">
       {/* Reading grade banner — shown once, above the questions */}
       {qIdx === 0 && !verdictShown && (
@@ -337,28 +514,43 @@ export default function CoachPractice() {
         </div>
       )}
 
-      <div className="mb-4 flex items-center gap-3">
-        {questions.map((_, i) => (
-          <div
-            key={i}
-            className="h-1.5 flex-1 rounded-full transition-colors"
-            style={{ background: i < qIdx || attempts[questions[i].id] ? "var(--teal)" : i === qIdx ? "rgba(93,202,165,0.4)" : "var(--glass-border-lo)" }}
-          />
-        ))}
-        <span className="text-xs muted flex-none">Q{qIdx + 1} / {questions.length}</span>
-      </div>
-
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Passage — plain canvas, no glass, maximum reading legibility */}
-        <div className="lg:w-[45%]">
-          <div className="sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto lg:border-r lg:pr-6" style={{ borderColor: "var(--glass-border-lo)" }}>
-            <div className="eyebrow mb-2">Passage</div>
+        <div className={mapCollapsed ? "lg:w-full" : "lg:w-[45%]"}>
+          <div className={mapCollapsed ? "sticky top-4" : "sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto lg:border-r lg:pr-6"} style={{ borderColor: "var(--glass-border-lo)" }}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="eyebrow">Passage</div>
+              <div className="flex items-center gap-2">
+                <PassageFontMenu
+                  fontId={fontPrefs.fontId}
+                  onFontChange={(id) => setFontPrefs((p) => ({ ...p, fontId: id }))}
+                  fontSize={fontPrefs.fontSize}
+                  onFontSizeChange={(sz) => setFontPrefs((p) => ({ ...p, fontSize: sz }))}
+                  spacingId={fontPrefs.spacingId}
+                  onSpacingChange={(id) => setFontPrefs((p) => ({ ...p, spacingId: id }))}
+                />
+                <button
+                  type="button"
+                  onClick={() => setMapCollapsed((c) => !c)}
+                  title={mapCollapsed ? "Bring the question back" : "Move the question aside to read full width"}
+                  className="fx-ring flex flex-none items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-semibold transition-colors"
+                  style={mapCollapsed
+                    ? { background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.4)", color: "var(--teal)" }
+                    : { background: "rgba(255,255,255,0.06)", border: "1px solid var(--glass-border-hi)", color: "var(--text)" }}
+                >
+                  {mapCollapsed
+                    ? <><Icon name="chevL" size={14} stroke={2.4} /> Show question</>
+                    : <>Hide <Icon name="chevR" size={14} stroke={2.4} /></>}
+                </button>
+              </div>
+            </div>
             {passage.title && <h2 className="mb-3 display text-[22px] italic leading-tight">{passage.title}</h2>}
-            <ArticleWithHighlight text={passage.body} sourceLines={question?.sourceLines || null} />
+            <ArticleWithHighlight text={passage.body} sourceLines={question?.sourceLines || null} fontFamily={currentFont.family} fontSize={fontPrefs.fontSize} lineHeight={currentSpacing} />
           </div>
         </div>
 
         {/* Question + verdict + discuss */}
+        {!mapCollapsed && (
         <div className="lg:w-[55%] flex flex-col gap-5">
           <div className="glass p-5">
             <div className="flex items-center justify-between mb-3">
@@ -436,7 +628,14 @@ export default function CoachPractice() {
                 )}
                 {(attempt.discussConversation || []).map((msg, i) => (
                   <div key={i} className={cn("flex", msg.role === "student" ? "justify-end" : "justify-start")}>
-                    <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed", msg.role === "coach" ? "bg-muted text-foreground rounded-tl-sm" : "bg-primary text-primary-foreground rounded-tr-sm")}>
+                    <div
+                      className="max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed"
+                      style={
+                        msg.role === "coach"
+                          ? { background: "rgba(255,255,255,0.05)", color: "var(--text)", borderTopLeftRadius: 4 }
+                          : { background: "var(--teal)", color: "#07130E", borderTopRightRadius: 4 }
+                      }
+                    >
                       {msg.text}
                     </div>
                   </div>
@@ -477,26 +676,81 @@ export default function CoachPractice() {
             </div>
           )}
         </div>
+        )}
+      </div>
+    </div>
+    {showLeaveModal && (
+      <CoachLeaveModal
+        busy={leaving}
+        action={leaveAction}
+        onResume={resumeLater}
+        onEnd={endAndSummarize}
+        onDiscard={discardSession}
+        onStay={() => setShowLeaveModal(false)}
+      />
+    )}
+    </>
+  );
+}
+
+// ── Leave-session modal ────────────────────────────────────────────────────
+// Coach sessions ARE resumable (unlike Drills), so this offers a third,
+// safe-default path: Resume later just navigates away and leaves everything
+// as-is — the session reappears on the Dashboard's "pick up where you left
+// off" card. End and Discard are both terminal (End completes it now and
+// shows the summary for whatever's answered so far; Discard deletes it).
+function CoachLeaveModal({ busy, action, onResume, onEnd, onDiscard, onStay }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="glass-floating w-full max-w-sm p-6">
+        <h2 className="text-base font-bold text-foreground mb-1">Leave this passage?</h2>
+        <p className="text-xs dim mb-5">Hover an option to see what it does.</p>
+        <div className="flex flex-col gap-2">
+          <Tooltip label="Deletes this passage session and every answer in it. Nothing is saved." wrapperClassName="w-full" side="top">
+            <button
+              onClick={onDiscard}
+              disabled={busy}
+              className="btn w-full disabled:opacity-60"
+              style={{ background: "var(--red)", color: "#fff" }}
+            >
+              {action === "discard" ? "Discarding…" : "Discard session"}
+            </button>
+          </Tooltip>
+          <Tooltip label="Leaves everything as-is. Pick it back up any time from your Dashboard." wrapperClassName="w-full" side="top">
+            <button onClick={onResume} disabled={busy} className="btn btn-primary fx-sheen w-full disabled:opacity-60">
+              Resume later
+            </button>
+          </Tooltip>
+          <Tooltip label="Marks this session complete now and takes you to the summary for whatever you've answered so far." wrapperClassName="w-full" side="top">
+            <button onClick={onEnd} disabled={busy} className="btn btn-glass fx-ring w-full disabled:opacity-60">
+              {action === "end" ? "Ending…" : "End & Get Summary"}
+            </button>
+          </Tooltip>
+          <button onClick={onStay} disabled={busy} className="btn btn-glass fx-ring w-full">
+            Stay
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function ArticleWithHighlight({ text, sourceLines }) {
+function ArticleWithHighlight({ text, sourceLines, fontFamily, fontSize = 15, lineHeight = 1.9 }) {
+  const style = { fontFamily, fontSize, lineHeight, color: "#C9D0E0" };
   if (!sourceLines || !text) return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9, color: "#C9D0E0" }}>{text || ""}</p>
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={style}>{text || ""}</p>
   );
   const idx = text.indexOf(sourceLines.slice(0, 40));
   if (idx === -1) return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9, color: "#C9D0E0" }}>{text}</p>
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={style}>{text}</p>
   );
   const before = text.slice(0, idx);
   const match = text.slice(idx, idx + sourceLines.length);
   const after = text.slice(idx + sourceLines.length);
   return (
-    <p className="font-reading text-foreground whitespace-pre-wrap" style={{ fontSize: 15, lineHeight: 1.9, color: "#C9D0E0" }}>
+    <p className="font-reading text-foreground whitespace-pre-wrap" style={style}>
       {before}
-      <mark style={{ background: "rgba(93,202,165,0.18)", borderBottom: "2px solid var(--teal)", borderRadius: 3, padding: "0 1px" }}>{match}</mark>
+      <mark style={{ background: "rgba(93,202,165,0.18)", color: "#C9D0E0", borderBottom: "2px solid var(--teal)", borderRadius: 3, padding: "0 1px" }}>{match}</mark>
       {after}
     </p>
   );

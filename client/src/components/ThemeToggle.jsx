@@ -14,7 +14,7 @@ export default function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={cycleTheme}
-      title={`${label} — click to cycle`}
+      title={`${label}: click to cycle`}
       aria-label="Toggle theme"
     >
       <Icon className="h-4 w-4" />
