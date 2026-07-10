@@ -7,6 +7,9 @@ const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
+const { aiLimiter } = require("../lib/rateLimiters");
+const { validateBody } = require("../lib/validate");
+const { evaluateSchema } = require("../lib/schemas");
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -81,7 +84,7 @@ ${reasoningText}`;
 
 // POST /api/attempts/evaluate — analysis mode with AI reasoning evaluation.
 // Pass deferred:true to save the attempt without calling Claude (for timed sessions).
-router.post("/evaluate", authenticate, async (req, res) => {
+router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), async (req, res) => {
   const {
     sessionId,
     questionId,

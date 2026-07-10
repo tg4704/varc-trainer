@@ -10,6 +10,11 @@ const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { clearCache: clearDashCache } = require("./dashboard");
+const { aiLimiter } = require("../lib/rateLimiters");
+const { validateBody } = require("../lib/validate");
+const {
+  coachCreateSessionSchema, coachReadingMapSchema, coachAttemptSchema, coachExchangeSchema,
+} = require("../lib/schemas");
 
 const LETTERS = ["A", "B", "C", "D"];
 const MAX_DISCUSS_EXCHANGES = 4;
@@ -87,7 +92,7 @@ router.get("/passages", async (req, res, next) => {
 });
 
 // ── POST /api/coach/sessions — start (or resume) a session on a passage ───────
-router.post("/sessions", async (req, res, next) => {
+router.post("/sessions", validateBody(coachCreateSessionSchema), async (req, res, next) => {
   try {
     const { passageId } = req.body || {};
     if (!passageId) return res.status(400).json({ error: "passageId is required" });
@@ -137,7 +142,7 @@ router.post("/sessions", async (req, res, next) => {
 // ── POST /api/coach/sessions/:id/reading-map — the b2 differentiator ──────────
 // Grades the student's reading BEFORE they see any question. Any language is
 // accepted (mother-tongue verbalization) — grading is on understanding, not grammar.
-router.post("/sessions/:id/reading-map", async (req, res, next) => {
+router.post("/sessions/:id/reading-map", aiLimiter, validateBody(coachReadingMapSchema), async (req, res, next) => {
   try {
     const session = await db.get(
       "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]
@@ -266,7 +271,7 @@ router.get("/sessions/:id", async (req, res, next) => {
 // ── POST /api/coach/attempts — reasoning verdict for one question ─────────────
 // Mirrors attempts/evaluate.js but writes to coach_attempts. Response shape
 // matches FeedbackSections' expected `attempt` prop so the client can reuse it.
-router.post("/attempts", async (req, res, next) => {
+router.post("/attempts", aiLimiter, validateBody(coachAttemptSchema), async (req, res, next) => {
   try {
     const { coachSessionId, questionId, questionIndex, selectedOptionIndex, reasoningText } = req.body || {};
     if (coachSessionId == null || !questionId || selectedOptionIndex == null) {
@@ -376,7 +381,7 @@ ${reasoningText.trim()}`;
 // ── POST /api/coach/exchange — optional "Stuck? Discuss" chat ─────────────────
 // Only usable AFTER a question's attempt/verdict exists — this is supplementary
 // discussion, not a gate to revealing the answer (that's the point of the redesign).
-router.post("/exchange", async (req, res, next) => {
+router.post("/exchange", aiLimiter, validateBody(coachExchangeSchema), async (req, res, next) => {
   try {
     const { coachSessionId, questionId, message } = req.body || {};
     if (!coachSessionId || !questionId || !message || !message.trim()) {

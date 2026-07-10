@@ -3,8 +3,13 @@ const db = require("./db");
 
 const SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
+// 7 days (was 30d) — shortened as part of the pre-payments security pass:
+// once Razorpay billing is live (Roadmap Phase 6), a leaked/stolen token
+// staying valid for a month is a meaningfully worse exposure window than on
+// a free study app. Revisit toward a short-lived-token + refresh-token model
+// if 7 days ever proves annoying for regular users.
 function signToken(userId) {
-  return jwt.sign({ userId }, SECRET, { expiresIn: "30d" });
+  return jwt.sign({ userId }, SECRET, { expiresIn: "7d" });
 }
 
 // Express middleware: requires a valid Bearer token, sets req.userId.

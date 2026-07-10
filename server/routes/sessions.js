@@ -6,6 +6,7 @@ const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { VALID_TYPES } = require("../lib/validateQuestion");
+const { aiLimiter } = require("../lib/rateLimiters");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
@@ -364,7 +365,13 @@ async function evaluateOneAttempt(attempt, userId) {
   }
 }
 
-router.post("/:id/batch-evaluate", authenticate, async (req, res, next) => {
+// Note: this single request can internally make up to N model calls (one
+// per pending question, capped by session size <= 25) if the primary
+// single-batch-call path fails and it falls back to per-question calls —
+// the rate limiter below only counts it as one hit. Acceptable for now
+// since it's bounded and infrequent (once per session), not the primary
+// abuse surface (that's /evaluate and /coach/*, which fire on every answer).
+router.post("/:id/batch-evaluate", authenticate, aiLimiter, async (req, res, next) => {
   try {
   const s = await getOwnedSession(req.params.id, req.userId);
   if (!s) return res.status(404).json({ error: "Session not found" });

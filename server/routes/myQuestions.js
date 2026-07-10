@@ -10,6 +10,9 @@ const { authenticate } = require("../auth");
 const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
+const { aiLimiter } = require("../lib/rateLimiters");
+const { validateBody } = require("../lib/validate");
+const { generateDraftSchema } = require("../lib/schemas");
 
 router.use(authenticate);
 
@@ -168,7 +171,7 @@ router.delete("/:id", async (req, res, next) => {
 // Claude generates a full question + 4 options. Returns a draft object the
 // frontend pre-populates the editor with. The user reviews and edits before saving.
 // Feature-flagged: ENABLE_AI_AUTHORING env var (defaults true).
-router.post("/generate-draft", async (req, res) => {
+router.post("/generate-draft", aiLimiter, validateBody(generateDraftSchema), async (req, res) => {
   if (!AI_ENABLED) {
     return res.status(403).json({ error: "AI question generation is not enabled on this server." });
   }

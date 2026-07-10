@@ -1,9 +1,11 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const path = require("path");
 const fs = require("fs");
 const logger = require("./logger");
+const { apiLimiter } = require("./lib/rateLimiters");
 
 // ── Sentry (error monitoring) — init before anything else ────────────────────
 // @sentry/node v8: just call init() — no manual middleware needed.
@@ -30,8 +32,43 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
-app.use(express.json());
+// contentSecurityPolicy off: the single Railway service also serves the
+// built React app's static HTML/JS, and a default CSP would need real
+// tuning (inline styles, font/analytics origins, etc.) to not break it —
+// worth doing as a deliberate follow-up once the app is stable, not bundled
+// into this pass. The other helmet defaults (X-Frame-Options/clickjacking,
+// X-Content-Type-Options, etc.) are safe to turn on immediately.
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// CORS allowlist — was previously wide open (bare `cors()`), which lets any
+// site's JS make authenticated-looking requests to this API using a
+// visitor's stored token. FRONTEND_URL already exists for the OAuth
+// redirect flow (see routes/auth.js); reused here so there's one source of
+// truth for "what origin is actually allowed to call us."
+const allowedOrigins = [
+  (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, ""),
+  "http://localhost:5173",
+];
+app.use(cors({
+  origin(origin, callback) {
+    // No Origin header = same-origin request (curl, server-to-server, the
+    // app's own static frontend served from this same process) — allow it.
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
+
+// Body size cap — without this, an attacker (or a bug) can POST an
+// arbitrarily large body; on the AI routes specifically that becomes an
+// expensive prompt, not just a memory/bandwidth problem. 100kb comfortably
+// covers the longest real payload (a full reading-map submission plus
+// article text) with headroom.
+app.use(express.json({ limit: "100kb" }));
+
+// Global rate limit — see server/lib/rateLimiters.js for the "Balanced"
+// profile and the tighter per-route limiters (auth, AI) applied downstream.
+app.use("/api", apiLimiter);
 
 // ── Request logger ────────────────────────────────────────────────────────────
 // Logs every API request with method, path, status, and duration.
@@ -316,7 +353,13 @@ if (fs.existsSync(distPath)) {
 // ── Global async error handler ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: err.message || "Internal server error" });
+  // Respect a real status the error already carries (e.g. express.json()'s
+  // body-size-limit rejection is a genuine 413, not a server fault) instead
+  // of flattening everything to 500 — a 413 response also carries a much
+  // more actionable message for the client than a generic server error.
+  const status = err.status || err.statusCode || 500;
+  const message = status === 413 ? "Request body too large." : (err.message || "Internal server error");
+  res.status(status).json({ error: message });
 });
 
 const PORT = process.env.PORT || 3001;

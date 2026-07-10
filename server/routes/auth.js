@@ -4,7 +4,15 @@ const bcrypt  = require("bcryptjs");
 const crypto  = require("crypto");
 const db      = require("../db");
 const { signToken, authenticate } = require("../auth");
-const { sendOtpEmail } = require("../email");
+const { sendOtpEmail, sendAccountExistsNotice } = require("../email");
+const { authLimiter } = require("../lib/rateLimiters");
+const loginLockout = require("../lib/loginLockout");
+const { validateBody } = require("../lib/validate");
+const {
+  registerSchema, loginSchema, verifyEmailSchema, resendOtpSchema,
+  forgotPasswordSchema, resetPasswordSchema, usernamePatchSchema, namePatchSchema,
+  avatarPatchSchema, profilePatchSchema, passwordPatchSchema,
+} = require("../lib/schemas");
 
 // ── Google OAuth config ───────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
@@ -133,7 +141,7 @@ async function canResend(userId, purpose) {
 }
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
-router.post("/register", async (req, res) => {
+router.post("/register", authLimiter, validateBody(registerSchema), async (req, res) => {
   const { username, email, password, name } = req.body || {};
   if (!username || !email || !password)
     return res.status(400).json({ error: "Username, email, and password are required" });
@@ -144,16 +152,30 @@ router.post("/register", async (req, res) => {
   if (password.length < 6)
     return res.status(400).json({ error: "Password must be at least 6 characters" });
 
-  const existing = await db.get(
-    "SELECT id, username, email FROM users WHERE username = $1 OR email = $2",
-    [username, email]
-  );
-  if (existing) {
-    const field = existing.email === email ? "email" : "username";
-    return res.status(409).json({ error: `That ${field} is already registered` });
+  // Username collisions stay an immediate, specific error — usernames are
+  // already intentionally public/checkable live via GET /username-available
+  // (used while picking a name, and again on Profile), so there's no new
+  // leak in confirming one is taken here.
+  const usernameTaken = await db.get("SELECT id FROM users WHERE username = $1", [username]);
+  if (usernameTaken) {
+    return res.status(409).json({ error: "That username is already taken" });
   }
 
-  const hash   = bcrypt.hashSync(password, 10);
+  // Email collisions are handled generically on purpose: confirming/denying
+  // that a specific email is registered lets an attacker run a scraped
+  // email list through this endpoint and build a list of real Graspr users
+  // (classic account-enumeration attack). Instead of telling the requester,
+  // notify the actual account owner and respond exactly like a fresh signup
+  // succeeded — the requester can't tell the difference either way.
+  const emailTaken = await db.get("SELECT id FROM users WHERE email = $1", [email]);
+  if (emailTaken) {
+    sendAccountExistsNotice(email).catch((e) =>
+      console.error("[auth] account-exists notice failed:", e.message)
+    );
+    return res.json({ requiresVerification: true, email });
+  }
+
+  const hash   = bcrypt.hashSync(password, 12);
   const result = await db.run(
     "INSERT INTO users (username, email, password_hash, name, email_verified) VALUES ($1, $2, $3, $4, 0) RETURNING id",
     [username, email, hash, (name || "").trim() || null]
@@ -173,25 +195,37 @@ router.post("/register", async (req, res) => {
 });
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
-router.post("/login", async (req, res, next) => {
+router.post("/login", authLimiter, validateBody(loginSchema), async (req, res, next) => {
   try {
     const { identifier, password } = req.body || {};
     if (!identifier || !password)
       return res.status(400).json({ error: "Username/email and password are required" });
 
+    // Locked out — same generic message as a wrong password below, so this
+    // never reveals that a lockout (or the account) exists.
+    if (loginLockout.isLocked(identifier, req.ip)) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
     const user = await db.get(
       "SELECT * FROM users WHERE username = $1 OR email = $2",
       [identifier, identifier]
     );
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+      loginLockout.recordFailure(identifier, req.ip);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
     // Google-only account (no password set)
     if (!user.password_hash) {
       return res.status(400).json({
         error: "This account uses Google sign-in. Please use the 'Continue with Google' button.",
       });
     }
-    if (!bcrypt.compareSync(password, user.password_hash))
+    if (!bcrypt.compareSync(password, user.password_hash)) {
+      loginLockout.recordFailure(identifier, req.ip);
       return res.status(401).json({ error: "Invalid credentials" });
+    }
+    loginLockout.clearFailures(identifier, req.ip);
 
     if (!user.email_verified) {
       // Silently resend a fresh OTP so the user doesn't have to click "resend"
@@ -214,7 +248,7 @@ router.post("/login", async (req, res, next) => {
 });
 
 // ── POST /api/auth/verify-email ───────────────────────────────────────────────
-router.post("/verify-email", async (req, res, next) => {
+router.post("/verify-email", validateBody(verifyEmailSchema), async (req, res, next) => {
   try {
     const { email, otp } = req.body || {};
     if (!email || !otp) return res.status(400).json({ error: "Email and code are required" });
@@ -235,7 +269,7 @@ router.post("/verify-email", async (req, res, next) => {
 });
 
 // ── POST /api/auth/resend-otp ─────────────────────────────────────────────────
-router.post("/resend-otp", async (req, res, next) => {
+router.post("/resend-otp", validateBody(resendOtpSchema), async (req, res, next) => {
   try {
     const { email, purpose } = req.body || {};
     if (!email || !purpose) return res.status(400).json({ error: "Email and purpose are required" });
@@ -264,7 +298,7 @@ router.post("/resend-otp", async (req, res, next) => {
 });
 
 // ── POST /api/auth/forgot-password ───────────────────────────────────────────
-router.post("/forgot-password", async (req, res, next) => {
+router.post("/forgot-password", authLimiter, validateBody(forgotPasswordSchema), async (req, res, next) => {
   try {
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: "Email is required" });
@@ -290,7 +324,10 @@ router.post("/forgot-password", async (req, res, next) => {
 });
 
 // ── POST /api/auth/reset-password ────────────────────────────────────────────
-router.post("/reset-password", async (req, res, next) => {
+// Rate-limited too — this takes an OTP code, and without a limit here the
+// same rate-limit gap that protects login would otherwise let someone brute
+// force the 6-digit reset code.
+router.post("/reset-password", authLimiter, validateBody(resetPasswordSchema), async (req, res, next) => {
   try {
     const { email, otp, newPassword } = req.body || {};
     if (!email || !otp || !newPassword)
@@ -306,7 +343,7 @@ router.post("/reset-password", async (req, res, next) => {
 
     await db.run(
       "UPDATE users SET password_hash = $1 WHERE id = $2",
-      [bcrypt.hashSync(newPassword, 10), user.id]
+      [bcrypt.hashSync(newPassword, 12), user.id]
     );
     res.json({ token: signToken(user.id), user: publicUser(user) });
   } catch (e) { next(e); }
@@ -444,7 +481,7 @@ router.get("/username-available", async (req, res, next) => {
 });
 
 // ── PATCH /api/auth/username ──────────────────────────────────────────────────
-router.patch("/username", authenticate, async (req, res, next) => {
+router.patch("/username", authenticate, validateBody(usernamePatchSchema), async (req, res, next) => {
   try {
     const { username } = req.body || {};
     if (!username || username.length < 3 || username.length > 30 || !/^[a-z0-9_]+$/i.test(username)) {
@@ -464,7 +501,7 @@ router.patch("/username", authenticate, async (req, res, next) => {
 // ── PATCH /api/auth/name ────────────────────────────────────────────────────
 // Optional display name (powers "Good evening, {name}" greetings). Unlike
 // username, not unique — trimmed, max 60 chars, empty string clears it to NULL.
-router.patch("/name", authenticate, async (req, res, next) => {
+router.patch("/name", authenticate, validateBody(namePatchSchema), async (req, res, next) => {
   try {
     const raw = (req.body?.name ?? "").trim();
     if (raw.length > 60) {
@@ -477,7 +514,7 @@ router.patch("/name", authenticate, async (req, res, next) => {
 });
 
 // ── PATCH /api/auth/avatar ────────────────────────────────────────────────────
-router.patch("/avatar", authenticate, async (req, res, next) => {
+router.patch("/avatar", authenticate, validateBody(avatarPatchSchema), async (req, res, next) => {
   try {
     const { avatarId } = req.body || {};
     if (!isValidAvatarId(avatarId)) {
@@ -490,7 +527,12 @@ router.patch("/avatar", authenticate, async (req, res, next) => {
 });
 
 // ── PATCH /api/auth/profile — Student Profile card (favorite topic + bio) ──
-router.patch("/profile", authenticate, async (req, res, next) => {
+// Validated with .optional() (not .default()) on both fields deliberately —
+// confirmed via a direct zod test that an omitted key stays absent (not
+// filled in as undefined-then-dropped) in the parsed output, preserving the
+// hasOwnProperty check below that this route's independent-field-save logic
+// depends on (see the bio-reset bug this fixed earlier).
+router.patch("/profile", authenticate, validateBody(profilePatchSchema), async (req, res, next) => {
   try {
     const body = req.body || {};
     const hasTopic = Object.prototype.hasOwnProperty.call(body, "favoriteTopic");
@@ -524,7 +566,7 @@ router.patch("/profile", authenticate, async (req, res, next) => {
 });
 
 // ── PATCH /api/auth/password ──────────────────────────────────────────────────
-router.patch("/password", authenticate, async (req, res, next) => {
+router.patch("/password", authenticate, validateBody(passwordPatchSchema), async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword)
@@ -543,7 +585,7 @@ router.patch("/password", authenticate, async (req, res, next) => {
 
     await db.run(
       "UPDATE users SET password_hash = $1 WHERE id = $2",
-      [bcrypt.hashSync(newPassword, 10), req.userId]
+      [bcrypt.hashSync(newPassword, 12), req.userId]
     );
     res.json({ ok: true });
   } catch (e) { next(e); }

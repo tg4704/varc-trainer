@@ -12,13 +12,16 @@
     "@logtail/node": "^0.4.21",
     "@sentry/node": "^8.0.0",
     "bcryptjs": "^2.4.3",
-    "pg": "^8.11.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "openai": "^4.47.1",
-    "resend": "^4.8.0"
+    "pg": "^8.11.3",
+    "resend": "^4.8.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

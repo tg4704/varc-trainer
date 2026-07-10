@@ -260,14 +260,48 @@ Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch).
 ## Environment Variables
 
 ```
-ANTHROPIC_API_KEY=...                    # Phase 4
+OPENROUTER_API_KEY=sk-or-...             # All AI calls go through OpenRouter (server/ai/provider.js), NOT a direct Anthropic key — despite the "AI" section above saying claude-haiku-4-5, the actual provider is OpenRouter's OpenAI-compatible API. Get a key at openrouter.ai/keys.
+AI_MODEL=anthropic/claude-haiku-4-5      # Optional override — this is the default if unset. NOTE: as of 2026-07 this var was found set in dev to a free/rate-limited OpenRouter model (openrouter's ":free" suffix models are shared and get 429'd easily) — always double check this isn't accidentally pointed at a free-tier model in any environment.
+APP_URL=https://www.graspr.in            # Sent as HTTP-Referer to OpenRouter's dashboard for their per-app rate-limit tiers
 PORT=3001
-JWT_SECRET=...                           # change in production
+JWT_SECRET=...                           # change in production; rotate before real users depend on the app (see Security Hardening below)
 DATABASE_URL=postgresql://...            # Railway Postgres (required — no SQLite fallback)
 ADMIN_USERNAMES=tarun,priya              # Phase 9 — comma-separated; auto-promote on startup
 ENABLE_AI_AUTHORING=true                 # Phase 10 — set 'false' to disable AI question generation
 RESEND_API_KEY=...                       # Email OTP (optional in dev — logs to console if absent)
 RESEND_FROM_EMAIL=noreply@yourdomain.com # Sender address for OTP emails
+FRONTEND_URL=https://www.graspr.in       # Also used as the CORS allowlist origin (server/index.js) and the OAuth redirect base — keep in sync with the real deployed domain, a stale value here silently breaks both
+BACKEND_URL=https://www.graspr.in        # Same origin as FRONTEND_URL in production (one Railway service serves both) — used for the Google OAuth callback URL
+GOOGLE_CLIENT_ID=...                     # Google OAuth
+GOOGLE_CLIENT_SECRET=...
+SENTRY_DSN=...                           # optional — error monitoring, server-side
+VITE_SENTRY_DSN=...                      # optional — error monitoring, client-side (safe to expose, DSNs aren't secret)
 ```
 
 In production, the frontend uses `VITE_API_URL` to point at the deployed backend instead of the dev proxy.
+
+## Security Hardening (2026-07 pass)
+
+A security/production-readiness pass landed on top of Post-16 fixes, covering most of the "Security & Hardening" checklist (rate limiting, input validation, secret handling, password hashing, auth error messages, account lockout, backend auth enforcement, security headers/CORS, dependency scanning). Not a full app rewrite — additive middleware + a handful of targeted route changes.
+
+**What's live:**
+- `helmet()` (CSP explicitly left off — the single Railway service also serves the built React static assets, and a default CSP needs real tuning against that before enabling; the other helmet defaults like X-Frame-Options are on).
+- CORS allowlist (`server/index.js`) replacing the previous wide-open `cors()` — origin restricted to `FRONTEND_URL` + `localhost:5173`.
+- `express.json({ limit: "100kb" })` — the global error handler (`server/index.js`) was fixed alongside this to actually respect `err.status` (it previously flattened every error, including a legit 413 from this limit, to 500).
+- Rate limiting (`server/lib/rateLimiters.js`) — "Balanced" profile: global 100/min/IP, auth routes (login/register/forgot-password/reset-password) 10/min/IP, AI routes (evaluate, coach reading-map/attempts/exchange, my-questions generate-draft, sessions batch-evaluate) 20/min per authenticated user.
+  - **TODO, not built yet**: the AI limiter is currently one flat rate for every user. Once paid tiers exist (`users.tier`, Razorpay — see `ROADMAP.md`), this should become tier-aware (free vs paid gets a different `limit`). The code comment in `rateLimiters.js` points back here.
+- Account lockout (`server/lib/loginLockout.js`) — 5 failed attempts / 15 min, keyed by identifier+IP, in-memory (fine for the current single Railway instance; move to Redis/Upstash if it ever runs on more than one instance — same caveat applies to the rate limiters, which also use an in-memory store).
+- Registration no longer leaks whether an email is already registered (`server/routes/auth.js` `/register` + `server/email.js` `sendAccountExistsNotice`) — responds identically either way and silently emails the existing account owner instead of telling the requester. Username collisions still return an immediate, specific error deliberately — usernames are already intentionally public/checkable live via `GET /auth/username-available`, so there's no new leak in confirming one's taken.
+- bcrypt cost factor bumped 10 → 12 on all three `bcrypt.hashSync` call sites (register, reset-password, change-password). Only affects newly-hashed passwords going forward, not existing hashes.
+- JWT expiry shortened 30d → 7d (`server/auth.js`) — done specifically because payments (Razorpay) are on the roadmap; revisit toward a short-lived-token + refresh-token model if 7 days ever proves annoying, but that's real added infrastructure, not a one-line change.
+- zod input validation (`server/lib/schemas.js` + `server/lib/validate.js`) on **auth routes and the AI-calling routes** — register/login/verify-email/resend-otp/forgot-password/reset-password/username/name/avatar/profile/password in `auth.js`; evaluate in `evaluate.js`; create-session/reading-map/attempts/exchange in `coach.js`; generate-draft in `myQuestions.js`.
+  - **Deliberately NOT covered**: `sessions.js`'s `POST /` (create session) — it already has thorough, order-dependent hand-validation (`parseInt` coercion, `timerMode`-gates-other-fields logic) that a rigid zod schema risked conflicting with; question CRUD (already has its own `validateQuestionPayload` custom validator in `lib/validateQuestion.js`); admin routes; dashboard; flags. Extend incrementally if these become a real target.
+- Verified: no `dangerouslySetInnerHTML` anywhere in `client/src`, no string-concatenated SQL anywhere in `server` (everything already uses `pg` parameterized `$1`-style placeholders), no secrets found in a production client build (`grep`'d `client/dist` for key patterns — clean).
+- `npm audit fix` (non-breaking) run — went from 20 → 19 vulnerabilities. The remaining 19 (all moderate) are transitively pulled in through `@sentry/node`'s OpenTelemetry auto-instrumentation for DB drivers this app doesn't use (Prisma, MySQL) — fixing them needs `npm audit fix --force`, which risks bumping Sentry to a breaking major version. Left as-is; revisit if `npm audit` ever shows something in a package actually on this app's real dependency path.
+- Confirmed (not new — already correct): `requireAdmin` middleware genuinely checks `role` server-side on every admin route, not just hidden client-side — live-tested with a non-admin token against `/api/admin/overview`, `/api/admin/users`, `/api/admin/api-calls` → all correctly 403. No token → 401.
+
+**Not done / explicitly deferred** (see the Security & Hardening checklist in the Obsidian vault's `Operations/Launch & Production Readiness.md` for the full original list and reasoning per item):
+- Secrets manager (Doppler/Infisical) — P2, `.env` + rotation is enough at current scale.
+- Pen-test pass (OWASP ZAP/Burp) — needs a running staging environment; do this *after* the above, as a final check, not in parallel.
+- Managed auth provider swap (Clerk/Supabase/Firebase) — optional, current custom bcrypt+JWT+OTP+OAuth works fine.
+- Actually rotating `JWT_SECRET`/`OPENROUTER_API_KEY` on Railway — that's a manual action on the live environment, not something done from this repo.
