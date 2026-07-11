@@ -96,9 +96,9 @@ export default function TopNav() {
   const isActive = (to) => pathname === to || (to !== "/" && pathname.startsWith(to));
 
   return (
-    <div className="sticky top-[18px] z-50 px-6">
+    <div className="sticky top-[18px] z-50 px-4 md:px-6">
       <nav
-        className="mx-auto grid max-w-[1180px] grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[18px] py-2.5 pl-[22px] pr-[14px] transition-shadow"
+        className="mx-auto grid max-w-[1180px] grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[18px] py-2.5 pl-4 pr-2.5 transition-shadow md:pl-[22px] md:pr-[14px]"
         style={{
           background: scrolled ? "rgba(20,23,31,0.7)" : "rgba(255,255,255,0.06)",
           backdropFilter: "blur(22px) saturate(150%)",
@@ -118,15 +118,17 @@ export default function TopNav() {
       >
         <Link to="/" onClick={guarded("/")} className="fx-logo flex items-center gap-2.5">
           <BrandMark size={30} />
-          <span className="display text-xl tracking-tight text-foreground">
+          <span className="display whitespace-nowrap text-xl tracking-tight text-foreground">
             graspr<span style={{ color: "var(--teal)" }}>.</span>in
           </span>
         </Link>
 
         {/* Center group: the three practice surfaces, as distinct top-level
-            buttons rather than a single dropdown — each is one click away. */}
+            buttons rather than a single dropdown — each is one click away.
+            Hidden below md: the avatar dropdown carries Drills/Coach/Dashboard
+            on phones instead (logged-out gets logo + auth buttons only). */}
         {user ? (
-          <div className="flex items-center justify-center gap-1">
+          <div className="hidden items-center justify-center gap-1 md:flex">
             <NavPillTooltip label="Reading Lounge" sublabel="Coming Soon">
               <span
                 className="flex cursor-default items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold"
@@ -162,7 +164,7 @@ export default function TopNav() {
             </Link>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-1">
+          <div className="hidden items-center justify-center gap-1 md:flex">
             <button
               type="button"
               onClick={() => {
@@ -214,7 +216,7 @@ export default function TopNav() {
             <Link
               to="/dashboard"
               onClick={guarded("/dashboard")}
-              className="rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
+              className="hidden rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors md:block"
               style={
                 isActive("/dashboard")
                   ? { background: "var(--teal)", color: "#07130E" }
@@ -227,11 +229,12 @@ export default function TopNav() {
             <div className="relative" ref={userRef}>
               <button
                 onClick={toggleUser}
-                className="fx-ring flex items-center gap-2 rounded-[9px] py-1.5 pl-1.5 pr-3 text-[13.5px] font-semibold"
+                aria-label="Account menu"
+                className="fx-ring flex items-center gap-2 rounded-[9px] py-1.5 pl-1.5 pr-2 text-[13.5px] font-semibold md:pr-3"
                 style={{ background: userOpen ? "rgba(255,255,255,0.08)" : "transparent", color: "var(--text)" }}
               >
                 <Avatar avatarId={user.avatarId} name={user.name || user.username} size={24} radius={7} />
-                {user.name || user.username}
+                <span className="hidden md:inline">{user.name || user.username}</span>
                 <Icon name="chevD" size={12} style={{ opacity: 0.7 }} />
               </button>
 
@@ -242,6 +245,29 @@ export default function TopNav() {
                   style={{ position: "fixed", top: userRect.bottom + 10, right: Math.max(8, window.innerWidth - userRect.right), zIndex: 60, ...MENU_GLASS }}
                 >
                   <div className="mono px-3 pb-1.5 pt-2 text-[10px] uppercase tracking-wide dim">{user.email}</div>
+                  {/* Mobile-only: the center nav pills + Dashboard collapse into
+                      this menu below md (the bar can't fit them on phones). */}
+                  <div className="md:hidden">
+                    <DropdownItem
+                      to="/setup"
+                      onClick={(e) => { if (!attemptNav("/setup")) e.preventDefault(); setUserOpen(false); }}
+                    >
+                      Drills
+                    </DropdownItem>
+                    <DropdownItem
+                      to="/coach"
+                      onClick={(e) => { if (!attemptNav("/coach")) e.preventDefault(); setUserOpen(false); }}
+                    >
+                      Coach
+                    </DropdownItem>
+                    <DropdownItem
+                      to="/dashboard"
+                      onClick={(e) => { if (!attemptNav("/dashboard")) e.preventDefault(); setUserOpen(false); }}
+                    >
+                      Dashboard
+                    </DropdownItem>
+                    <div className="my-1 h-px" style={{ background: "var(--glass-border-lo)" }} />
+                  </div>
                   <DropdownItem to="/profile" onClick={() => setUserOpen(false)}>Profile</DropdownItem>
                   {/* My Questions temporarily disabled — see App.jsx route redirect */}
                   {user.role === "admin" && (

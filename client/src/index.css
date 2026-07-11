@@ -132,6 +132,10 @@
   body {
     margin: 0;
     color: var(--text);
+    /* Defense-in-depth: no single over-wide element may pan the whole page
+       sideways on phones. Individual overflow sources still get real fixes —
+       this only stops the viewport-level symptom. */
+    overflow-x: clip;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     /* deep canvas with soft teal + periwinkle ambient glow, fixed so it doesn't scroll */
