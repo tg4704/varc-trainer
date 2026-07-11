@@ -305,6 +305,22 @@ export default function Practice() {
     return () => clearGuard();
   }, [registerGuard, clearGuard]);
 
+  // navGuard only intercepts in-app nav (clicks that go through attemptNav) —
+  // the browser's own Back button or closing/refreshing the tab bypasses it
+  // entirely, with no warning. Answers already submitted aren't lost (each
+  // is persisted as it happens, and the session itself survives a refresh
+  // via varc_active_session / GET /sessions/active) — but any half-typed,
+  // unsubmitted reasoning on the *current* question is gone with no notice.
+  useEffect(() => {
+    function handleBeforeUnload(e) {
+      if (!inProgressRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   function requestExit() {
     if (!attemptNav("/dashboard")) return; // guard intercepted — shows LeaveSessionModal
     navigate("/dashboard");
@@ -628,32 +644,45 @@ export default function Practice() {
     return Math.max(0, session.timerSeconds - (tick - start) / 1000);
   }
 
-  // Bootstrap
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        let s = loadActiveSession();
-        if (!s) {
-          const { session: active } = await getActiveSession();
-          if (active) { s = { ...active, startedAt: Date.now() }; saveActiveSession(s); }
-        }
-        if (cancelled) return;
-        if (!s) { navigate("/setup", { replace: true }); return; }
-        sessionStartRef.current = s.startedAt || Date.now();
-        setSession(s);
-        const { questions: qs } = await getSessionQuestions(s.id);
-        if (cancelled) return;
-        questionStartTimesRef.current = { 0: Date.now() };
-        setQuestions(qs);
-        setQuestionStates(qs.map(() => defaultQState()));
-        setLoadingQuestions(false);
-      } catch (e) {
-        if (!cancelled) { setError(e.message); setLoadingQuestions(false); }
+  // Bootstrap — pulled out of the effect into its own callback so the
+  // Retry button (below, in the error-state render) can actually re-run it.
+  // Previously Retry only reset `error`/`loadingQuestions`, but the fetch
+  // effect had already run its once-on-mount course, so nothing re-fired
+  // and the user was stuck on "Loading questions…" forever after any
+  // transient failure. bootstrapRunIdRef supersedes stale in-flight calls
+  // the same way the old `cancelled` flag did (covers both StrictMode's
+  // double-invoke in dev and a Retry click racing an earlier attempt).
+  const bootstrapRunIdRef = useRef(0);
+  const bootstrapSession = useCallback(async () => {
+    const runId = ++bootstrapRunIdRef.current;
+    setError(null);
+    setLoadingQuestions(true);
+    try {
+      let s = loadActiveSession();
+      if (!s) {
+        const { session: active } = await getActiveSession();
+        if (active) { s = { ...active, startedAt: Date.now() }; saveActiveSession(s); }
       }
-    })();
-    return () => { cancelled = true; };
+      if (bootstrapRunIdRef.current !== runId) return;
+      if (!s) { navigate("/setup", { replace: true }); return; }
+      sessionStartRef.current = s.startedAt || Date.now();
+      setSession(s);
+      const { questions: qs } = await getSessionQuestions(s.id);
+      if (bootstrapRunIdRef.current !== runId) return;
+      questionStartTimesRef.current = { 0: Date.now() };
+      setQuestions(qs);
+      setQuestionStates(qs.map(() => defaultQState()));
+      setLoadingQuestions(false);
+    } catch (e) {
+      if (bootstrapRunIdRef.current !== runId) return;
+      setError(e.message);
+      setLoadingQuestions(false);
+    }
   }, [navigate]);
+
+  useEffect(() => {
+    bootstrapSession();
+  }, [bootstrapSession]);
 
   // Leave fullscreen when the practice screen unmounts (session ended, exited,
   // discarded). Fullscreen is entered from the SessionSetup "Begin" gesture.
@@ -704,7 +733,7 @@ export default function Practice() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <p className="text-destructive">Something went wrong: {error}</p>
-        <Button className="mt-4" onClick={() => { setError(null); setLoadingQuestions(true); }}>
+        <Button className="mt-4" onClick={bootstrapSession}>
           Retry
         </Button>
       </div>
@@ -715,6 +744,22 @@ export default function Practice() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center muted">
         Loading questions…
+      </div>
+    );
+  }
+
+  // Every question in this session was deleted/deactivated after the
+  // session started (e.g. an admin removed flagged questions) — without
+  // this guard the page below renders nothing at all: no error, no Exit
+  // button, just a blank screen with no way out except knowing to navigate
+  // away manually.
+  if (questions.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <p className="text-destructive">This session's questions are no longer available.</p>
+        <Button className="mt-4" onClick={() => navigate("/setup", { replace: true })}>
+          Back to Session Setup
+        </Button>
       </div>
     );
   }

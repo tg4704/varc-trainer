@@ -1,11 +1,12 @@
-# Security, Legal, SEO, Monitoring & Performance — Manual Test Plan
+# Security, Legal, SEO, Monitoring, Performance & Reliability — Manual Test Plan
 
-Covers four passes from 2026-07 (see `CLAUDE.md` for what was built and why
+Covers five passes from 2026-07 (see `CLAUDE.md` for what was built and why
 in each):
 - **Part A — Security Hardening** (tests 1–14): rate limiting, auth, headers, CORS.
 - **Part B — Legal & Compliance + SEO** (tests 15–21): privacy/consent, DPDP rights, sitemap/meta.
 - **Part C — Monitoring & Observability** (tests 22–26): error tracking, health check, analytics events.
 - **Part D — Performance & Infrastructure** (tests 27–30): compression, DB indexes, optimistic UI.
+- **Part E — Testing, Reliability & Release Engineering** (tests 31–39): token-expiry, AI-audit fixes, CI.
 
 Each test is copy-pasteable — run it, compare to "Expected," check the box.
 
@@ -731,6 +732,208 @@ state) if the save actually fails
 
 ---
 
+# Part E — Reliability fixes (CI/CD + token-expiry + AI flow audit)
+
+## 31. Expired/invalid token mid-session redirects with a clear message and returns you to where you were
+
+In a browser, log in and navigate to any protected page (e.g. `/dashboard`).
+In DevTools console, corrupt the token to simulate an expired/invalid one:
+```js
+localStorage.setItem('varc_token', 'invalid.corrupted.token');
+```
+Reload the page. **Expected:**
+- Redirected to `/login`.
+- A teal banner reads "Your session timed out. Log back in to pick up right
+  where you left off." — not a raw `"jwt expired"` error stuck on the old page.
+- `localStorage.getItem('varc_token')` is now `null` (dead token cleared).
+
+Log back in. **Expected:** you land back on `/dashboard` (or wherever you
+were), not the homepage — the return path survived the round trip.
+
+Verified live this session both ways, including the corrupted-token → banner
+→ re-login → exact-original-path-restored flow.
+
+☐ Pass — clear message, dead token cleared, return path preserved
+
+---
+
+## 32. Practice "Retry" button actually retries after a load failure
+
+In a browser, log in and note you have at least one Drills session you can
+resume (or create one). Stop the backend (`Ctrl+C` the `npm run dev`
+process), then navigate to `/practice`. **Expected:** an error screen with a
+"Something went wrong" message and a **Retry** button — not an infinite
+"Loading questions…" spinner.
+
+Restart the backend, then click **Retry**. **Expected:** the request re-fires
+and the actual practice screen loads — no page refresh needed, no repeated
+click needed.
+
+```bash
+# Verify the underlying fix is in place (extracted into a reusable callback
+# both the mount effect and Retry button call, instead of the old dead
+# reset-state-but-nothing-re-fires bug):
+grep -n "bootstrapSession\b" client/src/pages/Practice.jsx | head -5
+```
+**Expected:** shows `bootstrapSession` defined once via `useCallback`, called
+from the mount `useEffect`, and called directly from the Retry button's
+`onClick`.
+
+☐ Pass — Retry genuinely re-fetches and recovers, doesn't just reset state
+
+---
+
+## 33. A session with every question deleted shows an error, not a blank page
+
+Requires `psql` access.
+
+```bash
+# Create a session referencing only nonexistent question IDs, for your own test user.
+psql "$DATABASE_URL" -c "
+INSERT INTO sessions (user_id, num_questions, timer_mode, feedback_mode, session_type, status, question_ids)
+SELECT id, 3, 'untimed', 'instant', 'practice', 'active', '[\"nonexistent1\",\"nonexistent2\",\"nonexistent3\"]'
+FROM users WHERE username = '$TEST_USER'
+RETURNING id;
+"
+```
+Note the returned `id`, then in a browser (logged in as that user) run in
+DevTools console:
+```js
+localStorage.setItem('varc_active_session', JSON.stringify({
+  id: <THE_ID>, numQuestions: 3, timerMode: "untimed",
+  feedbackMode: "instant", sessionType: "practice", status: "active",
+  questionIds: ["nonexistent1","nonexistent2","nonexistent3"],
+  practiceMode: "analysis", startedAt: Date.now()
+}));
+```
+Navigate to `/practice`. **Expected:** "This session's questions are no
+longer available." with a **Back to Session Setup** button — not a blank
+white screen with no way out.
+
+Clean up afterward:
+```bash
+psql "$DATABASE_URL" -c "DELETE FROM sessions WHERE id = <THE_ID>;"
+```
+
+☐ Pass — clear error screen with an escape hatch, verified live
+
+---
+
+## 34. Question index/total stay sequential after a partial deletion
+
+Requires `psql` access. Same idea as test 33, but with a **mix** of valid and
+invalid question IDs:
+
+```bash
+psql "$DATABASE_URL" -c "
+INSERT INTO sessions (user_id, num_questions, timer_mode, feedback_mode, session_type, status, question_ids)
+SELECT id, 5, 'untimed', 'instant', 'practice', 'active', '[\"q001\",\"nonexistent1\",\"q020\",\"nonexistent2\",\"q014\"]'
+FROM users WHERE username = '$TEST_USER'
+RETURNING id;
+"
+TOKEN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" \
+  -d "{\"identifier\":\"$TEST_USER\",\"password\":\"$TEST_PASS\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s $BASE/api/sessions/<THE_ID>/questions -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+for q in d['questions']: print(q['id'], 'index=', q['index'], 'total=', q['total'])
+"
+```
+**Expected:** three surviving questions numbered `index=1,2,3` with
+`total=3` each — sequential, no gaps (previously could show e.g. `1, 3, 4` of
+a stale `"total": 5`).
+
+Clean up: `psql "$DATABASE_URL" -c "DELETE FROM sessions WHERE id = <THE_ID>;"`
+
+☐ Pass — index/total renumbered after filtering, verified live
+
+---
+
+## 35. AI calls have a real timeout (no infinite "Analyzing…")
+
+```bash
+grep -n "timeout:" server/ai/provider.js
+```
+**Expected:** shows `timeout: 30_000` on the OpenAI client construction. Not
+independently live-testable without artificially hanging OpenRouter — this
+is a code-level guarantee: any call that exceeds 30s now throws the same way
+any other AI failure does, which every calling route already catches
+(`aiError: true`, logged to `api_calls`).
+
+☐ Pass — timeout configured, verified by code read
+
+---
+
+## 36. Browser back/tab-close is warned while a Drills session is unresolved
+
+In a browser, start a Drills session, answer or view at least one question
+(so you're mid-session), then try to **close the tab** (or use the browser's
+own Back button). **Expected:** the browser's native "Leave site? Changes you
+made may not be saved" prompt appears — this is a native browser dialog
+Graspr can't customize the text of, but it should appear at all, which it
+didn't before this fix.
+
+Note: this only fires while `questions` are loaded and the session hasn't
+ended (`inProgressRef` in `Practice.jsx`) — it won't nag you on `/dashboard`
+or other non-session pages.
+
+☐ Pass — native leave-confirmation prompt appears mid-session
+
+---
+
+## 37. Coach: unsaved reasoning/chat text also warns on tab-close
+
+Same idea as test 36, but for `CoachPractice.jsx`: type something into the
+reasoning box or the Discuss chat input **without submitting/sending it**,
+then try to close the tab. **Expected:** the native leave-confirmation prompt
+appears. Clear the field (or submit/send it) and try again — **expected:**
+no prompt, since the Coach session itself is safely resumable and only
+*unsaved typed text* is at risk here.
+
+☐ Pass — prompts only when there's actually unsaved text, not on every leave
+
+---
+
+## 38. Coach chat: a failed send rolls back instead of losing the message
+
+Requires DevTools. Start (or resume) a Coach session, get to a question's
+Discuss chat, and in the console run:
+```js
+window.__origFetch = window.__origFetch || window.fetch;
+window.fetch = (url, opts) => (typeof url === "string" && url.includes("/api/coach/exchange"))
+  ? Promise.reject(new Error("simulated failure"))
+  : window.__origFetch(url, opts);
+```
+Type a message in the Discuss box and send it. **Expected:** an error
+appears, and — this is the actual fix — **your typed message reappears in
+the input box** instead of vanishing, and the phantom "sent" bubble does
+**not** stay stuck in the conversation. Restore fetch afterward
+(`window.fetch = window.__origFetch`) and send again to confirm the happy
+path still works normally.
+
+☐ Pass — failed send restores the input text, doesn't leave a stuck bubble
+
+---
+
+## 39. CI runs and passes on push to main
+
+```bash
+gh run list --limit 3
+```
+**Expected:** the most recent run for `CI` on `main` shows `completed` /
+`success` — not `failure`. If it's still `in_progress`, wait a minute and
+re-run.
+
+```bash
+gh run view --log-failed 2>&1 | head -40
+```
+**Expected:** no output (nothing failed). If something did fail, this shows
+which step and why.
+
+☐ Pass — CI green on the current `main`
+
+---
+
 ## Quick summary checklist
 
 | # | Test | Pass? |
@@ -765,3 +968,12 @@ state) if the save actually fails
 | 28 | All 4 new DB indexes exist (sessions/attempts/coach hot columns) | ☐ |
 | 29 | DB pool has explicit max: 10 | ☐ |
 | 30 | Skip advances instantly on success; correctly rolls back on failure | ☐ |
+| 31 | Expired token → clear banner, dead token cleared, return path preserved | ☐ |
+| 32 | Practice "Retry" button actually re-fetches and recovers | ☐ |
+| 33 | All-questions-deleted session shows an error screen, not a blank page | ☐ |
+| 34 | Question index/total stay sequential after a partial deletion | ☐ |
+| 35 | AI client has a real 30s timeout configured | ☐ |
+| 36 | Browser tab-close warns mid-Drills-session | ☐ |
+| 37 | Browser tab-close warns only when Coach has unsaved reasoning/chat text | ☐ |
+| 38 | Coach chat failed-send rolls back (restores input, no stuck bubble) | ☐ |
+| 39 | CI is green on the current main | ☐ |

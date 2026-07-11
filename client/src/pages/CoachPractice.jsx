@@ -131,6 +131,21 @@ export default function CoachPractice() {
     navigate("/coach");
   }
 
+  // Unlike the session itself (resumable, safe to navigate away from), text
+  // typed into the reasoning box or the Discuss chat input isn't saved until
+  // submitted/sent — closing or refreshing the tab loses it silently. The
+  // browser's own Back button / tab-close bypasses the in-app Exit button
+  // entirely, so this is the only backstop for that specific loss.
+  useEffect(() => {
+    function handleBeforeUnload(e) {
+      if (!reasoningText.trim() && !discussInput.trim()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [reasoningText, discussInput]);
+
   useEffect(() => {
     if (sessionId) saveActiveCoachSession(sessionId);
   }, [sessionId]);
@@ -257,6 +272,11 @@ export default function CoachPractice() {
         [question.id]: { ...prev[question.id], discussConversation: [...optimistic.discussConversation, { role: "coach", text: reply }], exchangeCount },
       }));
     } catch (e) {
+      // Roll back the optimistic bubble and restore the typed text — without
+      // this, a failed send silently vanishes both the message on screen
+      // and the input the user would need to retype it.
+      setAttempts((prev) => ({ ...prev, [question.id]: current }));
+      setDiscussInput(msg);
       setError(e.message);
     } finally {
       setDiscussSending(false);

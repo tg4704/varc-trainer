@@ -460,7 +460,11 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
     }
 
     const questions = await Promise.all(questionIds.map((id) => questionsRepo.findById(id)));
-    const sanitised = questions.map((q, i) => q ? {
+    // Filter out any question deleted/deactivated after the session was
+    // created BEFORE numbering index/total — numbering before the filter
+    // left gaps (e.g. 1, 3, 4 of "5") whenever one was dropped.
+    const found = questions.filter(Boolean);
+    const sanitised = found.map((q, i) => ({
       id: q.id,
       topic: q.topic,
       paragraph: q.paragraph,
@@ -468,8 +472,8 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
       type: q.type,
       options: q.options.map((o) => ({ text: o.text })),
       index: i + 1,
-      total: questionIds.length,
-    } : null).filter(Boolean);
+      total: found.length,
+    }));
 
     res.json({ questions: sanitised });
   } catch (e) { next(e); }

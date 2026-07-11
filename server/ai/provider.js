@@ -12,6 +12,14 @@ function getClient() {
     _client = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: process.env.OPENROUTER_API_KEY,
+      // Without this the SDK's own default (~10 min) is the only backstop —
+      // if OpenRouter or the upstream model hangs rather than errors, every
+      // route calling callModel() shows "Analyzing…"/"Generating…" with no
+      // way to know it's dead. 30s is generous for these short evaluation/
+      // generation calls; a genuine timeout throws APIConnectionTimeoutError,
+      // which every calling route already catches the same way as any other
+      // AI failure (logs to api_calls, returns aiError: true to the client).
+      timeout: 30_000,
       defaultHeaders: {
         // OpenRouter uses these for their dashboard / rate-limit tiers
         "HTTP-Referer": process.env.APP_URL || "https://varc-trainer.up.railway.app",
