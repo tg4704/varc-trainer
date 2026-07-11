@@ -29,6 +29,19 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  // A 401 on an authenticated request (api.js's request()) means the token
+  // died mid-session — expired, or the account was deleted/reset elsewhere.
+  // Deliberately doesn't touch varc_active_session: unlike logout(), this
+  // isn't the user choosing to leave, so an in-progress Drills/Coach session
+  // should still be there to resume once they log back in.
+  useEffect(() => {
+    function handleSessionExpired() {
+      setUser(null);
+    }
+    window.addEventListener("graspr:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("graspr:session-expired", handleSessionExpired);
+  }, []);
+
   async function login(identifier, password) {
     const result = await api.login({ identifier, password });
     if (result.requiresVerification) {

@@ -14,6 +14,14 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+// Routes where a 401 means something other than "your session expired" —
+// login/register reject bad credentials with 401 before any token exists,
+// and changing your password rejects a wrong *current* password with 401
+// even though the request itself is properly authenticated. Excluded so a
+// wrong password doesn't look like an expired session and bounce the user
+// to the login screen.
+const SESSION_EXPIRY_EXEMPT_PATHS = ["/api/auth/login", "/api/auth/register", "/api/auth/password"];
+
 async function request(path, options = {}) {
   const token = getToken();
   const res = await fetch(BASE + path, {
@@ -27,6 +35,16 @@ async function request(path, options = {}) {
     const body = await res.json().catch(() => ({}));
     const err = new Error(body.error || `Request failed: ${res.status}`);
     err.status = res.status;
+    // A 401 on an authenticated request (we had a token, this wasn't one of
+    // the exempt routes above) means the token is dead — expired, or the
+    // user was deleted/reset elsewhere. Surface it app-wide instead of
+    // leaving a raw "jwt expired" error stuck on whatever screen the user
+    // happened to be on mid-session.
+    if (res.status === 401 && token && !SESSION_EXPIRY_EXEMPT_PATHS.includes(path)) {
+      setToken(null);
+      sessionStorage.setItem("graspr_session_expired", "1");
+      window.dispatchEvent(new Event("graspr:session-expired"));
+    }
     throw err;
   }
   return res.json();

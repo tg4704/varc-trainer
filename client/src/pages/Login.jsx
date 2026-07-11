@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import {
@@ -19,6 +19,20 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(searchParams.get("oauthError") || null);
   const [busy, setBusy] = useState(false);
+
+  // Set by api.js when a 401 mid-session means the token died (expired, or
+  // the account changed elsewhere) — distinct from a normal logout, so the
+  // message reassures the user their in-progress session is still there.
+  // Read in an effect, not a useState lazy initializer: the initializer runs
+  // twice under React 18 StrictMode in dev, and its sessionStorage.removeItem
+  // side effect would consume the flag on the throwaway first call.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  useEffect(() => {
+    if (sessionStorage.getItem("graspr_session_expired")) {
+      sessionStorage.removeItem("graspr_session_expired");
+      setSessionExpired(true);
+    }
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -47,6 +61,14 @@ export default function Login() {
         footer={<>By continuing you agree to our <span className="muted">Terms</span> and <span className="muted">Privacy Policy</span>.</>}
       >
         <AuthTabs active="login" />
+        {sessionExpired && !error && (
+          <div
+            className="mb-4 flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13px]"
+            style={{ background: "rgba(93,202,165,0.1)", border: "1px solid rgba(93,202,165,0.35)", color: "var(--teal)" }}
+          >
+            Your session timed out. Log back in to pick up right where you left off.
+          </div>
+        )}
         <AuthError>{error}</AuthError>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
