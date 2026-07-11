@@ -11,13 +11,13 @@ export default function SessionTopBar({ current, total, timerText, timerTone = "
 
   return (
     <header
-      className="flex items-center justify-between px-6 py-3.5"
+      className="flex items-center justify-between gap-3 px-4 py-3.5 md:px-6"
       style={{ borderBottom: "1px solid var(--glass-border-lo)" }}
     >
       <button
         type="button"
         onClick={onExit}
-        className="flex items-center gap-1.5 text-[13px] font-medium transition-colors"
+        className="flex flex-none items-center gap-1.5 text-[13px] font-medium transition-colors"
         style={{ color: "var(--text-2)" }}
         onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
         onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-2)")}
@@ -25,11 +25,13 @@ export default function SessionTopBar({ current, total, timerText, timerTone = "
         <Icon name="arrowR" size={15} style={{ transform: "rotate(180deg)" }} /> Exit
       </button>
 
-      <div className="flex items-center gap-2.5">
-        <span className="mono text-[12px]" style={{ color: "var(--text-2)" }}>
-          Question {current} / {total}
+      {/* Center group shrinks with the viewport (flex-1 min-w-0) instead of
+          forcing a fixed 160px bar; the "Question" word drops below sm. */}
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-2.5">
+        <span className="mono whitespace-nowrap text-[12px]" style={{ color: "var(--text-2)" }}>
+          <span className="hidden sm:inline">Question </span>{current} / {total}
         </span>
-        <div className="h-[5px] w-[160px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+        <div className="h-[5px] w-full max-w-[160px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
           <div
             className="h-full rounded-full transition-all"
             style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--teal), var(--periwinkle))" }}
@@ -37,12 +39,12 @@ export default function SessionTopBar({ current, total, timerText, timerTone = "
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-none items-center gap-3">
         {timerText && (
           <span className="flex items-center gap-1.5">
             <Icon name="clock" size={14} style={{ color: "var(--text-2)" }} />
             {timerLabel && (
-              <span className="mono text-[9px] uppercase tracking-[0.12em]" style={{ color: "var(--text-2)" }}>
+              <span className="mono hidden text-[9px] uppercase tracking-[0.12em] sm:inline" style={{ color: "var(--text-2)" }}>
                 {timerLabel}
               </span>
             )}

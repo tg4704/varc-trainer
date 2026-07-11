@@ -70,3 +70,24 @@ Expected: `true` on every page — the viewport never pans horizontally
 (`body { overflow-x: clip }` backstop + real fixes).
 
 - [ ] Pass
+
+## 3. In-session top bars fit on one line on mobile (P0-2)
+
+**Drills, timed:**
+1. At 375px, start a Drills session: 1 question, Countdown, Per question.
+2. Look at the in-session header.
+
+Expected: `← Exit`, a compact `1 / 1` + progress bar, and the timer all sit
+on ONE line with nothing wrapped, clipped, or overlapping. (The word
+"Question" and the timer's "Session" label only appear at ≥640px.)
+
+- [ ] Pass
+
+**Coach:**
+3. At 375px, start any Coach passage.
+
+Expected: `← Exit | Mapping the passage | ✳` on one line (the "AI COACH"
+text label only appears at ≥640px). After the map step, the question
+progress segments shrink to fit instead of forcing a fixed width.
+
+- [ ] Pass
