@@ -1,14 +1,19 @@
-# Security Hardening — Manual Test Plan
+# Security, Legal, SEO & Monitoring — Manual Test Plan
 
-Covers everything from the 2026-07 security pass (see `CLAUDE.md` → "Security
-Hardening" for what was built and why). Each test is copy-pasteable — run it,
-compare to "Expected," check the box.
+Covers three passes from 2026-07 (see `CLAUDE.md` for what was built and why
+in each):
+- **Part A — Security Hardening** (tests 1–14): rate limiting, auth, headers, CORS.
+- **Part B — Legal & Compliance + SEO** (tests 15–21): privacy/consent, DPDP rights, sitemap/meta.
+- **Part C — Monitoring & Observability** (tests 22–26): error tracking, health check, analytics events.
+
+Each test is copy-pasteable — run it, compare to "Expected," check the box.
 
 ## Setup
 
 ```bash
 # Point this at whatever you're testing — local dev or a deployed URL.
 BASE=http://localhost:3001
+FRONTEND=http://localhost:5173
 ```
 
 **Two things to know before you start:**
@@ -386,6 +391,254 @@ worth investigating before ignoring.
 
 ---
 
+# Part B — Legal & Compliance + SEO
+
+## 15. Privacy Policy / Terms pages load and are linked correctly
+
+```bash
+curl -s -o /dev/null -w "privacy: %{http_code}\n" $FRONTEND/privacy
+curl -s -o /dev/null -w "terms: %{http_code}\n" $FRONTEND/terms
+```
+
+**Expected:** both `200`.
+
+Then in a browser: open `$FRONTEND/`, scroll to the footer, confirm "Privacy"
+and "Terms" links under the "Legal" column actually navigate (not dead links)
+to `/privacy` and `/terms` respectively, and that both pages name **Tarun
+Gupta, an individual based in Bangalore, Karnataka** and list `privacy@graspr.in`
+as the contact.
+
+☐ Pass — both pages load, footer links work, contact info correct
+
+---
+
+## 16. Cookie consent banner + PostHog gating
+
+In a browser (private/incognito window, so there's no prior consent decision):
+
+1. Open `$FRONTEND/`. **Expected:** a bottom banner appears — "We use analytics
+   cookies..." with Accept/Decline buttons.
+2. Open DevTools → Application → Local Storage. **Expected:** no key
+   `ph_<project-key>_posthog` exists yet (PostHog hasn't loaded).
+3. Click **Decline**. **Expected:** banner disappears; `graspr_analytics_consent`
+   in Local Storage is `"denied"`; still no `ph_..._posthog` key — PostHog never loads.
+4. Reload the page, confirm the banner does **not** reappear (decision persisted).
+5. Go to `/privacy`, click "Manage cookie preferences" near the bottom of the
+   Cookies section. **Expected:** banner reappears.
+6. Click **Accept**. **Expected:** `graspr_analytics_consent` becomes `"granted"`;
+   within a couple seconds a `ph_<project-key>_posthog` key appears in Local
+   Storage (confirms PostHog actually initialized).
+
+☐ Pass — banner shows once, Decline blocks PostHog entirely, Accept enables it,
+"Manage cookie preferences" reopens the banner
+
+---
+
+## 17. Registration requires the 18+/Terms checkbox
+
+In a browser, open `$FRONTEND/register`, fill in valid username/email/password,
+but **leave the checkbox unchecked**.
+
+**Expected:** the "Create account" button is disabled (greyed out) — form
+cannot be submitted without checking "I confirm I'm 18 or older and agree to
+the Terms and Privacy Policy." Checking the box enables the button.
+
+☐ Pass — signup blocked until the checkbox is checked
+
+---
+
+## 18. DPDP data export downloads real data, no password hash
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" \
+  -d "{\"identifier\":\"$TEST_USER\",\"password\":\"$TEST_PASS\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+
+curl -s $BASE/api/account/export -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print('top-level keys:', list(d.keys()))
+print('password_hash present:', 'password_hash' in d.get('profile', {}))
+print('sessions:', len(d.get('sessions', [])), '| attempts:', len(d.get('attempts', [])))
+"
+```
+
+**Expected:** keys include `profile`, `sessions`, `attempts`, `coachSessions`,
+`coachAttempts`, `spacedRepetitionCards`; `password_hash present: False`;
+session/attempt counts match what you'd expect for that account.
+
+In the browser, confirm the equivalent UI path works too: log in, open the
+avatar dropdown (top right), click **"Export my data"** — a `graspr-data-export.json`
+file should download.
+
+☐ Pass — export returns real data, no password hash, UI download works
+
+---
+
+## 19. SEO static assets served correctly
+
+```bash
+for f in favicon.ico favicon.svg apple-touch-icon.png og-image.png sitemap.xml robots.txt; do
+  code=$(curl -s -o /dev/null -w "%{http_code}" $FRONTEND/$f)
+  echo "$f -> $code"
+done
+```
+
+**Expected:** all six return `200`.
+
+```bash
+curl -s $FRONTEND/robots.txt | grep -c "Disallow"
+```
+
+**Expected:** a non-zero count (auth-gated routes like `/dashboard`, `/admin`,
+`/coach` are disallowed).
+
+☐ Pass — all SEO assets served, robots.txt has real Disallow rules
+
+---
+
+## 20. Per-page title/description actually change per route
+
+In a browser, open `$FRONTEND/` then navigate to `/pricing` via a nav link
+(client-side navigation, not a full reload) and check the tab title.
+
+**Expected:** the browser tab title changes from "Graspr — Stop Picking the
+Trap" to "Pricing — Graspr". Open DevTools console and run:
+
+```js
+document.title
+document.querySelector('meta[name="description"]').content
+document.querySelectorAll('meta[name="description"]').length
+```
+
+**Expected:** title matches the current page, description is Pricing-specific
+text (not the homepage's), and the count is exactly `1` (no duplicate meta tags
+left behind from the previous page).
+
+☐ Pass — title/description change per route via client-side nav, no duplicates
+
+---
+
+## 21. Age/Terms gate does not block Google OAuth (known gap)
+
+This is a **known, accepted gap**, not something to fix here — just confirm
+it's still the documented state: the 18+/Terms checkbox only exists on the
+email/password `/register` form. The Google OAuth signup path
+(`/choose-username`, reached via "Continue with Google") has no equivalent
+gate. Low priority since email signup is the primary path — no action needed,
+just don't be surprised by it.
+
+☐ Acknowledged — not a bug, documented gap
+
+---
+
+# Part C — Monitoring & Observability
+
+## 22. Health check does a real DB round-trip
+
+```bash
+curl -s -o /dev/null -w "status: %{http_code}\n" $BASE/api/health
+curl -s $BASE/api/health
+```
+
+**Expected:** `status: 200`, body `{"ok":true}`.
+
+**To actually prove it checks the DB** (not just a static 200), temporarily
+point `DATABASE_URL` at something unreachable and restart the server, then:
+
+```bash
+curl -s -o /dev/null -w "status: %{http_code}\n" $BASE/api/health
+```
+
+**Expected:** `status: 503` with `{"ok":false,"error":"Database unavailable"}`.
+Restore the real `DATABASE_URL` and restart afterward.
+
+☐ Pass — healthy DB → 200, unreachable DB → 503 (not a false-positive 200)
+
+---
+
+## 23. Server errors don't leak internals to the client in production
+
+This only differs from dev when `NODE_ENV=production`. If you're testing
+against a deployed instance (which should already be `NODE_ENV=production`),
+you'd need to actually trigger a genuine 500 — not easy to script safely
+against production. The safer verification is a code read, not a live test:
+
+```bash
+grep -A3 "status < 500 && err.message" server/index.js
+```
+
+**Expected:** confirms the logic — 4xx errors still show their real message,
+5xx errors show `err.message` only when `NODE_ENV !== "production"`. Full
+detail always still goes to `console.error` + Sentry either way.
+
+Known-good 4xx behavior (safe to test anywhere, doesn't touch the 5xx path):
+
+```bash
+curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" -d '{"identifier":"tester"}'
+```
+
+**Expected:** `{"error":"password: Required"}` — a real, specific 4xx message,
+unaffected by the production-generic-500 change.
+
+☐ Pass — 4xx messages unaffected; 5xx logic confirmed correct by code read
+
+---
+
+## 24. Sentry captures a client-side render crash
+
+Requires `VITE_SENTRY_DSN` to be set — this test is a no-op (nothing to see)
+without it, by design.
+
+In a browser with React DevTools available, or by temporarily editing a
+component to `throw new Error("test crash")` during render, trigger a crash
+and confirm:
+1. The `ErrorBoundary` fallback UI ("Something went wrong") appears instead of
+   a blank screen.
+2. If you have access to the Sentry project dashboard, a new issue appears
+   within a minute or two, with the error message and a component stack trace
+   attached.
+
+☐ Pass — ErrorBoundary shows fallback UI, and (if DSN configured) the error
+appears in Sentry
+
+---
+
+## 25. Sentry captures server-side route errors
+
+Requires `SENTRY_DSN` to be set. Trigger any route that throws an unexpected
+error (e.g., temporarily break a query, or use an existing route with bad
+input that reaches `next(err)` rather than a handled `res.status().json()`),
+then check the Sentry dashboard for a new server-side issue.
+
+☐ Pass — a server error triggered via `next(err)` shows up in Sentry (not just
+truly-uncaught exceptions)
+
+---
+
+## 26. PostHog funnel events fire
+
+Requires `VITE_POSTHOG_KEY` set and cookie consent accepted (test 16). This is
+best verified against the real PostHog project dashboard, not locally — this
+session's own attempt to observe the network calls directly was inconclusive
+in a sandboxed test browser (its network monitor never surfaced any
+cross-origin request, PostHog's initial config call included), so dashboard
+verification is the reliable path.
+
+In PostHog → **Activity → Live events** (or **Events** in the left sidebar),
+perform each action below and confirm a matching event appears within
+~30 seconds:
+
+| Action | Expected event |
+|---|---|
+| Register a new account | `signup` |
+| Start a Drills session (Session Setup → Begin) | `session_start` |
+| Answer (not skip) a question in Practice | `question_answered` |
+| Start or resume a Coach session | `coach_used` |
+
+☐ Pass — all four events appear in PostHog's live events view
+
+---
+
 ## Quick summary checklist
 
 | # | Test | Pass? |
@@ -404,3 +657,15 @@ worth investigating before ignoring.
 | 12 | Username-available check still works publicly | ☐ |
 | 13 | No dangerouslySetInnerHTML, no string-concat SQL, injection payload inert | ☐ |
 | 14 | npm audit shows only the known 19 moderate issues | ☐ |
+| 15 | Privacy/Terms pages load, footer links work, contact info correct | ☐ |
+| 16 | Cookie banner shows once; Decline blocks PostHog, Accept enables it | ☐ |
+| 17 | Registration blocked until 18+/Terms checkbox is checked | ☐ |
+| 18 | Data export returns real data, no password hash | ☐ |
+| 19 | All SEO static assets served (favicon, sitemap, robots, OG image) | ☐ |
+| 20 | Per-page title/description change on client-side nav, no duplicates | ☐ |
+| 21 | Google OAuth age-gate gap acknowledged (not a bug) | ☐ |
+| 22 | Health check does a real DB round-trip (200 healthy, 503 down) | ☐ |
+| 23 | 5xx errors don't leak internals in production; 4xx unaffected | ☐ |
+| 24 | Sentry captures a client-side render crash | ☐ |
+| 25 | Sentry captures a server-side route error via next(err) | ☐ |
+| 26 | PostHog funnel events (signup/session_start/question_answered/coach_used) fire | ☐ |
