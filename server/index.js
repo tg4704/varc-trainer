@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const compression = require("compression");
 const path = require("path");
 const fs = require("fs");
 const logger = require("./logger");
@@ -44,6 +45,11 @@ app.use((req, res, next) => {
 // into this pass. The other helmet defaults (X-Frame-Options/clickjacking,
 // X-Content-Type-Options, etc.) are safe to turn on immediately.
 app.use(helmet({ contentSecurityPolicy: false }));
+
+// gzip/brotli-negotiated compression on every response — API JSON payloads
+// (question lists, dashboard) and the static client build both benefit;
+// cuts bandwidth and Railway egress cost for close to zero CPU overhead.
+app.use(compression());
 
 // CORS allowlist — was previously wide open (bare `cors()`), which lets any
 // site's JS make authenticated-looking requests to this API using a

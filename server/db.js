@@ -5,8 +5,15 @@ const { Pool, types } = require("pg");
 types.setTypeParser(20,   (v) => (v === null ? null : parseInt(v, 10)));
 types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));
 
+// Single shared pool for the whole app (this module is required once — Node
+// caches it — so every route reuses the same pool, never opens one per
+// request). max is set explicitly so it's a documented decision rather than
+// silently relying on pg's default of 10; comfortably under Railway's
+// connection cap at current scale. Revisit (PgBouncer / Railway pooling) if
+// this ever runs as more than one instance.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: 10,
   ssl:
     process.env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }
@@ -402,6 +409,14 @@ async function schemaIsStale() {
     await db.exec("CREATE INDEX IF NOT EXISTS idx_api_calls_created_at ON api_calls(created_at DESC)");
     await db.exec("CREATE INDEX IF NOT EXISTS idx_api_calls_user_id ON api_calls(user_id)");
     await db.exec("CREATE INDEX IF NOT EXISTS idx_api_calls_status ON api_calls(status)");
+    // Hot columns with zero indexes until now — every dashboard, session, and
+    // account-export/delete query filters or joins on these and was doing a
+    // full table scan. sr_cards already gets one for free from its
+    // UNIQUE(user_id, question_id) constraint, so it's skipped here.
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_attempts_session_id ON attempts(session_id)");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_coach_sessions_user_id ON coach_sessions(user_id)");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_coach_attempts_coach_session_id ON coach_attempts(coach_session_id)");
     await seedQuestions();
     await bootstrapAdmins();
     console.log("[db] Database initialised.");

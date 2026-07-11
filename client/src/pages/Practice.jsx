@@ -387,7 +387,22 @@ export default function Practice() {
     const startTime = questionStartTimesRef.current[idx] || Date.now();
     const timeTaken = Math.floor((Date.now() - startTime) / 1000);
 
-    patchCS(idx, { isSkipping: true });
+    // Optimistic: a skip has no correctness data to wait on (unlike answer
+    // grading, which genuinely needs the server's response since the correct
+    // answer is never sent to the client early) — so mark it skipped and
+    // advance immediately instead of blocking on the round-trip. Roll back
+    // only if the request genuinely fails (rare — network/auth).
+    patchCS(idx, { isSkipping: false, skipped: true });
+    setQuestionStates(prev => {
+      const nextIdx = findNextUnanswered(prev, idx);
+      if (nextIdx !== null) {
+        if (!questionStartTimesRef.current[nextIdx]) questionStartTimesRef.current[nextIdx] = Date.now();
+        setCurrentIdx(nextIdx);
+      } else {
+        setShowEndModal(true);
+      }
+      return prev;
+    });
     try {
       await submitBasicAttempt({
         sessionId: sess.id,
@@ -396,20 +411,9 @@ export default function Practice() {
         timeTakenSeconds: timeTaken,
         mode: sess.practiceMode || "analysis",
       });
-      patchCS(idx, { isSkipping: false, skipped: true });
-      // Auto-advance to next unanswered
-      setQuestionStates(prev => {
-        const nextIdx = findNextUnanswered(prev, idx);
-        if (nextIdx !== null) {
-          if (!questionStartTimesRef.current[nextIdx]) questionStartTimesRef.current[nextIdx] = Date.now();
-          setCurrentIdx(nextIdx);
-        } else {
-          setShowEndModal(true);
-        }
-        return prev;
-      });
     } catch (e) {
-      patchCS(idx, { isSkipping: false });
+      patchCS(idx, { isSkipping: false, skipped: false });
+      setCurrentIdx(idx);
       setError(e.message);
     }
   }, [questions, questionStates]);
