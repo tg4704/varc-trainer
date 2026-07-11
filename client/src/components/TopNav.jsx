@@ -16,7 +16,7 @@ import { useAuth } from "../auth.jsx";
 import { useNavGuard } from "../navGuard.jsx";
 import { BrandMark } from "./AuthShell.jsx";
 import Icon from "./Icon.jsx";
-import { changePassword } from "../api.js";
+import { changePassword, exportAccountData } from "../api.js";
 import Avatar from "./Avatar.jsx";
 import { ResetDataModal, DeleteAccountModal } from "./AccountDangerModals.jsx";
 
@@ -30,6 +30,7 @@ export default function TopNav() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showResetData, setShowResetData] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const userRef = useRef(null);
   // The avatar dropdown is portaled to <body> so it escapes this nav's
   // backdrop-filter — a backdrop-filter nested inside another backdrop-filter
@@ -57,6 +58,18 @@ export default function TopNav() {
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [userOpen]);
+
+  async function handleExport() {
+    setUserOpen(false);
+    setExporting(true);
+    try {
+      await exportAccountData();
+    } catch {
+      // Non-critical UX — silent failure is fine, user can just retry from the menu.
+    } finally {
+      setExporting(false);
+    }
+  }
 
   function toggleUser() {
     setUserOpen((o) => {
@@ -237,6 +250,9 @@ export default function TopNav() {
                   <DropdownButton onClick={() => { setUserOpen(false); setShowChangePassword(true); }}>
                     Change Password
                   </DropdownButton>
+                  <DropdownButton onClick={handleExport} disabled={exporting}>
+                    {exporting ? "Preparing export…" : "Export my data"}
+                  </DropdownButton>
                   <DropdownButton onClick={() => { setUserOpen(false); setShowResetData(true); }}>
                     Reset all data
                   </DropdownButton>
@@ -300,14 +316,15 @@ function NavPillTooltip({ label, sublabel, children }) {
   );
 }
 
-function DropdownButton({ onClick, children }) {
+function DropdownButton({ onClick, children, disabled }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-[9px] px-3 py-2 text-left text-[13.5px] text-foreground transition-colors"
+      disabled={disabled}
+      className="w-full rounded-[9px] px-3 py-2 text-left text-[13.5px] text-foreground transition-colors disabled:opacity-50"
       style={{ background: "transparent" }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+      onMouseEnter={(e) => !disabled && (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       {children}

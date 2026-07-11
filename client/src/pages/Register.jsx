@@ -4,6 +4,7 @@ import { useAuth } from "../auth.jsx";
 import {
   AuthShell, AuthCard, AuthTabs, AuthDivider, AuthError, GoogleButton, PasswordField,
 } from "../components/AuthShell.jsx";
+import PageMeta from "../components/PageMeta.jsx";
 
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
@@ -16,6 +17,7 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -24,6 +26,10 @@ export default function Register() {
     setError(null);
     if (password !== confirm) {
       setError("Passwords do not match");
+      return;
+    }
+    if (!agreed) {
+      setError("Please confirm you're 18+ and agree to the Terms and Privacy Policy");
       return;
     }
     setBusy(true);
@@ -43,10 +49,10 @@ export default function Register() {
 
   return (
     <AuthShell>
+      <PageMeta title="Sign up — Graspr" description="Create a free Graspr account and start training CAT VARC reading comprehension with AI feedback on every answer." />
       <AuthCard
         title="Create your account"
         subtitle="Start training your reasoning today."
-        footer={<>By continuing you agree to our <span className="muted">Terms</span> and <span className="muted">Privacy Policy</span>.</>}
       >
         <AuthTabs active="register" />
         <AuthError>{error}</AuthError>
@@ -92,7 +98,23 @@ export default function Register() {
           <PasswordField label="Password" value={password} onChange={setPassword} autoComplete="new-password" />
           <PasswordField label="Confirm password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
 
-          <button type="submit" disabled={busy} className="btn btn-primary btn-block fx-sheen mt-1">
+          <label className="flex items-start gap-2.5 text-[13px] leading-snug muted">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-current"
+              style={{ accentColor: "var(--teal)" }}
+            />
+            <span>
+              I confirm I'm 18 or older and agree to the{" "}
+              <Link to="/terms" target="_blank" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>Terms</Link>{" "}
+              and{" "}
+              <Link to="/privacy" target="_blank" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>Privacy Policy</Link>.
+            </span>
+          </label>
+
+          <button type="submit" disabled={busy || !agreed} className="btn btn-primary btn-block fx-sheen mt-1">
             {busy ? "Creating…" : <>Create account <span className="arrow inline-block">→</span></>}
           </button>
         </form>

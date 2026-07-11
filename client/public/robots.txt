@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /setup
+Disallow: /practice
+Disallow: /results
+Disallow: /session-review
+Disallow: /coach
+Disallow: /admin
+Disallow: /choose-username
+Disallow: /verify-email
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /oauth-callback
+Disallow: /my-questions
+
+Sitemap: https://www.graspr.in/sitemap.xml

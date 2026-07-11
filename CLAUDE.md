@@ -255,7 +255,16 @@ Remaining: see [`ROADMAP.md`](ROADMAP.md) — Phase 17–19 (monetize + launch).
 - Google OAuth ("Continue with Google" — email signup stays as primary)
 - Mobile OTP verification (SMS via Twilio etc. — deferred, costs money)
 
-**Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared.
+**Account reset**: `DELETE /api/account/reset` (auth-gated, `server/routes/account.js`) deletes all sessions and attempts for the user while keeping the account. Frontend: "Reset all data" button on the Profile page opens a confirmation dialog, then shows a toast notification on success. `clearActiveSession()` is called client-side so any in-progress session is cleared. `DELETE /api/account` (same file) permanently deletes the user row and everything cascading from it (sessions, attempts, coach data, SR cards, OTP tokens); rows other users might depend on (`api_calls`, `question_flags`, authored `questions`/`passages`) are anonymised (`user_id`/`author_user_id` → `NULL`) rather than deleted. Frontend: "Delete account" in the TopNav avatar dropdown (`AccountDangerModals.jsx`, shared between the dropdown and Profile page), gated behind typing `DELETE` to confirm.
+
+## Legal & Compliance (2026-07)
+
+Entity: Graspr is operated by Tarun Gupta, an individual (no registered company), based in Bangalore, Karnataka, India. Contact: `privacy@graspr.in` (ImprovMX forwarding on `graspr.in`, DNS on GoDaddy). Governing law / jurisdiction: courts of Bangalore, Karnataka.
+
+- **Privacy Policy & Terms of Service** (`client/src/pages/Privacy.jsx`, `Terms.jsx`, shared layout in `LegalDoc.jsx`) — live at `/privacy` and `/terms`, linked from the Home page footer (previously dead links) and from the Register page checkbox. Content is drafted directly from the actual data model (not a generic template): what's collected, third parties (OpenRouter/underlying AI provider, Resend, Railway, Google OAuth, PostHog, future Razorpay), DPDP data-principal rights, grievance officer contact, AI-output disclaimer, 18+ eligibility.
+- **DPDP Act 2023 data rights**: `GET /api/account/export` (`server/routes/account.js`) returns the user's full data (profile minus password hash, sessions, attempts, coach sessions/attempts, SR cards) as a downloadable JSON file — "Export my data" in the TopNav avatar dropdown (`exportAccountData()` in `api.js`, triggers a client-side Blob download). Erasure right is the pre-existing `DELETE /api/account` (see above). Correction right is the existing Profile edit fields.
+- **18+ age-gate**: `Register.jsx` has a required checkbox ("I confirm I'm 18+ and agree to the Terms and Privacy Policy") that gates the submit button — not persisted to the DB, purely a UI/ToS gate per the product decision (CAT is a graduate-entrance exam; real userbase is already 18+). Not yet applied to the Google OAuth signup path (`ChooseUsername.jsx`) — flagged as a gap, low priority since OAuth isn't the primary signup path.
+- **Cookie/analytics consent banner** (`client/src/components/CookieConsent.jsx` + `client/src/analytics.js`): shown once (bottom banner) until the user Accepts or Declines; decision stored in `localStorage` (`graspr_analytics_consent`). Accept lazily imports and initializes `posthog-js` (`disable_session_recording: true` by default — session replay can be turned on later from the PostHog dashboard with no code change). Nothing analytics-related loads before explicit consent. Auth (JWT in `localStorage`) is treated as essential and needs no banner. "Manage cookie preferences" link on the Privacy page (`resetAnalyticsConsent()`) reopens the banner via a `window` custom event (`graspr:reopen-cookie-banner`). `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` are public, non-secret client env vars (see below).
 
 ## Environment Variables
 
@@ -276,6 +285,8 @@ GOOGLE_CLIENT_ID=...                     # Google OAuth
 GOOGLE_CLIENT_SECRET=...
 SENTRY_DSN=...                           # optional — error monitoring, server-side
 VITE_SENTRY_DSN=...                      # optional — error monitoring, client-side (safe to expose, DSNs aren't secret)
+VITE_POSTHOG_KEY=phc_...                 # optional — client-side analytics, safe to expose (write-only key). Never fires until the user accepts the cookie-consent banner.
+VITE_POSTHOG_HOST=https://us.i.posthog.com
 ```
 
 In production, the frontend uses `VITE_API_URL` to point at the deployed backend instead of the dev proxy.
@@ -305,3 +316,13 @@ A security/production-readiness pass landed on top of Post-16 fixes, covering mo
 - Pen-test pass (OWASP ZAP/Burp) — needs a running staging environment; do this *after* the above, as a final check, not in parallel.
 - Managed auth provider swap (Clerk/Supabase/Firebase) — optional, current custom bcrypt+JWT+OTP+OAuth works fine.
 - Actually rotating `JWT_SECRET`/`OPENROUTER_API_KEY` on Railway — that's a manual action on the live environment, not something done from this repo.
+
+## SEO & Discoverability (2026-07)
+
+Vite/SPA, not Next.js — no `app/sitemap.ts`. Static files in `client/public/` + a plain `useEffect`-based per-route title/description, not a helmet library (see below for why).
+
+- **`client/public/`**: `robots.txt` (disallows every auth-gated route — `/dashboard`, `/practice`, `/coach`, `/admin`, etc. — and points at the sitemap), `sitemap.xml` (home, pricing, login, register, privacy, terms — `/blog` deliberately excluded until it has real content, still reachable via nav, just not asking Google to index a "coming soon" page), `favicon.ico` (16/32/48px), `favicon.svg`, `apple-touch-icon.png` (180px), `og-image.png` (1200×630, built from the BrandMark recipe in `AuthShell.jsx` — headless-Chrome-screenshotted from a throwaway HTML file, not hand-drawn).
+- **Meta title/description per page**: `client/src/components/PageMeta.jsx` — a plain component using `useEffect` to set `document.title` and the `<meta name="description">` tag, restoring the previous value on unmount so client-side route changes don't leak one page's meta into the next. Wired into every public page (Home, Pricing, Login, Register, Blog, Privacy, Terms).
+  - **Why not `react-helmet-async`**: tried it first (`HelmetProvider` + `<Helmet>`), fully wired per its docs — it silently never committed anything to `<head>` in this app (traced into its own source: zero `data-rh`-tagged elements ever appeared, meaning its `HelmetDispatcher`/`Context.Consumer` commit path never fired, with or without `React.StrictMode`). Root cause not fully isolated (React 18.3.1 + Vite dev, single React instance confirmed, not a duplicate-package issue) and not worth chasing further for ~7 static page titles — the native `useEffect` approach has no such risk and is fewer moving parts.
+- **OG/Twitter tags are static in `client/index.html`**, not set per-route via JS — link-preview crawlers (WhatsApp, LinkedIn, X, iMessage) generally don't execute JavaScript, so tags set client-side would never be seen. One shared OG image/description covers the whole site; revisit per-route OG only if distinct shareable landing pages exist later.
+- **Not done yet** (external actions, not code): submitting the sitemap to Google Search Console + Bing Webmaster Tools (needs DNS TXT verification on `graspr.in`, on GoDaddy); running Lighthouse/PageSpeed against the real deployed URL (meaningless against localhost). IndexNow explicitly skipped — Bing/Yandex-only, not worth it at current traffic.

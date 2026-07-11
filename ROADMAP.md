@@ -303,3 +303,6 @@ Coach-generated questions can already be saved to the global bank (`POST /api/co
 
 ## Google OAuth ("Continue with Google")
 Basic OAuth flow exists (authorization code exchange, account linking). New users are redirected to `/choose-username` to pick a username. Remaining: surface a "Continue with Google" button on the Login/Register pages as a first-class option (currently email/password is the only primary path).
+
+## SEO — post-launch verification steps
+Code-side SEO work is done (sitemap.xml, robots.txt, favicon, OG image, per-page meta — see CLAUDE.md "SEO & Discoverability"). Two steps are deliberately deferred until `graspr.in` is pointed at the live deployed build, since verifying/auditing a site that isn't live yet is pointless: (1) verify the domain in Google Search Console (DNS TXT record on GoDaddy) + Bing Webmaster Tools (can import from GSC in one click), submit `https://www.graspr.in/sitemap.xml` to both; (2) run Lighthouse/PageSpeed (pagespeed.web.dev) against the real deployed URL and fix whatever it flags.

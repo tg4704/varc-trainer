@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import TopNav from "./components/TopNav.jsx";
+import CookieConsent from "./components/CookieConsent.jsx";
 import { AuthProvider } from "./auth.jsx";
 import { NavGuardProvider } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -9,6 +10,8 @@ import AdminRoute from "./components/AdminRoute.jsx";
 import Home from "./pages/Home.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import Blog from "./pages/Blog.jsx";
+import Privacy from "./pages/Privacy.jsx";
+import Terms from "./pages/Terms.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
@@ -106,6 +109,8 @@ function AppShell() {
           <Route path="/" element={<Home />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/blog" element={<Blog />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
@@ -166,6 +171,7 @@ function AppShell() {
         </Routes>
         </ErrorBoundary>
       </main>
+      <CookieConsent />
     </div>
     </NavGuardProvider>
   );

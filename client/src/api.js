@@ -135,6 +135,20 @@ export function deleteAccount() {
   return request("/api/account", { method: "DELETE" });
 }
 
+// Downloads the user's full data export as a .json file (DPDP data-portability right).
+export async function exportAccountData() {
+  const data = await request("/api/account/export");
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "graspr-data-export.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── My Questions (Phase 10) ───────────────────────────
 export const myQuestions = {
   list: () => request("/api/my-questions"),

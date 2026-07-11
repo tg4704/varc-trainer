@@ -7,6 +7,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import Icon from "../components/Icon.jsx";
+import PageMeta from "../components/PageMeta.jsx";
 
 const TIERS = [
   {
@@ -72,6 +73,10 @@ export default function Pricing() {
   const { user } = useAuth();
   return (
     <div className="mx-auto max-w-[1080px] px-7 py-16">
+      <PageMeta
+        title="Pricing — Graspr"
+        description="Simple, predictable pricing for CAT VARC practice. Start free, upgrade when Drills alone isn't enough."
+      />
       <div className="text-center">
         <h1 className="display text-[42px] leading-[1.05] sm:text-[52px]">
           Simple, <span className="italic" style={{ color: "var(--teal)" }}>predictable</span> pricing.

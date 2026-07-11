@@ -3,6 +3,50 @@ const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
 
+// GET /api/account/export — DPDP data-portability right. Returns every row
+// tied to the logged-in user as one JSON document (profile, sessions,
+// attempts, coach sessions/attempts, SR cards). Excludes password_hash.
+router.get("/export", authenticate, async (req, res, next) => {
+  try {
+    const userId = req.userId;
+
+    const [user, sessions, attempts, coachSessions, coachAttempts, srCards] = await Promise.all([
+      db.get(
+        `SELECT id, username, email, name, avatar_id, favorite_topic, bio,
+                tier, daily_goal, created_at
+         FROM users WHERE id = $1`,
+        [userId]
+      ),
+      db.all("SELECT * FROM sessions WHERE user_id = $1 ORDER BY id", [userId]),
+      db.all(
+        `SELECT a.* FROM attempts a
+         JOIN sessions s ON s.id = a.session_id
+         WHERE s.user_id = $1 ORDER BY a.id`,
+        [userId]
+      ),
+      db.all("SELECT * FROM coach_sessions WHERE user_id = $1 ORDER BY id", [userId]),
+      db.all(
+        `SELECT ca.* FROM coach_attempts ca
+         JOIN coach_sessions cs ON cs.id = ca.coach_session_id
+         WHERE cs.user_id = $1 ORDER BY ca.id`,
+        [userId]
+      ),
+      db.all("SELECT * FROM sr_cards WHERE user_id = $1 ORDER BY id", [userId]),
+    ]);
+
+    res.setHeader("Content-Disposition", `attachment; filename="graspr-data-export-${userId}.json"`);
+    res.json({
+      exportedAt: new Date().toISOString(),
+      profile: user,
+      sessions,
+      attempts,
+      coachSessions,
+      coachAttempts,
+      spacedRepetitionCards: srCards,
+    });
+  } catch (e) { next(e); }
+});
+
 // DELETE /api/account/reset
 // Deletes all attempts and sessions for the authenticated user.
 // The user account itself is preserved — they stay logged in.

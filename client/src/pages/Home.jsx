@@ -4,6 +4,7 @@ import { useAuth } from "../auth.jsx";
 import { loadActiveSession } from "../session.js";
 import Icon from "../components/Icon.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
+import PageMeta from "../components/PageMeta.jsx";
 
 // ── Interactive demo card ────────────────────────────────────────────────────
 // No backend calls, but genuinely interactive: the visitor clicks whichever
@@ -310,6 +311,10 @@ export default function Home() {
 
   return (
     <div>
+      <PageMeta
+        title="Graspr — Stop Picking the Trap"
+        description="AI feedback on every answer. Practice CAT VARC reading comprehension and train the reasoning skill that separates 95th from 99th percentile."
+      />
       {/* hero */}
       <section className="mx-auto grid max-w-[1100px] items-center gap-10 px-7 pb-10 pt-4 md:grid-cols-[0.82fr_1.18fr] md:gap-14 md:pt-[21px]">
         <div>
@@ -444,8 +449,8 @@ export default function Home() {
               { label: "Reading Lounge" },
             ]}
           />
-          <FooterColumn title="Company" items={[{ label: "About" }, { label: "Blog" }, { label: "Contact" }]} />
-          <FooterColumn title="Legal" items={[{ label: "Privacy" }, { label: "Terms" }]} />
+          <FooterColumn title="Company" items={[{ label: "About" }, { label: "Blog", to: "/blog" }, { label: "Contact" }]} />
+          <FooterColumn title="Legal" items={[{ label: "Privacy", to: "/privacy" }, { label: "Terms", to: "/terms" }]} />
         </div>
         <div
           className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-7 py-4"

@@ -4,6 +4,7 @@ import { useAuth } from "../auth.jsx";
 import {
   AuthShell, AuthCard, AuthTabs, AuthDivider, AuthError, GoogleButton, PasswordField,
 } from "../components/AuthShell.jsx";
+import PageMeta from "../components/PageMeta.jsx";
 
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
@@ -39,6 +40,7 @@ export default function Login() {
 
   return (
     <AuthShell>
+      <PageMeta title="Log in — Graspr" description="Sign in to Graspr to keep training CAT VARC reading comprehension." />
       <AuthCard
         title="Welcome back"
         subtitle="Sign in to keep your streak alive."
