@@ -1,3 +1,5 @@
+import { track } from "./analytics.js";
+
 // In dev, VITE_API_URL is unset and requests go to /api (proxied to :3001 by Vite).
 // In production, VITE_API_URL points at the deployed backend.
 const BASE = import.meta.env.VITE_API_URL || "";
@@ -102,9 +104,11 @@ export function getNextQuestion(sessionId) {
   return request(`/api/questions/next?sessionId=${sessionId}`);
 }
 export function submitBasicAttempt(payload) {
+  if (!payload.skipped) track("question_answered", { mode: payload.mode, deferred: false });
   return request("/api/attempts/basic", { method: "POST", body: JSON.stringify(payload) });
 }
 export function submitEvaluateAttempt(payload) {
+  if (!payload.skipped) track("question_answered", { mode: payload.mode, deferred: Boolean(payload.deferred) });
   return request("/api/attempts/evaluate", { method: "POST", body: JSON.stringify(payload) });
 }
 

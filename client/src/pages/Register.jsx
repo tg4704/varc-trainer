@@ -5,6 +5,7 @@ import {
   AuthShell, AuthCard, AuthTabs, AuthDivider, AuthError, GoogleButton, PasswordField,
 } from "../components/AuthShell.jsx";
 import PageMeta from "../components/PageMeta.jsx";
+import { track } from "../analytics.js";
 
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
@@ -35,6 +36,7 @@ export default function Register() {
     setBusy(true);
     try {
       const result = await register(username.trim(), email.trim(), password, name.trim());
+      track("signup", { requiresVerification: Boolean(result.requiresVerification) });
       if (result.requiresVerification) {
         navigate(`/verify-email?email=${encodeURIComponent(result.email)}`);
       } else {

@@ -8,16 +8,21 @@ const logger = require("./logger");
 const { apiLimiter } = require("./lib/rateLimiters");
 
 // ── Sentry (error monitoring) — init before anything else ────────────────────
-// @sentry/node v8: just call init() — no manual middleware needed.
+// @sentry/node v8: init() wires automatic instrumentation (uncaught exceptions,
+// unhandled rejections), but errors routes pass to next(err) only reach Sentry
+// once setupExpressErrorHandler(app) is registered below, after all routes.
+let Sentry = null;
 if (process.env.SENTRY_DSN) {
   try {
-    require("@sentry/node").init({
+    Sentry = require("@sentry/node");
+    Sentry.init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || "production",
       tracesSampleRate: 0.1,
     });
   } catch {
     console.warn("Sentry init failed — continuing without it");
+    Sentry = null;
   }
 }
 
@@ -65,6 +70,19 @@ app.use(cors({
 // covers the longest real payload (a full reading-map submission plus
 // article text) with headroom.
 app.use(express.json({ limit: "100kb" }));
+
+// Health check — for uptime monitoring (UptimeRobot / Better Stack). Does a
+// real DB round-trip so a healthy HTTP response can't mask a dead database.
+// Registered before the rate limiter so external monitor pings never count
+// against it and never need auth.
+app.get("/api/health", async (req, res) => {
+  try {
+    await require("./db").get("SELECT 1");
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(503).json({ ok: false, error: "Database unavailable" });
+  }
+});
 
 // Global rate limit — see server/lib/rateLimiters.js for the "Balanced"
 // profile and the tighter per-route limiters (auth, AI) applied downstream.
@@ -350,6 +368,14 @@ if (fs.existsSync(distPath)) {
   });
 }
 
+// Forwards errors passed to next(err) to Sentry — must be registered after
+// all routes/middleware and before the final error handler below, or errors
+// thrown inside routes never reach Sentry (only truly uncaught exceptions
+// would, via the automatic instrumentation from Sentry.init() above).
+if (Sentry) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
 // ── Global async error handler ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error(err);
@@ -358,7 +384,18 @@ app.use((err, req, res, next) => {
   // of flattening everything to 500 — a 413 response also carries a much
   // more actionable message for the client than a generic server error.
   const status = err.status || err.statusCode || 500;
-  const message = status === 413 ? "Request body too large." : (err.message || "Internal server error");
+  const isProd = process.env.NODE_ENV === "production";
+  let message;
+  if (status === 413) {
+    message = "Request body too large.";
+  } else if (status < 500 && err.message) {
+    // 4xx from our own code — the message is intentional and safe to show.
+    message = err.message;
+  } else {
+    // 5xx = unexpected. Never leak internals (DB errors, file paths) to the
+    // client in production; full detail still goes to console + Sentry above.
+    message = isProd ? "Internal server error" : (err.message || "Internal server error");
+  }
   res.status(status).json({ error: message });
 });
 

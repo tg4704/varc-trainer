@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { coach } from "../api.js";
+import { track } from "../analytics.js";
 import { Badge } from "../components/ui/badge.jsx";
 import { cn } from "../lib/utils.js";
 
@@ -28,10 +29,12 @@ export default function CoachLanding() {
     setError(null);
     try {
       if (activeSessionId) {
+        track("coach_used", { resumed: true });
         navigate(`/coach/practice?sessionId=${activeSessionId}`);
         return;
       }
       const { coachSession } = await coach.createSession(passageId);
+      track("coach_used", { resumed: false });
       navigate(`/coach/practice?sessionId=${coachSession.id}`, { state: { coachSession } });
     } catch (e) {
       setError(e.message || "Something went wrong. Try again.");

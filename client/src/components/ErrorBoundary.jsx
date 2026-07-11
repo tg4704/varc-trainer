@@ -1,4 +1,5 @@
 import { Component } from "react";
+import { captureException } from "../sentry.js";
 
 /**
  * Catches unhandled render errors in the component tree.
@@ -20,8 +21,8 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    // Log to console so it's visible in browser DevTools / Sentry
     console.error("[ErrorBoundary]", error, info?.componentStack);
+    captureException(error, { componentStack: info?.componentStack });
   }
 
   render() {

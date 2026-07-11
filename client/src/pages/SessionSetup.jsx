@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createSession } from "../api.js";
 import { saveActiveSession } from "../session.js";
+import { track } from "../analytics.js";
 import { Button } from "../components/ui/button.jsx";
 import Tooltip from "../components/Tooltip.jsx";
 
@@ -83,6 +84,7 @@ export default function SessionSetup() {
     try {
       const { session } = await createSession(config);
       saveActiveSession({ ...session, startedAt: Date.now(), practiceMode });
+      track("session_start", { practiceMode, timerMode, numQuestions });
       navigate("/practice", { replace: true });
     } catch (err) {
       setError(err.message);

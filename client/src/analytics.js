@@ -33,6 +33,13 @@ export function initAnalytics() {
     });
 }
 
+// Fires a named funnel event (signup, session_start, question_answered,
+// coach_used). No-op before consent/init — same silent-fail posture as the
+// rest of this module.
+export function track(event, props) {
+  posthogInstance?.capture(event, props);
+}
+
 function shutdownAnalytics() {
   if (posthogInstance) posthogInstance.opt_out_capturing();
 }
