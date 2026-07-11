@@ -1,10 +1,11 @@
-# Security, Legal, SEO & Monitoring — Manual Test Plan
+# Security, Legal, SEO, Monitoring & Performance — Manual Test Plan
 
-Covers three passes from 2026-07 (see `CLAUDE.md` for what was built and why
+Covers four passes from 2026-07 (see `CLAUDE.md` for what was built and why
 in each):
 - **Part A — Security Hardening** (tests 1–14): rate limiting, auth, headers, CORS.
 - **Part B — Legal & Compliance + SEO** (tests 15–21): privacy/consent, DPDP rights, sitemap/meta.
 - **Part C — Monitoring & Observability** (tests 22–26): error tracking, health check, analytics events.
+- **Part D — Performance & Infrastructure** (tests 27–30): compression, DB indexes, optimistic UI.
 
 Each test is copy-pasteable — run it, compare to "Expected," check the box.
 
@@ -639,6 +640,97 @@ perform each action below and confirm a matching event appears within
 
 ---
 
+# Part D — Performance & Infrastructure
+
+## 27. Response compression is actually on
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" \
+  -d "{\"identifier\":\"$TEST_USER\",\"password\":\"$TEST_PASS\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+
+curl -s -D - -o /dev/null -H "Accept-Encoding: gzip" -H "Authorization: Bearer $TOKEN" $BASE/api/dashboard | grep -i "content-encoding"
+```
+
+**Expected:** `Content-Encoding: gzip`. (Tiny responses like `/api/health`
+won't show this — `compression` has a size threshold below which it doesn't
+bother; that's normal, not a bug.)
+
+☐ Pass — a real payload comes back gzip-encoded
+
+---
+
+## 28. DB indexes on the hot columns exist
+
+Requires `psql` access to the database being tested.
+
+```bash
+psql "$DATABASE_URL" -c "SELECT indexname, tablename FROM pg_indexes WHERE indexname LIKE 'idx_%' ORDER BY tablename;"
+```
+
+**Expected:** includes at minimum `idx_sessions_user_id`,
+`idx_attempts_session_id`, `idx_coach_sessions_user_id`,
+`idx_coach_attempts_coach_session_id`, alongside the earlier `idx_api_calls_*`
+ones and `idx_users_google_id`. These are created automatically on server
+startup (`server/db.js`'s migration block, `CREATE INDEX IF NOT EXISTS` —
+safe, non-blocking, idempotent) — no manual step needed on a fresh deploy,
+just confirm they landed.
+
+☐ Pass — all four new indexes present
+
+---
+
+## 29. DB pool has an explicit, sane max
+
+```bash
+grep -A2 "new Pool" server/db.js
+```
+
+**Expected:** shows `max: 10` explicitly set (previously relied on `pg`'s
+implicit default of 10 — same behavior, now a documented decision instead of
+an accident).
+
+☐ Pass — pool max is explicit
+
+---
+
+## 30. Optimistic Skip in Practice — instant advance + correct rollback on failure
+
+In a browser, log in, start any Drills session, and on question 1 click
+**"Not sure"**.
+
+**Expected (happy path):** the app advances to question 2 immediately — no
+visible "Skipping…" delay, no spinner blocking the UI. Question 1's slot in
+the top-left stepper shows the skipped (amber) state.
+
+To verify the skip actually persisted server-side (not just a client-side
+illusion), check the DB directly:
+
+```bash
+# Replace SESSION_ID with the id from the active session
+psql "$DATABASE_URL" -c "SELECT session_id, skipped, selected_option_index FROM attempts WHERE session_id = SESSION_ID ORDER BY id;"
+```
+
+**Expected:** a row with `skipped = 1` for the question you skipped, confirming
+the optimistic UI matched real server state.
+
+**Rollback path** (requires DevTools): before clicking "Not sure" on another
+question, open the console and run:
+```js
+window.__origFetch = window.fetch;
+window.fetch = (url, opts) => (typeof url === "string" && url.includes("/api/attempts/basic"))
+  ? Promise.reject(new Error("simulated failure"))
+  : window.__origFetch(url, opts);
+```
+Then click "Not sure". **Expected:** an error message appears, the question
+you tried to skip is still the current one (not stranded on the next
+question), and "Not sure" is clickable again to retry. Restore fetch
+afterward: `window.fetch = window.__origFetch`.
+
+☐ Pass — skip is instant on success, and correctly rolls back (no stuck
+state) if the save actually fails
+
+---
+
 ## Quick summary checklist
 
 | # | Test | Pass? |
@@ -669,3 +761,7 @@ perform each action below and confirm a matching event appears within
 | 24 | Sentry captures a client-side render crash | ☐ |
 | 25 | Sentry captures a server-side route error via next(err) | ☐ |
 | 26 | PostHog funnel events (signup/session_start/question_answered/coach_used) fire | ☐ |
+| 27 | A real API response comes back gzip-encoded | ☐ |
+| 28 | All 4 new DB indexes exist (sessions/attempts/coach hot columns) | ☐ |
+| 29 | DB pool has explicit max: 10 | ☐ |
+| 30 | Skip advances instantly on success; correctly rolls back on failure | ☐ |
