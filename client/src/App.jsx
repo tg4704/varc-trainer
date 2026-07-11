@@ -31,6 +31,7 @@ import CoachPractice from "./pages/CoachPractice.jsx";
 import CoachSummary from "./pages/CoachSummary.jsx";
 import CoachHistory from "./pages/CoachHistory.jsx";
 import ChooseUsername from "./pages/ChooseUsername.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
 // Wraps React.lazy so a failed chunk import (stale client after a new deploy —
 // the old chunk hash no longer exists on the server) triggers a one-time full
@@ -168,6 +169,9 @@ function AppShell() {
             <Route path="logs"                 element={<Suspense fallback={AdminLoading}><AdminLogs /></Suspense>} />
             <Route path="flags"                element={<Suspense fallback={AdminLoading}><AdminFlags /></Suspense>} />
           </Route>
+
+          {/* Catch-all 404 — must stay last so it only matches unknown URLs. */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>
       </main>

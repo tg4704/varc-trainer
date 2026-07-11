@@ -91,3 +91,17 @@ text label only appears at ≥640px). After the map step, the question
 progress segments shrink to fit instead of forcing a fixed width.
 
 - [ ] Pass
+
+## 4. 404 page for unknown routes (P0-3)
+
+1. With the app running, visit http://localhost:5173/definitely-not-a-page
+
+Expected: styled "Page not found." screen (red target icon, explanation,
+"Back home" button) — not a blank page. Browser tab title reads
+"Page not found — Graspr". The nav still renders and works.
+
+2. Click "Back home".
+
+Expected: lands on `/`.
+
+- [ ] Pass
