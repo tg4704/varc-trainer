@@ -521,10 +521,21 @@ export default function CoachPractice() {
             ? { background: "rgba(240,168,104,0.06)", border: "1px solid rgba(240,168,104,0.3)" }
             : { background: "rgba(93,202,165,0.06)", border: "1px solid rgba(93,202,165,0.3)" }}
         >
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between gap-3 mb-1">
             <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: readingGrade.ungraded ? "var(--amber)" : "var(--teal)" }}>
               {readingGrade.ungraded ? "Reading feedback unavailable" : `Your reading: ${readingGrade.reading_mode?.replace(/-/g, " ")}`}
             </span>
+            {readingGrade.ungraded && (
+              <button
+                type="button"
+                onClick={submitReadingMap}
+                disabled={gradingMap}
+                className="flex-none rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-60"
+                style={{ borderColor: "rgba(240,168,104,0.4)", color: "var(--amber)" }}
+              >
+                {gradingMap ? "Retrying…" : "Retry grade"}
+              </button>
+            )}
           </div>
           <p className="text-sm text-foreground mb-1">{readingGrade.verdict_line}</p>
           <p className="text-xs muted">{readingGrade.what_you_missed}</p>

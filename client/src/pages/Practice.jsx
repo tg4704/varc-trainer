@@ -20,6 +20,7 @@ import {
   getSessionQuestions,
   submitBasicAttempt,
   submitEvaluateAttempt,
+  retryEvaluateAttempt,
   getActiveSession,
   completeSession,
   deleteSession,
@@ -534,6 +535,23 @@ export default function Practice() {
       });
     } catch (e) {
       patchCS(currentIdx, { submitting: false });
+      setError(e.message);
+    }
+  }
+
+  // Re-run AI evaluation for a question whose first evaluation failed. Targets
+  // the specific question by index (not currentIdx) so retrying still works if
+  // the user has navigated away while it runs.
+  async function handleRetryAI(idx) {
+    const s = questionStates[idx] || defaultQState();
+    const attemptId = s.feedback?.attemptId;
+    if (!attemptId || s.retryingAI) return;
+    patchCS(idx, { retryingAI: true });
+    try {
+      const fb = await retryEvaluateAttempt(attemptId);
+      patchCS(idx, { feedback: { ...s.feedback, ...fb }, retryingAI: false });
+    } catch (e) {
+      patchCS(idx, { retryingAI: false });
       setError(e.message);
     }
   }
@@ -1131,6 +1149,8 @@ export default function Practice() {
                 selectedOptionIndex={cs.lockedSelected}
                 reasoningText={cs.reasoning.trim() || undefined}
                 isLast={currentIdx === questions.length - 1}
+                onRetryAI={cs.reasoning.trim() ? () => handleRetryAI(currentIdx) : null}
+                retryingAI={cs.retryingAI}
                 onNext={() => {
                   const nextIdx = findNextUnanswered(questionStates, currentIdx);
                   if (nextIdx !== null) navigateTo(nextIdx);
@@ -1365,7 +1385,7 @@ function DeferredSavedCard({ feedback, isLast, onNext, onEnd }) {
 }
 
 // ── Analysis mode feedback — tabbed AI feedback card ──────────────────────────
-function AnalysisFeedback({ feedback, question, selectedOptionIndex, reasoningText, isLast, onNext, onEnd }) {
+function AnalysisFeedback({ feedback, question, selectedOptionIndex, reasoningText, isLast, onRetryAI, retryingAI, onNext, onEnd }) {
   const attempt = {
     options: question.options,
     correctOptionIndex: feedback.correctOptionIndex,
@@ -1385,8 +1405,18 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, reasoningTe
   return (
     <div className="mt-6 animate-slide-up">
       {feedback.aiError && (
-        <div className="mb-4 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
-          {feedback.aiErrorMessage || "AI feedback unavailable. Your attempt was saved."}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-warning/15 px-3 py-2 text-sm text-warning">
+          <span>{feedback.aiErrorMessage || "AI feedback unavailable. Your attempt was saved."}</span>
+          {onRetryAI && (
+            <button
+              type="button"
+              onClick={onRetryAI}
+              disabled={retryingAI}
+              className="flex-none rounded-md border border-warning/40 px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-warning/20 disabled:opacity-60"
+            >
+              {retryingAI ? "Retrying…" : "Retry AI feedback"}
+            </button>
+          )}
         </div>
       )}
       <FeedbackSections attempt={attempt} />

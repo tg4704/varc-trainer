@@ -129,6 +129,10 @@ export function submitEvaluateAttempt(payload) {
   if (!payload.skipped) track("question_answered", { mode: payload.mode, deferred: Boolean(payload.deferred) });
   return request("/api/attempts/evaluate", { method: "POST", body: JSON.stringify(payload) });
 }
+// Re-run AI evaluation for an already-saved attempt whose first evaluation failed.
+export function retryEvaluateAttempt(attemptId) {
+  return request(`/api/attempts/${attemptId}/retry-evaluation`, { method: "POST" });
+}
 
 // ── Dashboard ─────────────────────────────────────────
 export function getDashboard() {

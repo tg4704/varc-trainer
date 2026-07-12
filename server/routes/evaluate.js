@@ -139,6 +139,9 @@ router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), 
   );
 
   const base = {
+    // attemptId lets the client retry a failed AI evaluation against this
+    // saved attempt (POST /:attemptId/retry-evaluation) without re-inserting.
+    attemptId: result.lastId,
     isCorrect: isCorrect === 1,
     correctOptionIndex: q.correctIndex,
     trapOptionIndex: q.trapIndex,
@@ -155,17 +158,27 @@ router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), 
     return res.json({ ...base, deferred: true });
   }
 
-  const attemptId = result.lastId;
+  const evalResult = await runEvaluation({
+    userId: req.userId, attemptId: result.lastId, q,
+    selectedOptionIndex, reasoningText: reasoningText.trim(), quotedLines,
+  });
+  return res.json({ ...base, ...evalResult });
+});
 
+// Runs the Claude evaluation for an already-saved attempt and writes the AI
+// fields back to it. Shared by POST /evaluate and POST /:attemptId/retry-evaluation.
+// Never throws — on AI failure it logs and returns { aiError: true, ... } so the
+// attempt itself is never lost.
+async function runEvaluation({ userId, attemptId, q, selectedOptionIndex, reasoningText, quotedLines }) {
   try {
     const response = await callModel({
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText.trim(), quotedLines) }],
+      messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText, quotedLines) }],
     });
 
     // Log API call for admin cost tracking (Phase 9)
     await logApiCall({
-      userId: req.userId,
+      userId,
       route: "/api/attempts/evaluate",
       provider: "openrouter",
       model: DEFAULT_MODEL,
@@ -194,31 +207,73 @@ router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), 
       ]
     );
 
-    return res.json({
-      ...base,
+    return {
       reasoningScore: evaluation.reasoningScore,
       reasoningFeedback: evaluation.reasoningFeedback,
       correctExplanation: evaluation.correctExplanation,
       trapExplanation: evaluation.trapExplanation,
       keyTakeaway: evaluation.keyTakeaway,
       aiError: false,
-    });
+    };
   } catch (err) {
     console.error("AI provider error:", err.message);
     await logApiCall({
-      userId: req.userId,
+      userId,
       route: "/api/attempts/evaluate",
       provider: "openrouter",
       model: DEFAULT_MODEL,
       status: "error",
       errorMessage: describeError(err),
     });
-    return res.json({
-      ...base,
+    return {
       aiError: true,
       aiErrorMessage: "AI feedback unavailable. Your attempt was saved.",
-    });
+    };
   }
+}
+
+// Retry a failed AI evaluation for an attempt the user already submitted, using
+// the reasoning text saved on that attempt. Verifies ownership via the session.
+router.post("/:attemptId/retry-evaluation", authenticate, aiLimiter, async (req, res) => {
+  const attemptId = parseInt(req.params.attemptId, 10);
+  if (!Number.isInteger(attemptId)) {
+    return res.status(400).json({ error: "Invalid attempt id" });
+  }
+
+  const attempt = await db.get(
+    `SELECT a.* FROM attempts a
+       JOIN sessions s ON a.session_id = s.id
+      WHERE a.id = $1 AND s.user_id = $2`,
+    [attemptId, req.userId]
+  );
+  if (!attempt) {
+    return res.status(404).json({ error: "Attempt not found" });
+  }
+  if (attempt.selected_option_index == null || !attempt.reasoning_text) {
+    return res.status(400).json({ error: "Attempt has no reasoning to evaluate" });
+  }
+
+  const q = await questionsRepo.findById(attempt.question_id);
+  if (!q) {
+    return res.status(404).json({ error: "Question not found" });
+  }
+
+  const base = {
+    attemptId,
+    isCorrect: attempt.is_correct === 1,
+    correctOptionIndex: q.correctIndex,
+    trapOptionIndex: q.trapIndex,
+    trapType: q.trapType,
+    selectedTrap: attempt.selected_trap === 1,
+  };
+
+  const evalResult = await runEvaluation({
+    userId: req.userId, attemptId, q,
+    selectedOptionIndex: attempt.selected_option_index,
+    reasoningText: attempt.reasoning_text.trim(),
+    quotedLines: null,
+  });
+  return res.json({ ...base, ...evalResult });
 });
 
 module.exports = router;

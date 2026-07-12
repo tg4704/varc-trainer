@@ -105,3 +105,53 @@ Expected: styled "Page not found." screen (red target icon, explanation,
 Expected: lands on `/`.
 
 - [ ] Pass
+
+## 5. AI feedback works, and failures can be retried (P0-4)
+
+**Model config (do this first):**
+1. Confirm `.env` has NO active `AI_MODEL` line pointing at a `:free`
+   OpenRouter model (it's commented out; unset falls back to
+   `anthropic/claude-haiku-4-5`). Restart the backend if you changed it.
+
+**Happy path:**
+2. Start an untimed Analysis Drills session, answer a question, write a
+   sentence of reasoning, click "Get AI feedback".
+
+Expected: after a few seconds a real 5-section feedback card appears (a
+reasoning score, correct-answer explanation, trap breakdown) — NOT the
+"AI feedback unavailable" banner.
+
+- [ ] Pass
+
+**Retry path (simulate a failure):**
+3. Stop the backend, set `AI_MODEL=this/does-not-exist` in `.env`, restart.
+4. Answer a question with reasoning, click "Get AI feedback".
+
+Expected: an amber "AI feedback unavailable. Your attempt was saved."
+banner with a **"Retry AI feedback"** button beside it. The ✓/✗ verdict
+and correct answer still show (those don't need AI).
+
+5. Fix `AI_MODEL` back (comment it out), restart the backend, then click
+   "Retry AI feedback" on that same banner (navigate back to the question
+   if needed).
+
+Expected: button shows "Retrying…", then the banner is replaced by the
+full AI feedback sections for that attempt. No duplicate attempt is
+created (check `attempts` table count is unchanged).
+
+- [ ] Pass
+
+## 6. Coach reading-map grade can be retried (P0-4)
+
+1. With a broken `AI_MODEL` (see test 5 step 3), start a Coach passage,
+   fill the reading map, click "Grade my reading".
+
+Expected: proceeds to the questions with an amber "Reading feedback
+unavailable" banner that now has a **"Retry grade"** button.
+
+2. Fix `AI_MODEL`, restart, click "Retry grade".
+
+Expected: button shows "Retrying…", then the banner turns teal with a
+real reading grade ("Your reading: …", verdict line, technique tip).
+
+- [ ] Pass
