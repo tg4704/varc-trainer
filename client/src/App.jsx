@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import TopNav from "./components/TopNav.jsx";
@@ -99,9 +99,22 @@ function AppNav() {
   return <TopNav />;
 }
 
+// React Router v6 does not reset scroll on navigation — without this, a new
+// route mounts already scrolled to the previous page's offset. Keyed on
+// pathname only (not hash) so in-page anchor links (e.g. /#toolkit) still work.
+function ScrollToTop() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (hash) return; // let anchor navigation handle its own scroll
+    window.scrollTo(0, 0);
+  }, [pathname, hash]);
+  return null;
+}
+
 function AppShell() {
   return (
     <NavGuardProvider>
+    <ScrollToTop />
     <div className="min-h-screen bg-background text-foreground">
       <AppNav />
       <main>

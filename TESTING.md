@@ -4,8 +4,8 @@ Companion to the 2026-07 UI/UX audit fixes (see the audit plan for the full
 findings list). Same conventions as `SECURITY_TESTING.md`: each test is
 copy-pasteable — run it, compare to "Expected," check the box.
 
-- **Part A — P0 fixes** (tests 1–5): mobile nav/top-bar overflow, 404, AI retry.
-- **Part B — P1 fixes**: scroll/motion/layout fundamentals.
+- **Part A — P0 fixes** (tests 1–6): mobile nav/top-bar overflow, 404, AI retry.
+- **Part B — P1 fixes** (tests 7+): scroll/motion/layout fundamentals.
 - **Part C — P2 fixes**: copy, consistency, a11y.
 
 ## Setup
@@ -153,5 +153,23 @@ unavailable" banner that now has a **"Retry grade"** button.
 
 Expected: button shows "Retrying…", then the banner turns teal with a
 real reading grade ("Your reading: …", verdict line, technique tip).
+
+- [ ] Pass
+
+---
+
+# Part B — P1 fixes
+
+## 7. Scroll resets to top on route change (P1-5)
+
+1. Open `/privacy`, scroll to the bottom.
+2. Click "Terms" (or any nav link) to go to another route.
+
+Expected: the new page opens scrolled to the TOP, not mid-page.
+
+3. On the Home page, click a footer anchor that uses a `#hash` (if any).
+
+Expected: hash/anchor links still jump to their target section (scroll
+reset does NOT hijack in-page anchors).
 
 - [ ] Pass
