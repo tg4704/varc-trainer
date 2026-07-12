@@ -2,6 +2,7 @@
 // and the Profile page's Danger zone section, so the two entry points stay
 // in sync instead of drifting into two copies.
 import { useState } from "react";
+import Modal from "./Modal.jsx";
 import { resetAccount, deleteAccount } from "../api.js";
 import { clearActiveSession } from "../session.js";
 
@@ -23,9 +24,9 @@ export function ResetDataModal({ onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-foreground">Reset all practice data?</h2>
+    <Modal onClose={busy ? undefined : onClose} labelledBy="reset-data-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <h2 id="reset-data-title" className="text-lg font-bold text-foreground">Reset all practice data?</h2>
         <p className="mt-2 text-sm muted">
           This will permanently delete all your sessions, attempts, and stats. Your account
           will remain active. This cannot be undone.
@@ -45,7 +46,7 @@ export function ResetDataModal({ onClose, onDone }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -73,9 +74,9 @@ export function DeleteAccountModal({ onClose, onDeleted }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={busy ? undefined : onClose}>
-      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold" style={{ color: "var(--red)" }}>Delete your account?</h2>
+    <Modal onClose={busy ? undefined : onClose} labelledBy="delete-account-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <h2 id="delete-account-title" className="text-lg font-bold" style={{ color: "var(--red)" }}>Delete your account?</h2>
         <p className="mt-2 text-sm muted">
           This permanently deletes your account, every session, attempt, and stat. There is no
           undo and no recovery. Sign-in will stop working immediately.
@@ -106,6 +107,6 @@ export function DeleteAccountModal({ onClose, onDeleted }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

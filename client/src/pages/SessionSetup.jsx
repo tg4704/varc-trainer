@@ -4,6 +4,7 @@ import { createSession } from "../api.js";
 import { saveActiveSession } from "../session.js";
 import { track } from "../analytics.js";
 import { Button } from "../components/ui/button.jsx";
+import Modal from "../components/Modal.jsx";
 import Tooltip from "../components/Tooltip.jsx";
 
 const TYPE_LABELS = {
@@ -269,9 +270,9 @@ function buildSummary(s) {
 
 function ConfirmStartModal({ rows, busy, error, onBack, onBegin }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={busy ? undefined : onBack}>
-      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="display text-[22px]">Ready to begin?</h2>
+    <Modal onClose={busy ? undefined : onBack} labelledBy="confirm-start-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <h2 id="confirm-start-title" className="display text-[22px]">Ready to begin?</h2>
         <p className="mt-1 text-xs dim">
           Starting opens a distraction-free fullscreen. Press Esc any time to exit.
         </p>
@@ -300,7 +301,7 @@ function ConfirmStartModal({ rows, busy, error, onBack, onBegin }) {
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

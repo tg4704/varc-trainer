@@ -6,6 +6,7 @@ import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import ShareResultsModal from "../components/ShareResultsModal.jsx";
+import Modal from "../components/Modal.jsx";
 import { trapLabel } from "../trapTypes.js";
 
 const TYPE_LABELS = {
@@ -337,8 +338,8 @@ function QuestionReviewModal({ attempts, index, onNavigate, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10" onClick={onClose}>
-      <div className="glass-floating w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} align="top" labelledBy="results-review-title">
+      <div className="glass-floating w-full max-w-2xl p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="mono text-[11px] uppercase tracking-wide dim">Q{index + 1} of {total}</span>
@@ -359,7 +360,7 @@ function QuestionReviewModal({ attempts, index, onNavigate, onClose }) {
           <p className="serif-read mb-4 text-[14px] leading-[1.75] muted">{a.paragraph}</p>
         )}
         {a.questionText && (
-          <h2 className="display mb-4 text-[19px] leading-[1.4]">{a.questionText}</h2>
+          <h2 id="results-review-title" className="display mb-4 text-[19px] leading-[1.4]">{a.questionText}</h2>
         )}
 
         {a.skipped === 1 ? (
@@ -386,6 +387,6 @@ function QuestionReviewModal({ attempts, index, onNavigate, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

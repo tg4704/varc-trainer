@@ -9,6 +9,7 @@ import { useAuth } from "../auth.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import ShareResultsModal from "../components/ShareResultsModal.jsx";
+import Modal from "../components/Modal.jsx";
 import { cn } from "../lib/utils.js";
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -234,8 +235,8 @@ function CoachQuestionModal({ questions, attempts, index, onNavigate, onClose })
   const nextIdx = pos >= 0 && pos < attemptedIdxs.length - 1 ? attemptedIdxs[pos + 1] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10" onClick={onClose}>
-      <div className="glass-floating w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+    <Modal onClose={onClose} align="top" labelledBy="coach-review-title">
+      <div className="glass-floating w-full max-w-2xl p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="mono text-[11px] uppercase tracking-wide dim">Q{index + 1} of {total}</span>
@@ -246,7 +247,7 @@ function CoachQuestionModal({ questions, attempts, index, onNavigate, onClose })
           </button>
         </div>
 
-        <h2 className="display mb-4 text-[19px] leading-[1.4]">{q.question}</h2>
+        <h2 id="coach-review-title" className="display mb-4 text-[19px] leading-[1.4]">{q.question}</h2>
 
         <FeedbackSections attempt={feedbackAttempt} />
 
@@ -284,6 +285,6 @@ function CoachQuestionModal({ questions, attempts, index, onNavigate, onClose })
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

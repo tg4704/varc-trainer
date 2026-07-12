@@ -9,6 +9,7 @@ import SessionTopBar from "../components/SessionTopBar.jsx";
 import QuestionStepper, { stateFor, statusDotColor } from "../components/QuestionStepper.jsx";
 import PassageFontMenu, { PASSAGE_FONTS, LINE_SPACINGS } from "../components/PassageFontMenu.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
+import Modal from "../components/Modal.jsx";
 import Icon from "../components/Icon.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { Textarea } from "../components/ui/input.jsx";
@@ -785,6 +786,12 @@ export default function Practice() {
   const question = questions[currentIdx];
   if (!question) return null;
 
+  // Whether every question has a verdict or was skipped — drives the end-modal copy.
+  const allAnswered = questions.every((_, i) => {
+    const s = questionStates[i] || defaultQState();
+    return s.feedback !== null || s.skipped;
+  });
+
   // ── Intuition mode ─────────────────────────────────────────────────────────
   if (practiceMode === "intuition") {
     const secsLeft = intuitionSecondsLeft();
@@ -891,7 +898,7 @@ export default function Practice() {
         {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
           onSuccess={() => { setFlagModal(null); setFlagToast("Reported, thanks!"); setTimeout(() => setFlagToast(null), 3000); }} />}
         {flagToast && <div className="glass-floating fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-5 py-3 text-sm text-foreground">{flagToast}</div>}
-        {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
+        {showEndModal && <EndSessionModal allAnswered={allAnswered} onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
         {showLeaveModal && <LeaveSessionModal busy={leaving} action={leaveAction} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
       </div>
       </>
@@ -1229,7 +1236,7 @@ export default function Practice() {
       </div>
     )}
 
-    {showEndModal && <EndSessionModal onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
+    {showEndModal && <EndSessionModal allAnswered={allAnswered} onConfirm={() => finishSession(session)} onCancel={() => setShowEndModal(false)} />}
     {showLeaveModal && <LeaveSessionModal busy={leaving} action={leaveAction} onEnd={endSessionAndLeave} onDiscard={discardSessionAndLeave} onStay={() => { setShowLeaveModal(false); leavePendingRef.current = null; }} />}
     </>
   );
@@ -1296,69 +1303,53 @@ function MobileQuestionDots({ questions, currentIdx, questionStates, onJump }) {
 }
 
 // ── End session confirm modal ─────────────────────────────────────────────────
-function EndSessionModal({ onConfirm, onCancel }) {
+function EndSessionModal({ onConfirm, onCancel, allAnswered }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="glass-floating w-full max-w-sm p-6">
-        <h2 className="text-base font-bold text-foreground mb-2">Submit session?</h2>
+    <Modal onClose={onCancel} closeOnBackdrop={false} backdrop="bg-black/50" labelledBy="end-session-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up">
+        <h2 id="end-session-title" className="text-base font-bold text-foreground mb-2">Submit session?</h2>
         <p className="text-sm text-muted-foreground mb-5">
-          All questions answered. Submit the session to see your results, or keep reviewing.
+          {allAnswered
+            ? "You've been through all the questions. Submit the session to see your results, or keep reviewing."
+            : "Submit the session to see your results now, or keep reviewing the remaining questions."}
         </p>
         <div className="flex gap-3">
           <Button className="fx-sheen flex-1" onClick={onConfirm}>Submit session</Button>
           <Button variant="outline" className="flex-1" onClick={onCancel}>Keep reviewing</Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
 // ── Leave-session modal (nav away mid-practice) ───────────────────────────────
 // Practice sessions aren't resumable. Discard sits above End (destructive-first
-// per the redesign); what each does is shown on hover rather than in a wall of
-// body copy.
-function HoverHint({ hint, children }) {
-  return (
-    <div className="group relative">
-      {children}
-      <div
-        className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-max max-w-[280px] -translate-x-1/2 rounded-[10px] px-3 py-2 text-[12px] leading-snug opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-        style={{
-          background: "rgba(20,23,31,0.97)",
-          border: "1px solid var(--glass-border-hi)",
-          color: "var(--text-2)",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-        }}
-      >
-        {hint}
-      </div>
-    </div>
-  );
-}
-
+// per the redesign). Descriptions are shown inline (not hover-only) so they
+// work on touch devices too.
 function LeaveSessionModal({ busy, action, onEnd, onDiscard, onStay }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="glass-floating w-full max-w-sm p-6">
-        <h2 className="text-base font-bold text-foreground mb-1">Leave this session?</h2>
-        <p className="text-xs dim mb-5">Hover an option to see what it does.</p>
-        <div className="flex flex-col gap-2">
-          <HoverHint hint="Deletes this session and every answer in it, as if it never happened. Nothing is saved.">
+    <Modal onClose={busy ? undefined : onStay} closeOnBackdrop={false} backdrop="bg-black/50" labelledBy="leave-session-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up">
+        <h2 id="leave-session-title" className="text-base font-bold text-foreground mb-4">Leave this session?</h2>
+        <div className="flex flex-col gap-3">
+          <div>
             <Button variant="destructive" className="w-full" disabled={busy} onClick={onDiscard}>
               {action === "discard" ? "Discarding…" : "Discard session"}
             </Button>
-          </HoverHint>
-          <HoverHint hint="Keeps the questions you've answered and counts the rest as skipped. You'll go straight to your results.">
+            <p className="mt-1.5 text-[12px] leading-snug dim">Deletes this session and every answer in it, as if it never happened. Nothing is saved.</p>
+          </div>
+          <div>
             <Button className="fx-sheen w-full" disabled={busy} onClick={onEnd}>
               {action === "end" ? "Ending…" : "End session"}
             </Button>
-          </HoverHint>
+            <p className="mt-1.5 text-[12px] leading-snug dim">Keeps the questions you've answered and counts the rest as skipped. You'll go straight to your results.</p>
+          </div>
           <Button variant="outline" className="w-full" disabled={busy} onClick={onStay}>
             Stay
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -1454,9 +1445,9 @@ function FlagModal({ questionId, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-base font-bold text-foreground mb-1">Flag this question</h2>
+    <Modal onClose={busy ? undefined : onClose} labelledBy="flag-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <h2 id="flag-title" className="text-base font-bold text-foreground mb-1">Flag this question</h2>
         <p className="text-xs muted mb-4">Tell us what to look at.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -1502,7 +1493,7 @@ function FlagModal({ questionId, onClose, onSuccess }) {
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }
 

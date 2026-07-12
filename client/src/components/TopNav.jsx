@@ -17,6 +17,7 @@ import { useNavGuard } from "../navGuard.jsx";
 import { BrandMark } from "./AuthShell.jsx";
 import Icon from "./Icon.jsx";
 import { changePassword, exportAccountData } from "../api.js";
+import Modal from "./Modal.jsx";
 import Avatar from "./Avatar.jsx";
 import { ResetDataModal, DeleteAccountModal } from "./AccountDangerModals.jsx";
 
@@ -383,9 +384,9 @@ function ChangePasswordModal({ onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} className="glass-floating w-full max-w-sm p-6 space-y-3">
-        <h2 className="font-semibold text-foreground">Change password</h2>
+    <Modal onClose={busy ? undefined : onClose} labelledBy="change-password-title">
+      <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} className="glass-floating w-full max-w-sm p-6 space-y-3 animate-slide-up">
+        <h2 id="change-password-title" className="font-semibold text-foreground">Change password</h2>
         <input
           type="password"
           placeholder="Current password"
@@ -416,7 +417,7 @@ function ChangePasswordModal({ onClose }) {
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }
 

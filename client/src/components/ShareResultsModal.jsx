@@ -7,6 +7,7 @@
 // Duolingo/Spotify Wrapped-style share cards use. The share sheet already
 // lists Instagram, X, WhatsApp, etc. on any device that has them installed.
 import { useEffect, useRef, useState } from "react";
+import Modal from "./Modal.jsx";
 import { buildResultsShareCard } from "../lib/shareCard.js";
 
 export default function ShareResultsModal({ data, onClose }) {
@@ -73,9 +74,9 @@ export default function ShareResultsModal({ data, onClose }) {
   const canShare = typeof window !== "undefined" && !!navigator.canShare;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div className="glass-floating w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="display text-[20px]">Share your results</h2>
+    <Modal onClose={onClose} labelledBy="share-results-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <h2 id="share-results-title" className="display text-[20px]">Share your results</h2>
         <p className="mt-1 text-xs dim">A ready-made card: download it, copy it, or send it straight to any app.</p>
 
         <div
@@ -112,6 +113,6 @@ export default function ShareResultsModal({ data, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

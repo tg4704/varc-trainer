@@ -12,6 +12,7 @@ import OptionCard from "../components/OptionCard.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import CoachSessionTopBar from "../components/CoachSessionTopBar.jsx";
+import Modal from "../components/Modal.jsx";
 import QuestionStepper, { stateFor } from "../components/QuestionStepper.jsx";
 import Tooltip, { InfoDot } from "../components/Tooltip.jsx";
 import VoiceMicButton from "../components/VoiceMicButton.jsx";
@@ -732,12 +733,11 @@ export default function CoachPractice() {
 // shows the summary for whatever's answered so far; Discard deletes it).
 function CoachLeaveModal({ busy, action, onResume, onEnd, onDiscard, onStay }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="glass-floating w-full max-w-sm p-6">
-        <h2 className="text-base font-bold text-foreground mb-1">Leave this passage?</h2>
-        <p className="text-xs dim mb-5">Hover an option to see what it does.</p>
-        <div className="flex flex-col gap-2">
-          <Tooltip label="Deletes this passage session and every answer in it. Nothing is saved." wrapperClassName="w-full" side="top">
+    <Modal onClose={busy ? undefined : onStay} closeOnBackdrop={false} backdrop="bg-black/50" labelledBy="coach-leave-title">
+      <div className="glass-floating w-full max-w-sm p-6 animate-slide-up">
+        <h2 id="coach-leave-title" className="text-base font-bold text-foreground mb-4">Leave this passage?</h2>
+        <div className="flex flex-col gap-3">
+          <div>
             <button
               onClick={onDiscard}
               disabled={busy}
@@ -746,23 +746,26 @@ function CoachLeaveModal({ busy, action, onResume, onEnd, onDiscard, onStay }) {
             >
               {action === "discard" ? "Discarding…" : "Discard session"}
             </button>
-          </Tooltip>
-          <Tooltip label="Leaves everything as-is. Pick it back up any time from your Dashboard." wrapperClassName="w-full" side="top">
+            <p className="mt-1.5 text-[12px] leading-snug dim">Deletes this passage session and every answer in it. Nothing is saved.</p>
+          </div>
+          <div>
             <button onClick={onResume} disabled={busy} className="btn btn-primary fx-sheen w-full disabled:opacity-60">
               Resume later
             </button>
-          </Tooltip>
-          <Tooltip label="Marks this session complete now and takes you to the summary for whatever you've answered so far." wrapperClassName="w-full" side="top">
+            <p className="mt-1.5 text-[12px] leading-snug dim">Leaves everything as-is. Pick it back up any time from your Dashboard.</p>
+          </div>
+          <div>
             <button onClick={onEnd} disabled={busy} className="btn btn-glass fx-ring w-full disabled:opacity-60">
               {action === "end" ? "Ending…" : "End & Get Summary"}
             </button>
-          </Tooltip>
+            <p className="mt-1.5 text-[12px] leading-snug dim">Marks this session complete now and takes you to the summary for whatever you've answered so far.</p>
+          </div>
           <button onClick={onStay} disabled={busy} className="btn btn-glass fx-ring w-full">
             Stay
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
