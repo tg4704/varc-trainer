@@ -214,3 +214,30 @@ below the buttons and updates when you switch — it is NOT hidden behind a
 hover-only tooltip.
 
 - [ ] Pass
+
+## 13. Dashboard loads without a double-flash or width jump (P1-11)
+
+1. Hard-reload `/dashboard` (throttle network to see the loading state if
+   needed).
+
+Expected: a single skeleton style (the `.skel` shimmer blocks) at the same
+width as the final content — no switch between two different skeleton
+looks, and no container-width jump when the real data appears.
+
+- [ ] Pass
+
+## 14. Hover FX are smooth; reduced-motion is respected (P1-12)
+
+1. Hover a primary button (e.g. the Session-setup CTA) and a `.fx-underline`
+   link.
+
+Expected: the sheen sweep and underline grow animate smoothly (they now
+animate `transform`, not `left`/`width`).
+
+2. Enable "Reduce motion" (macOS: System Settings → Accessibility → Display).
+   Click the logged-out nav "Toolkit" link (jumps to the toolkit section).
+
+Expected: the jump is instant, not an animated smooth-scroll. CSS
+animations/transitions are also effectively disabled.
+
+- [ ] Pass

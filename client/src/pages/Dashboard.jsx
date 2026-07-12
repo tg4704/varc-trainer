@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../auth.jsx";
 import { getActiveCoachSessionId } from "../coachSession.js";
 import TopicBadge from "../components/TopicBadge.jsx";
+import DashboardSkeleton from "../components/DashboardSkeleton.jsx";
 import { InfoDot } from "../components/Tooltip.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
@@ -88,19 +89,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
   }, []);
 
   if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="skel h-24 rounded-xl" />)}
-        </div>
-        <div className="skel h-48 rounded-xl" />
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="skel h-36 rounded-xl" />
-          <div className="skel h-36 rounded-xl" />
-        </div>
-        <div className="skel h-20 rounded-xl" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
   if (error) {
     return (

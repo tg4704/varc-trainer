@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import DashboardSkeleton from "./components/DashboardSkeleton.jsx";
 import TopNav from "./components/TopNav.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
 import { AuthProvider } from "./auth.jsx";
@@ -67,15 +68,6 @@ const AdminCosts          = lazyWithReload(() => import("./pages/admin/AdminCost
 const AdminLogs           = lazyWithReload(() => import("./pages/admin/AdminLogs.jsx"));
 const AdminFlags          = lazyWithReload(() => import("./pages/admin/AdminFlags.jsx"));
 
-const DashboardSkeleton = (
-  <div className="max-w-6xl mx-auto px-4 py-8 space-y-6 animate-pulse">
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {[1, 2, 3, 4].map((i) => <div key={i} className="rounded-xl bg-muted h-24" />)}
-    </div>
-    <div className="rounded-xl bg-muted h-48" />
-  </div>
-);
-
 const AdminLoading = (
   <div className="max-w-6xl mx-auto px-4 py-16 text-center text-muted-foreground">
     Loading admin…
@@ -139,7 +131,7 @@ function AppShell() {
             path="/dashboard"
             element={
               <ProtectedRoute>
-                <Suspense fallback={DashboardSkeleton}><Dashboard /></Suspense>
+                <Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>
               </ProtectedRoute>
             }
           />

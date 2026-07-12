@@ -17,6 +17,7 @@ import { useNavGuard } from "../navGuard.jsx";
 import { BrandMark } from "./AuthShell.jsx";
 import Icon from "./Icon.jsx";
 import { changePassword, exportAccountData } from "../api.js";
+import { scrollIntoViewMotionSafe } from "../lib/utils.js";
 import Modal from "./Modal.jsx";
 import Avatar from "./Avatar.jsx";
 import { ResetDataModal, DeleteAccountModal } from "./AccountDangerModals.jsx";
@@ -170,7 +171,7 @@ export default function TopNav() {
               type="button"
               onClick={() => {
                 if (pathname === "/") {
-                  document.getElementById("toolkit")?.scrollIntoView({ behavior: "smooth" });
+                  scrollIntoViewMotionSafe(document.getElementById("toolkit"));
                 } else {
                   navigate("/#toolkit");
                 }

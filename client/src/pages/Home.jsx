@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { loadActiveSession } from "../session.js";
+import { scrollIntoViewMotionSafe } from "../lib/utils.js";
 import Icon from "../components/Icon.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import PageMeta from "../components/PageMeta.jsx";
@@ -305,7 +306,7 @@ export default function Home() {
   // page (and its content above the anchor) has actually mounted.
   useEffect(() => {
     if (window.location.hash === "#toolkit") {
-      document.getElementById("toolkit")?.scrollIntoView({ behavior: "smooth" });
+      scrollIntoViewMotionSafe(document.getElementById("toolkit"));
     }
   }, []);
 
