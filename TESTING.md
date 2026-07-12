@@ -278,3 +278,32 @@ daily goal tracking" (neither is in the app). They're replaced with
 "Trap-type weakness analytics" and "Voice-to-text reasoning input".
 
 - [ ] Pass
+
+## 17. Dashboard heatmap opens on the current month (P2-15)
+
+1. Open `/dashboard` at a width where the activity heatmap overflows (e.g.
+   375px, or a narrow window).
+
+Expected: the heatmap is scrolled to the RIGHT edge on load — the current
+month and today's cell are visible, not January off the left.
+
+- [ ] Pass
+
+## 18. Profile join date is unambiguous (P2-16)
+
+1. Open `/profile`.
+
+Expected: "Joined" shows a "12 Jul 2026"-style date (day + short month +
+year), not an ambiguous "11/07/2026".
+
+- [ ] Pass
+
+## 19. Intuition results show the points score (P2-17)
+
+1. Run an Intuition-mode Drills session and finish it.
+
+Expected: the Results page stat row includes a third "Points / intuition
+score" card (alongside Time and Trap rate) with the session's total
+intuition points.
+
+- [ ] Pass

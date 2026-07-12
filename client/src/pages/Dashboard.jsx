@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getDashboard, getDashboardTrend, getDashboardHeatmap,
@@ -503,6 +503,7 @@ function formatHeatDate(iso) {
 function WeeklyHeatmap() {
   const [heatmap, setHeatmap] = useState(null);
   const [hover, setHover] = useState(null); // { x, y, date, count } | null
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     getDashboardHeatmap().then(setHeatmap).catch(() => {});
@@ -512,6 +513,14 @@ function WeeklyHeatmap() {
   const total = days.reduce((s, d) => s + d.count, 0);
   const { cols, monthLabels } = buildHeatGrid(days);
 
+  // The grid spans 6 months with the current month at the right edge. Scroll
+  // to the end on load so today (and recent activity) is what the user sees,
+  // not January off the left.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && days.length) el.scrollLeft = el.scrollWidth;
+  }, [days.length]);
+
   return (
     <div className="glass p-[20px_22px]">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -519,7 +528,7 @@ function WeeklyHeatmap() {
         <span className="text-xs dim">{total} question{total === 1 ? "" : "s"} in the last 6 months</span>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto pb-1">
         {/* weekday row labels (aligned below the month-label strip) */}
         <div className="flex flex-none flex-col" style={{ gap: HEAT_GAP, paddingTop: 16 }}>
           {WEEKDAY_LABELS.map((lbl, r) => (

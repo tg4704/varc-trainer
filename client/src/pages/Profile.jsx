@@ -37,7 +37,7 @@ export default function Profile() {
       .catch(() => setStats(null));
   }, []);
 
-  const joined = user?.createdAt ? (() => { const d = new Date(user.createdAt); return isNaN(d) ? "—" : d.toLocaleDateString(); })() : "—";
+  const joined = user?.createdAt ? (() => { const d = new Date(user.createdAt); return isNaN(d) ? "—" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); })() : "—";
   const cat = catCountdown(2026);
   const name = user?.name || user?.username;
 

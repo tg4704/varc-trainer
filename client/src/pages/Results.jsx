@@ -70,6 +70,8 @@ export default function Results() {
   const totalTime = attempts.reduce((sum, a) => sum + (a.time_taken_seconds || 0), 0);
   const accuracyPct = answered.length ? Math.round((correct / answered.length) * 100) : 0;
   const avgTime = attempts.length ? totalTime / attempts.length : 0;
+  const isIntuition = attempts.some((a) => a.mode === "intuition");
+  const totalPoints = attempts.reduce((sum, a) => sum + (a.intuition_points || 0), 0);
 
   // By-question-type breakdown
   const byType = {};
@@ -159,7 +161,7 @@ export default function Results() {
       </div>
 
       {/* Stat cards */}
-      <div className="mt-8 grid grid-cols-2 gap-4">
+      <div className={`mt-8 grid gap-4 ${isIntuition ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
         <div className="glass glasscard p-[18px]">
           <div className="eyebrow">Time</div>
           <div className="mono mt-2 text-[22px] leading-none text-foreground">{formatTime(totalTime)}</div>
@@ -172,6 +174,13 @@ export default function Results() {
           </div>
           <div className="mt-1 text-xs dim">traps taken</div>
         </div>
+        {isIntuition && (
+          <div className="glass glasscard p-[18px]">
+            <div className="eyebrow">Points</div>
+            <div className="mono mt-2 text-[22px] leading-none" style={{ color: "var(--teal)" }}>{totalPoints}</div>
+            <div className="mt-1 text-xs dim">intuition score</div>
+          </div>
+        )}
       </div>
 
       {/* By-type breakdown + review grid */}

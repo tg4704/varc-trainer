@@ -164,7 +164,7 @@ router.get("/:id/review", authenticate, async (req, res, next) => {
     const attempts = await db.all(
       `SELECT a.id, a.question_id, a.selected_option_index, a.correct_option_index,
               a.is_correct, a.trap_option_index, a.trap_type, a.selected_trap, a.skipped,
-              a.time_taken_seconds, a.reasoning_text, a.mode,
+              a.time_taken_seconds, a.reasoning_text, a.mode, a.intuition_points,
               a.reasoning_score, a.reasoning_feedback, a.correct_explanation,
               a.trap_explanation, a.key_takeaway
        FROM attempts a WHERE a.session_id = $1 ORDER BY a.id`,
