@@ -263,6 +263,12 @@ export const admin = {
   importContent: (payload) =>
     request("/api/admin/import", { method: "POST", body: JSON.stringify(payload) }),
 
+  listPrompts: () => request("/api/admin/prompts"),
+  savePrompt: (key, content) =>
+    request(`/api/admin/prompts/${key}`, { method: "PUT", body: JSON.stringify({ content }) }),
+  resetPrompt: (key) =>
+    request(`/api/admin/prompts/${key}`, { method: "DELETE" }),
+
   listPassages: (active = "") =>
     request(`/api/admin/passages${active !== "" ? `?active=${active}` : ""}`),
   setPassageActive: (id, isActive) =>

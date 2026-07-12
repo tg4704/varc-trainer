@@ -15,6 +15,7 @@ const { validateBody } = require("../lib/validate");
 const {
   coachCreateSessionSchema, coachReadingMapSchema, coachAttemptSchema, coachExchangeSchema,
 } = require("../lib/schemas");
+const { getPrompt } = require("../ai/prompts");
 
 const LETTERS = ["A", "B", "C", "D"];
 const MAX_DISCUSS_EXCHANGES = 4;
@@ -167,25 +168,7 @@ router.post("/sessions/:id/reading-map", aiLimiter, validateBody(coachReadingMap
       ? `Paragraph crux words (one entry per paragraph, in the student's own words — may be in any language):\n${(crux || []).map((c, i) => `¶${i + 1}: ${c || "(blank)"}`).join("\n")}`
       : `Main point: ${mainPoint || "(blank)"}\nTone: ${tone || "(blank)"}\nStructure (one line per paragraph): ${(structure || []).map((s, i) => `\n¶${i + 1}: ${s || "(blank)"}`).join("")}\nThe turn: ${theTurn || "(not given)"}`;
 
-    const SYSTEM = `You are a CAT VARC reading coach. You are given a passage's canonical reading key and a student's reading map, submitted BEFORE they saw any questions. Grade their READING PROCESS.
-
-RULES:
-- Do NOT be generic or encouraging-by-default. If the reading is shallow, say so plainly.
-- Diagnose the READING MODE: is the student argument-mapping (tracking claims, evidence, turns) or information-gathering (cataloguing topics/facts)? Name it explicitly.
-- Grade UNDERSTANDING and LOGIC, never grammar or language — the student may write in their mother tongue, Hinglish, or ungrammatical English (this is an encouraged technique). Judge only whether they grasped the argument.
-- Be specific: quote/paraphrase what they wrote and contrast it with the passage's actual architecture.
-- End with ONE concrete technique they should apply on the very next passage.
-
-Respond ONLY with valid JSON, no markdown fences:
-{
-  "reading_mode": "argument-mapping" | "mixed" | "information-gathering",
-  "thesis": "strong" | "partial" | "weak",
-  "structure": "strong" | "partial" | "weak",
-  "caught_the_turn": true | false,
-  "what_you_missed": "string",
-  "one_technique": "string",
-  "verdict_line": "string"
-}`;
+    const SYSTEM = await getPrompt("coach_reading_grade");
 
     const userMsg = `CANONICAL READING KEY:
 Thesis: ${readingKey.thesis}
@@ -326,13 +309,7 @@ router.post("/attempts", aiLimiter, validateBody(coachAttemptSchema), async (req
 
     const presentTrapTypes = [...new Set(q.options.map((o) => o.trapType).filter(Boolean))];
     const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
-    const SYSTEM = `You are a CAT (Common Admission Test) Reading Comprehension coach. A student has answered a full-passage RC question and explained their reasoning. You already know the correct answer. Evaluate the QUALITY of their reasoning, explain the correct answer precisely, and deconstruct the trap.
-
-Respond ONLY with valid JSON, no markdown fences:
-{ "reasoningScore": integer 1-5, "reasoningFeedback": string, "correctExplanation": string, "trapExplanation": string, "keyTakeaway": string }
-
-Reasoning score rubric: 1=no real reasoning/circular, 2=paraphrased but didn't connect to option logic, 3=found the right part of the passage but erred connecting it, 4=sound but missed a nuance, 5=identified authorial intent, eliminated the trap with a specific reason, reached the answer through logic.
-Rules: reasoningFeedback (2-3 sentences on HOW they thought), correctExplanation (2-3 sentences, cite specific lines), trapExplanation (2-3 sentences naming the exact flaw using the trap type meaning below), keyTakeaway (one generalizable sentence). Always reference specific words from the options or passage.`;
+    const SYSTEM = await getPrompt("coach_attempt_eval");
     const userMsg = `PASSAGE:
 ${qRow.paragraph}
 
@@ -402,7 +379,7 @@ router.post("/exchange", aiLimiter, validateBody(coachExchangeSchema), async (re
     conversation.push({ role: "student", text: message.trim() });
 
     const presentTrapTypes = [...new Set(q.options.map((o) => o.trapType).filter(Boolean))];
-    const SYSTEM = `You are a VARC coach discussing an already-revealed answer with a student who wants to understand it better. They already know the correct answer and your explanation — this is a follow-up clarification chat, not a Socratic reveal. Answer their specific question directly and helpfully. Reference the passage's actual text. Keep responses under 120 words. Respond ONLY with your message, no JSON, no labels.`;
+    const SYSTEM = await getPrompt("coach_exchange");
     const historyLines = conversation.map((m) => `${m.role === "student" ? "STUDENT" : "COACH"}: ${m.text}`).join("\n");
     const userMsg = `PASSAGE:
 ${qRow.paragraph}

@@ -18,6 +18,7 @@ import Tooltip, { InfoDot } from "../components/Tooltip.jsx";
 import VoiceMicButton from "../components/VoiceMicButton.jsx";
 import PassageFontMenu, { PASSAGE_FONTS, LINE_SPACINGS } from "../components/PassageFontMenu.jsx";
 import Icon from "../components/Icon.jsx";
+import TypingLoader from "../components/TypingLoader.jsx";
 import { useVoiceInput } from "../hooks/useVoiceInput.js";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
@@ -476,6 +477,7 @@ export default function CoachPractice() {
                   <button className="btn btn-primary fx-sheen btn-block mt-4" disabled={gradingMap} onClick={submitReadingMap}>
                     {gradingMap ? "Grading your reading…" : <>Grade my reading <span className="arrow inline-block">→</span></>}
                   </button>
+                  {gradingMap && <TypingLoader text="Reading your notes against the passage…" className="mt-2" />}
                 </>
               )}
             </div>
@@ -631,6 +633,7 @@ export default function CoachPractice() {
                 <button className="btn btn-primary fx-sheen btn-block mt-3" disabled={submitting} onClick={submitAnswer}>
                   {submitting ? "Checking…" : reasoningText.trim() ? "Submit Answer →" : "Submit (No AI Feedback) →"}
                 </button>
+                {submitting && reasoningText.trim() && <TypingLoader text="Checking your reasoning…" className="mt-2" />}
               </div>
             )}
           </div>

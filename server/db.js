@@ -287,6 +287,18 @@ async function createTables() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  // Admin-editable AI prompt overrides (server/ai/prompts.js). A row here
+  // overrides the hardcoded default for that key; no row = use the default.
+  // Lets an admin tweak prompt wording from the UI without a redeploy.
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS ai_prompts (
+      key TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      updated_by INTEGER REFERENCES users(id),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 }
 
 // ── Lightweight additive migrations ──────────────────────────────────────────

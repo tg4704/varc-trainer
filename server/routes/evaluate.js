@@ -10,35 +10,9 @@ const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { aiLimiter } = require("../lib/rateLimiters");
 const { validateBody } = require("../lib/validate");
 const { evaluateSchema } = require("../lib/schemas");
+const { getPrompt } = require("../ai/prompts");
 
 const LETTERS = ["A", "B", "C", "D"];
-
-const SYSTEM_PROMPT = `You are a CAT (Common Admission Test) Reading Comprehension coach. A student has answered an RC question. You already know the correct answer. Your job is to evaluate the QUALITY of the student's reasoning process, explain the correct answer precisely, and deconstruct the trap option.
-
-Respond ONLY with a valid JSON object. No preamble, no markdown fences, no text outside the JSON.
-
-JSON schema:
-{
-  "reasoningScore": integer 1-5,
-  "reasoningFeedback": string,
-  "correctExplanation": string,
-  "trapExplanation": string,
-  "keyTakeaway": string
-}
-
-Reasoning score rubric:
-1 — No reasoning shown, or circular ("I chose this because it seemed right")
-2 — Paraphrased the paragraph but didn't connect it to option logic
-3 — Found the right part of the paragraph but made a reasoning error connecting it to the option
-4 — Sound reasoning but missed a nuance or used imprecise language
-5 — Identified the author's intent, eliminated the trap with a specific reason, arrived at answer through logic
-
-Rules for your response:
-- reasoningFeedback: 2-3 sentences on HOW the student thought, not just whether they were right. Be specific.
-- correctExplanation: 2-3 sentences. Reference specific lines from the source excerpt. Explain WHY this option is correct, not just that it is.
-- trapExplanation: 2-3 sentences. Name the exact flaw. For too_extreme: which word makes it extreme. For out_of_scope: what concept is introduced that wasn't in the paragraph. For real_but_unstated: what the paragraph actually says instead. For partially_correct: what the option gets right and what it misses.
-- keyTakeaway: One sentence. A generalizable rule the student can apply to future similar questions.
-- Never be vague. Always reference specific words from the options or paragraph.`;
 
 function buildUserMessage(q, selectedIndex, reasoningText, quotedLines) {
   const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
@@ -172,7 +146,7 @@ router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), 
 async function runEvaluation({ userId, attemptId, q, selectedOptionIndex, reasoningText, quotedLines }) {
   try {
     const response = await callModel({
-      system: SYSTEM_PROMPT,
+      system: await getPrompt("evaluate_reasoning"),
       messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText, quotedLines) }],
     });
 

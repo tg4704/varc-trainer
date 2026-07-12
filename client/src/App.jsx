@@ -65,6 +65,7 @@ const AdminQuestionEditor = lazyWithReload(() => import("./pages/admin/AdminQues
 const AdminPassages       = lazyWithReload(() => import("./pages/admin/AdminPassages.jsx"));
 const AdminImport         = lazyWithReload(() => import("./pages/admin/AdminImport.jsx"));
 const AdminCosts          = lazyWithReload(() => import("./pages/admin/AdminCosts.jsx"));
+const AdminPrompts        = lazyWithReload(() => import("./pages/admin/AdminPrompts.jsx"));
 const AdminLogs           = lazyWithReload(() => import("./pages/admin/AdminLogs.jsx"));
 const AdminFlags          = lazyWithReload(() => import("./pages/admin/AdminFlags.jsx"));
 
@@ -171,6 +172,7 @@ function AppShell() {
             <Route path="passages"             element={<Suspense fallback={AdminLoading}><AdminPassages /></Suspense>} />
             <Route path="import"               element={<Suspense fallback={AdminLoading}><AdminImport /></Suspense>} />
             <Route path="costs"                element={<Suspense fallback={AdminLoading}><AdminCosts /></Suspense>} />
+            <Route path="prompts"              element={<Suspense fallback={AdminLoading}><AdminPrompts /></Suspense>} />
             <Route path="logs"                 element={<Suspense fallback={AdminLoading}><AdminLogs /></Suspense>} />
             <Route path="flags"                element={<Suspense fallback={AdminLoading}><AdminFlags /></Suspense>} />
           </Route>

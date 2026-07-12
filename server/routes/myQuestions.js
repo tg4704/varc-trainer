@@ -13,6 +13,7 @@ const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
 const { aiLimiter } = require("../lib/rateLimiters");
 const { validateBody } = require("../lib/validate");
 const { generateDraftSchema } = require("../lib/schemas");
+const { getPrompt, renderPrompt } = require("../ai/prompts");
 
 router.use(authenticate);
 
@@ -187,34 +188,7 @@ router.post("/generate-draft", aiLimiter, validateBody(generateDraftSchema), asy
   const questionType = type || "inference";
   const questionTopic = topic || "humanities";
 
-  const SYSTEM = `You are an expert CAT (Common Admission Test) RC question designer.
-Given a passage, generate ONE high-quality CAT-style ${questionType} question.
-
-Rules:
-- Exactly 4 options: 1 correct, 1 trap, 2 distractors
-- The correct option requires inference/judgment, not direct quote recall
-- Trap types: too_extreme | out_of_scope | real_but_unstated | partially_correct
-- Correct option: 12–25 words, avoid absolute language (never/always/only/completely)
-- Trap option must be genuinely tempting to a 90-percentile student
-- Distractor options: clearly wrong but not obviously so
-- sourceLines: 2–4 verbatim sentences from the passage that justify the correct answer
-
-Respond ONLY with valid JSON. No preamble, no markdown fences.
-
-Schema:
-{
-  "question": string,
-  "options": [
-    {"text": string, "isCorrect": boolean, "isTrap": boolean, "trapType": string|null},
-    {"text": string, "isCorrect": boolean, "isTrap": boolean, "trapType": string|null},
-    {"text": string, "isCorrect": boolean, "isTrap": boolean, "trapType": string|null},
-    {"text": string, "isCorrect": boolean, "isTrap": boolean, "trapType": string|null}
-  ],
-  "correctIndex": 0|1|2|3,
-  "trapIndex": 0|1|2|3,
-  "trapType": "too_extreme"|"out_of_scope"|"real_but_unstated"|"partially_correct",
-  "sourceLines": string
-}`;
+  const SYSTEM = renderPrompt(await getPrompt("my_questions_generate"), { questionType });
 
   const userMsg = `PASSAGE:\n${paragraph.trim()}\n\nQUESTION TYPE: ${questionType}\n\nGenerate one CAT-style ${questionType} question on this passage.`;
 

@@ -14,6 +14,7 @@ import Icon from "../components/Icon.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { Textarea } from "../components/ui/input.jsx";
 import VoiceMicButton from "../components/VoiceMicButton.jsx";
+import TypingLoader from "../components/TypingLoader.jsx";
 import { useVoiceInput } from "../hooks/useVoiceInput.js";
 import { cn } from "../lib/utils.js";
 import { buildTextSegments, domOffsetToTextOffset, ANNOTATION_STYLES } from "../lib/textAnnotations.js";
@@ -1125,7 +1126,7 @@ export default function Practice() {
                 )}
               </button>
               {cs.submitting && isDeferred(session) && <p className="mt-2 text-center text-xs dim">Saving your answer…</p>}
-              {cs.submitting && !isDeferred(session) && reasoningLen > 0 && <p className="mt-2 text-center text-xs dim">Analyzing your reasoning…</p>}
+              {cs.submitting && !isDeferred(session) && reasoningLen > 0 && <TypingLoader text="Analyzing your reasoning…" className="mt-2" />}
             </div>
           )}
 

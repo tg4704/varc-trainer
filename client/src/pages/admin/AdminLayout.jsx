@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   ScrollText,
   Flag,
+  MessageSquareText,
 } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 
@@ -20,6 +21,7 @@ const NAV = [
   { to: "/admin/costs",     label: "AI Costs",  icon: CircleDollarSign },
   { to: "/admin/logs",      label: "API Logs",  icon: ScrollText },
   { to: "/admin/flags",     label: "Flags",     icon: Flag },
+  { to: "/admin/prompts",   label: "AI Prompts", icon: MessageSquareText },
 ];
 
 export default function AdminLayout() {

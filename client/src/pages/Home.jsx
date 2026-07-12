@@ -6,6 +6,7 @@ import { scrollIntoViewMotionSafe } from "../lib/utils.js";
 import Icon from "../components/Icon.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import PageMeta from "../components/PageMeta.jsx";
+import OnboardingChecklist from "../components/OnboardingChecklist.jsx";
 
 // ── Interactive demo card ────────────────────────────────────────────────────
 // No backend calls, but genuinely interactive: the visitor clicks whichever
@@ -355,6 +356,11 @@ export default function Home() {
               Track your accuracy trend over time
             </FeatureRow>
           </div>
+          {user && (
+            <div className="mt-8">
+              <OnboardingChecklist />
+            </div>
+          )}
         </div>
         <div className="md:border-l md:pl-12 md:py-11" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
           <DemoCard />

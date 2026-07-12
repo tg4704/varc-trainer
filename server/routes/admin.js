@@ -6,6 +6,7 @@ const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate, requireAdmin } = require("../auth");
 const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
+const { DEFAULTS: PROMPT_DEFAULTS, invalidatePromptCache } = require("../ai/prompts");
 
 router.use(authenticate, requireAdmin);
 
@@ -740,6 +741,61 @@ router.get("/api-calls", async (req, res, next) => {
     );
 
     res.json({ rows, total: Number(totalRow.total), page: Number(page) || 1, pageSize: limit });
+  } catch (e) { next(e); }
+});
+
+// ── Admin: AI prompt overrides (server/ai/prompts.js) ────────────────────────
+// GET lists every known prompt key with its effective content (DB override if
+// one exists, otherwise the hardcoded default) plus whether it's customized.
+router.get("/prompts", async (req, res, next) => {
+  try {
+    const overrides = await db.all("SELECT key, content, updated_at, updated_by FROM ai_prompts");
+    const overrideMap = new Map(overrides.map((r) => [r.key, r]));
+    const rows = Object.entries(PROMPT_DEFAULTS).map(([key, def]) => {
+      const override = overrideMap.get(key);
+      return {
+        key,
+        label: def.label,
+        description: def.description,
+        defaultContent: def.content,
+        content: override ? override.content : def.content,
+        isCustom: Boolean(override),
+        updatedAt: override ? override.updated_at : null,
+        updatedBy: override ? override.updated_by : null,
+      };
+    });
+    res.json({ prompts: rows });
+  } catch (e) { next(e); }
+});
+
+// PUT upserts an override for one prompt key. Rejects unknown keys and empty
+// content so a typo in the URL or a blank save can't silently break an AI call.
+router.put("/prompts/:key", async (req, res, next) => {
+  try {
+    const { key } = req.params;
+    if (!PROMPT_DEFAULTS[key]) return res.status(404).json({ error: "Unknown prompt key" });
+    const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
+    if (!content) return res.status(400).json({ error: "content is required" });
+
+    await db.run(
+      `INSERT INTO ai_prompts (key, content, updated_by, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (key) DO UPDATE SET content = $2, updated_by = $3, updated_at = NOW()`,
+      [key, content, req.userId]
+    );
+    invalidatePromptCache();
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// DELETE reverts a prompt to its hardcoded default.
+router.delete("/prompts/:key", async (req, res, next) => {
+  try {
+    const { key } = req.params;
+    if (!PROMPT_DEFAULTS[key]) return res.status(404).json({ error: "Unknown prompt key" });
+    await db.run("DELETE FROM ai_prompts WHERE key = $1", [key]);
+    invalidatePromptCache();
+    res.json({ ok: true });
   } catch (e) { next(e); }
 });
 
