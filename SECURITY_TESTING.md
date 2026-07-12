@@ -1,12 +1,13 @@
 # Security, Legal, SEO, Monitoring, Performance & Reliability — Manual Test Plan
 
-Covers five passes from 2026-07 (see `CLAUDE.md` for what was built and why
+Covers six passes from 2026-07 (see `CLAUDE.md` for what was built and why
 in each):
 - **Part A — Security Hardening** (tests 1–14): rate limiting, auth, headers, CORS.
 - **Part B — Legal & Compliance + SEO** (tests 15–21): privacy/consent, DPDP rights, sitemap/meta.
 - **Part C — Monitoring & Observability** (tests 22–26): error tracking, health check, analytics events.
 - **Part D — Performance & Infrastructure** (tests 27–30): compression, DB indexes, optimistic UI.
 - **Part E — Testing, Reliability & Release Engineering** (tests 31–39): token-expiry, AI-audit fixes, CI.
+- **Part F — Product, UX & Admin Prompts** (tests 40–42): onboarding checklist, loading animation, admin prompts manager.
 
 Each test is copy-pasteable — run it, compare to "Expected," check the box.
 
@@ -934,6 +935,140 @@ which step and why.
 
 ---
 
+# Part F — Product, UX & Admin Prompts
+
+## 40. Onboarding checklist shows for a fresh account, hides once done
+
+Requires creating a genuinely new account (existing test accounts with
+activity won't show it — see below).
+
+```bash
+BASE=http://localhost:3001
+curl -s -X POST $BASE/api/auth/register -H "Content-Type: application/json" \
+  -d '{"username":"onboardtest","email":"onboardtest@example.com","password":"testpass123"}'
+```
+**Expected:** `{"requiresVerification":true,...}`. In dev (no `RESEND_API_KEY`),
+the OTP prints to the server console — look for a line like
+`[email] Subject: 123456 is your Graspr verification code`. Verify it:
+```bash
+curl -s -X POST $BASE/api/auth/verify-email -H "Content-Type: application/json" \
+  -d '{"email":"onboardtest@example.com","otp":"<THE_CODE_FROM_THE_LOG>"}'
+```
+This returns a `token` — set it in the browser (`localStorage.setItem('varc_token', '<token>')`)
+and reload `/`.
+
+**Expected:** a "Get started" card appears below the hero's feature list with
+two unchecked steps — "Finish your first Drill" and "Try AI Coach", both
+linking correctly (`/setup`, `/coach`).
+
+Click the **×** to dismiss. **Expected:** it disappears immediately, and
+`localStorage.getItem('graspr_onboarding_dismissed')` is `"1"`. Reload —
+**expected:** it stays hidden (persisted).
+
+**Expected on an already-active account** (e.g. `$TEST_USER`, who's done both
+steps): the checklist never appears at all — no dismiss needed, since there's
+nothing to nag about. Confirm via:
+```bash
+TOKEN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" \
+  -d "{\"identifier\":\"$TEST_USER\",\"password\":\"$TEST_PASS\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s $BASE/api/dashboard -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json;print('totalAttempts:', json.load(sys.stdin)['totalAttempts'])"
+curl -s $BASE/api/coach/stats -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json;print('totalSessions:', json.load(sys.stdin)['totalSessions'])"
+```
+**Expected:** both > 0 — confirms why the checklist is (correctly) invisible
+for this account.
+
+Clean up the test account afterward:
+```bash
+psql "$DATABASE_URL" -c "DELETE FROM otp_tokens WHERE user_id = (SELECT id FROM users WHERE username='onboardtest'); DELETE FROM users WHERE username='onboardtest';"
+```
+
+☐ Pass — fresh account shows the checklist unchecked, dismiss persists, an
+already-active account never sees it
+
+---
+
+## 41. Loading animation appears during AI waits (Drills + Coach)
+
+In a browser: start a Drills session in Analysis mode, answer a question
+with some typed reasoning, and submit. **Expected:** while waiting for AI
+feedback, below the button you see a short type-in animation ("Analyzing
+your reasoning…") that reveals character-by-character over about a second,
+then sits still with a blinking cursor — not a spinner, not a static
+sentence appearing all at once.
+
+Same idea in Coach: submit a reading map (with `gradingMap` true) or answer a
+question with reasoning — **expected:** the equivalent typing hint appears
+beneath the button ("Reading your notes against the passage…" / "Checking
+your reasoning…").
+
+☐ Pass — type-in animation shows during all three AI waits, calm and brief
+
+---
+
+## 42. Admin AI Prompts manager — full CRUD round-trip
+
+Requires an admin account. If you don't have one locally:
+```bash
+psql "$DATABASE_URL" -c "UPDATE users SET role='admin' WHERE username='$TEST_USER';"
+```
+(revert with `role='user'` when done testing, unless you want it to stay admin).
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" \
+  -d "{\"identifier\":\"$TEST_USER\",\"password\":\"$TEST_PASS\"}" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+
+echo "--- list ---"
+curl -s $BASE/api/admin/prompts -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json,sys
+for p in json.load(sys.stdin)['prompts']: print(p['key'], '| isCustom:', p['isCustom'])
+"
+```
+**Expected:** exactly 5 keys (`evaluate_reasoning`, `coach_reading_grade`,
+`coach_attempt_eval`, `coach_exchange`, `my_questions_generate`), all
+`isCustom: False` on a fresh install.
+
+```bash
+echo "--- save an override ---"
+curl -s -X PUT $BASE/api/admin/prompts/coach_exchange -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"content":"TEST — respond only with the word banana."}'
+curl -s $BASE/api/admin/prompts -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json,sys
+p = [x for x in json.load(sys.stdin)['prompts'] if x['key']=='coach_exchange'][0]
+print('isCustom:', p['isCustom'])
+"
+```
+**Expected:** `{"ok":true}` then `isCustom: True`.
+
+```bash
+echo "--- reset ---"
+curl -s -X DELETE $BASE/api/admin/prompts/coach_exchange -H "Authorization: Bearer $TOKEN"
+curl -s $BASE/api/admin/prompts -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json,sys
+p = [x for x in json.load(sys.stdin)['prompts'] if x['key']=='coach_exchange'][0]
+print('isCustom:', p['isCustom'], '| starts with:', p['content'][:40])
+"
+```
+**Expected:** `isCustom: False`, content back to the original default text
+("You are a VARC coach discussing...").
+
+Non-admin should be rejected:
+```bash
+# Using any non-admin user's token
+curl -s -o /dev/null -w "%{http_code}\n" $BASE/api/admin/prompts -H "Authorization: Bearer $NON_ADMIN_TOKEN"
+```
+**Expected:** `403`.
+
+In the browser: log in as the admin user, go to `/admin/prompts`. **Expected:**
+5 cards, each showing a "Default" badge, a read-only-looking textarea with
+the real prompt text, and a disabled "Save" button (nothing to save yet).
+Edit one, confirm Save enables, click it, confirm the badge flips to
+"Customized" and a "Reset to default" button appears; click Reset, confirm
+it flips back to "Default" and the textarea reverts.
+
+☐ Pass — full save/reset round-trip works via API and UI, non-admin blocked
+
+---
+
 ## Quick summary checklist
 
 | # | Test | Pass? |
@@ -977,3 +1112,6 @@ which step and why.
 | 37 | Browser tab-close warns only when Coach has unsaved reasoning/chat text | ☐ |
 | 38 | Coach chat failed-send rolls back (restores input, no stuck bubble) | ☐ |
 | 39 | CI is green on the current main | ☐ |
+| 40 | Onboarding checklist shows unchecked for a fresh account, hides once done | ☐ |
+| 41 | Loading type-in animation appears during Drills + Coach AI waits | ☐ |
+| 42 | Admin AI Prompts CRUD round-trip works, non-admin gets 403 | ☐ |
