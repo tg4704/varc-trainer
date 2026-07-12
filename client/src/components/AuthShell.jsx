@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "./Icon.jsx";
 
@@ -124,11 +124,13 @@ export function GoogleButton({ href }) {
 
 export function PasswordField({ label, value, onChange, hint, autoComplete, placeholder = "••••••••" }) {
   const [show, setShow] = useState(false);
+  const id = useId();
   return (
     <div>
-      <label className="field-label">{label}</label>
+      <label htmlFor={id} className="field-label">{label}</label>
       <div className="relative">
         <input
+          id={id}
           className="input"
           type={show ? "text" : "password"}
           value={value}
@@ -141,7 +143,7 @@ export function PasswordField({ label, value, onChange, hint, autoComplete, plac
         <button
           type="button"
           onClick={() => setShow((s) => !s)}
-          aria-label="Toggle password visibility"
+          aria-label={show ? "Hide password" : "Show password"}
           className="mono absolute right-3 top-1/2 -translate-y-1/2 text-[11px]"
           style={{ color: "var(--text-2)" }}
         >

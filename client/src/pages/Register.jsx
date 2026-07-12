@@ -61,8 +61,9 @@ export default function Register() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>
-            <label className="field-label">Name <span className="dim font-normal">(optional)</span></label>
+            <label htmlFor="reg-name" className="field-label">Name <span className="dim font-normal">(optional)</span></label>
             <input
+              id="reg-name"
               className="input"
               type="text"
               value={name}
@@ -73,8 +74,9 @@ export default function Register() {
             />
           </div>
           <div>
-            <label className="field-label">Username</label>
+            <label htmlFor="reg-username" className="field-label">Username</label>
             <input
+              id="reg-username"
               className="input"
               type="text"
               value={username}
@@ -86,8 +88,9 @@ export default function Register() {
             />
           </div>
           <div>
-            <label className="field-label">Email</label>
+            <label htmlFor="reg-email" className="field-label">Email</label>
             <input
+              id="reg-email"
               className="input"
               type="email"
               value={email}

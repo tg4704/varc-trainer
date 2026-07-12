@@ -851,7 +851,10 @@ export default function Practice() {
                       />
                     </div>
                     {!fb && (
-                      <button type="button" title={isElim ? "Restore" : "Eliminate"}
+                      <button type="button"
+                        title={isElim ? "Restore" : "Eliminate"}
+                        aria-label={`${isElim ? "Restore" : "Eliminate"} option ${LETTERS[i]}`}
+                        aria-pressed={isElim}
                         onClick={() => {
                           const next = new Set(elim);
                           if (next.has(i)) next.delete(i);

@@ -58,7 +58,7 @@ export default function AdminCosts() {
       {/* By day */}
       <Card>
         <div className="p-4 border-b border-border text-sm font-semibold">Last 30 days</div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-3 py-2">Day</th>
@@ -78,13 +78,13 @@ export default function AdminCosts() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
 
       {/* By model */}
       <Card>
         <div className="p-4 border-b border-border text-sm font-semibold">By model</div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-3 py-2">Provider</th>
@@ -110,13 +110,13 @@ export default function AdminCosts() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
 
       {/* By user */}
       <Card>
         <div className="p-4 border-b border-border text-sm font-semibold">Top users by spend</div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-3 py-2">User</th>
@@ -136,7 +136,7 @@ export default function AdminCosts() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
     </div>
   );

@@ -307,3 +307,27 @@ score" card (alongside Time and Trap rate) with the session's total
 intuition points.
 
 - [ ] Pass
+
+## 20. Form inputs are labelled; controls have accessible names (P2-18)
+
+1. On Login and Register, inspect each input (or run a screen reader / axe).
+
+Expected: every field has an associated `<label>` (via `htmlFor`/`id`), so
+a screen reader announces "Email or username", "Username", "Password", etc.
+The password show/hide toggle announces "Show password"/"Hide password".
+
+2. In an Intuition-mode Drills question, inspect the per-option "✕" button.
+
+Expected: it has an accessible name like "Eliminate option A" (and
+"Restore option A" once eliminated), with `aria-pressed` reflecting state.
+
+- [ ] Pass
+
+## 21. Admin cost/log tables scroll on narrow screens (P2-19)
+
+1. As an admin, open `/admin/logs` and `/admin/costs` at ~375px.
+
+Expected: wide tables scroll horizontally within their card (no clipped
+Cost/Status columns) instead of overflowing the page.
+
+- [ ] Pass

@@ -167,8 +167,8 @@ export default function AdminLogs() {
       {error && <p className="text-destructive text-sm">{error}</p>}
 
       {/* Table */}
-      <Card>
-        <table className="w-full text-sm">
+      <Card className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-3 py-2">Time</th>
