@@ -102,6 +102,7 @@ export default function CoachPractice() {
   const [discussInput, setDiscussInput] = useState("");
   const [discussSending, setDiscussSending] = useState(false);
   const chatEndRef = useRef(null);
+  const chatBodyRef = useRef(null);
 
   // Leave-session modal — Coach sessions are resumable (unlike Drills), so
   // "leaving" isn't just End/Discard: the safe default is Resume later,
@@ -171,7 +172,11 @@ export default function CoachPractice() {
   }, [sessionId, coachSession]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only the chat container, not the whole window. scrollIntoView()
+    // would scroll every scrollable ancestor (including the page), yanking the
+    // sticky article + question columns down on every reply.
+    const el = chatBodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [attempts, discussOpen]);
 
   // Size the reading-map rows to the passage's actual paragraph count (split on
@@ -549,7 +554,7 @@ export default function CoachPractice() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Passage — plain canvas, no glass, maximum reading legibility */}
         <div className={mapCollapsed ? "lg:w-full" : "lg:w-[45%]"}>
-          <div className={mapCollapsed ? "sticky top-4" : "sticky top-4 max-h-[calc(100vh-6rem)] overflow-y-auto lg:border-r lg:pr-6"} style={{ borderColor: "var(--glass-border-lo)" }}>
+          <div className={mapCollapsed ? "lg:sticky lg:top-4" : "lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:border-r lg:pr-6"} style={{ borderColor: "var(--glass-border-lo)" }}>
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="eyebrow">Passage</div>
               <div className="flex items-center gap-2">
@@ -654,7 +659,7 @@ export default function CoachPractice() {
               <div className="px-4 py-2.5" style={{ borderBottom: "1px solid var(--glass-border-lo)" }}>
                 <span className="eyebrow">Discuss with Coach</span>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 max-h-72">
+              <div ref={chatBodyRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-3 max-h-72">
                 {(attempt.discussConversation || []).length === 0 && (
                   <p className="text-sm muted">Ask anything about this question: why an option is wrong, how to read the passage, whatever's unclear.</p>
                 )}

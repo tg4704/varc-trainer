@@ -1171,9 +1171,18 @@ export default function Practice() {
       </div>
     </div>
 
-    {/* Selection popover — Highlight / Underline / Note / Quote */}
-    {selectionPopover && (
-      <div style={{ position: "fixed", left: selectionPopover.x, top: selectionPopover.y, transform: "translateX(-50%)", zIndex: 120 }}>
+    {/* Selection popover — Highlight / Underline / Note / Quote.
+        Clamp the (centered) x so the toolbar can't clip off either edge when
+        text is selected near the screen edge on narrow viewports. HALF covers
+        the widest state (~5 labelled buttons). */}
+    {selectionPopover && (() => {
+      const HALF = 180, PAD = 8;
+      const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+      const clampedX = vw > 2 * (HALF + PAD)
+        ? Math.min(Math.max(selectionPopover.x, HALF + PAD), vw - HALF - PAD)
+        : vw / 2;
+      return (
+      <div style={{ position: "fixed", left: clampedX, top: selectionPopover.y, transform: "translateX(-50%)", maxWidth: "calc(100vw - 16px)", zIndex: 120 }}>
         <div
           className="flex items-center gap-0.5 rounded-[12px] p-[3px]"
           style={{ background: "rgba(20,23,31,0.95)", backdropFilter: "blur(18px) saturate(150%)", WebkitBackdropFilter: "blur(18px) saturate(150%)", border: "1px solid rgba(255,255,255,0.14)" }}
@@ -1225,7 +1234,8 @@ export default function Practice() {
           )}
         </div>
       </div>
-    )}
+      );
+    })()}
 
     {flagModal && <FlagModal questionId={flagModal.questionId} onClose={() => setFlagModal(null)}
       onSuccess={() => { setFlagModal(null); setFlagToast("Reported, thanks for the feedback!"); setTimeout(() => setFlagToast(null), 3500); }} />}

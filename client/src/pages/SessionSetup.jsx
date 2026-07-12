@@ -5,7 +5,6 @@ import { saveActiveSession } from "../session.js";
 import { track } from "../analytics.js";
 import { Button } from "../components/ui/button.jsx";
 import Modal from "../components/Modal.jsx";
-import Tooltip from "../components/Tooltip.jsx";
 
 const TYPE_LABELS = {
   inference: "Inference", tone: "Tone", title: "Title", detail: "Detail",
@@ -317,15 +316,17 @@ function Section({ title, children, flush = false }) {
   );
 }
 
-// Descriptions live in a hover tooltip per option (rather than one always-
-// visible line below the group) so picking between 2-3 short-labeled options
-// doesn't cost a full paragraph of body copy up front.
+// The selected option's description shows as a single line below the group —
+// visible on touch (a hover tooltip never appears on phones) but still compact
+// (only the active option's copy, not a paragraph per option).
 function SquareToggle({ options, value, onChange }) {
+  const selectedDesc = options.find((o) => o.value === value)?.desc;
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
-      {options.map((o) => (
-        <Tooltip key={o.value} label={o.desc} wrapperClassName="w-full">
+    <div>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+        {options.map((o) => (
           <button
+            key={o.value}
             type="button"
             onClick={() => onChange(o.value)}
             className="fx-ring flex w-full min-h-[68px] items-center justify-center rounded-[12px] px-3 py-3 text-center transition-colors"
@@ -342,8 +343,9 @@ function SquareToggle({ options, value, onChange }) {
               {o.title}
             </span>
           </button>
-        </Tooltip>
-      ))}
+        ))}
+      </div>
+      {selectedDesc && <p className="mt-2.5 text-[12.5px] leading-snug dim">{selectedDesc}</p>}
     </div>
   );
 }

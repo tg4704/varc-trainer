@@ -1,6 +1,9 @@
 // Small shared hover tooltip — used to move option/setting descriptions out
 // of always-visible body copy (information fatigue) and into an on-demand
-// reveal. Wrap any trigger element; the label shows on hover/focus.
+// reveal. Wrap any trigger element; the label shows on hover/focus, and on
+// touch via press-and-hold (group-active). max-w keeps it from overflowing
+// narrow screens; for content that MUST be readable on touch, prefer showing
+// it inline rather than in a tooltip.
 export default function Tooltip({ label, children, side = "bottom", wrapperClassName = "" }) {
   if (!label) return children;
   const posClass =
@@ -14,7 +17,7 @@ export default function Tooltip({ label, children, side = "bottom", wrapperClass
     <div className={`group relative ${wrapperClassName}`}>
       {children}
       <div
-        className={`pointer-events-none absolute z-20 w-max max-w-[240px] rounded-[10px] px-3 py-2 text-[11.5px] leading-snug opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 ${posClass}`}
+        className={`pointer-events-none absolute z-20 w-max max-w-[min(240px,calc(100vw-24px))] rounded-[10px] px-3 py-2 text-[11.5px] leading-snug opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100 ${posClass}`}
         style={{
           background: "rgba(18,20,27,0.96)",
           border: "1px solid var(--glass-border-hi)",

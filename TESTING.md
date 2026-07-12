@@ -173,3 +173,44 @@ Expected: hash/anchor links still jump to their target section (scroll
 reset does NOT hijack in-page anchors).
 
 - [ ] Pass
+
+## 10. Coach: passage panel & chat scroll behave on all sizes (P1-7 / P1-8)
+
+**Mobile passage panel (375px):**
+1. Start a Coach passage, map it, reach the questions phase at 375px.
+2. Scroll down through the passage into the question.
+
+Expected: the passage scrolls away normally — it is NOT a pinned/sticky
+box overlapping the question. (At ≥1024px the passage IS sticky beside
+the question, as before.)
+
+**Discuss chat auto-scroll (desktop):**
+3. On a question, answer it, open "Discuss with Coach", send a few
+   messages so the chat fills and scrolls.
+
+Expected: each new reply scrolls the CHAT box to the latest message only —
+the whole page (article + question columns) does NOT jump/scroll. Reaching
+the top/bottom of the chat does not chain-scroll the page behind it.
+
+- [ ] Pass
+
+## 11. Practice selection toolbar stays on-screen (P1-9)
+
+1. In a Drills question, select passage text right at the LEFT edge of the
+   screen, then right at the RIGHT edge (narrow viewport, ~375px).
+
+Expected: the Highlight/Underline/Note/Quote toolbar stays fully within
+the viewport both times — no button is clipped off either edge.
+
+- [ ] Pass
+
+## 12. Session-setup option descriptions show on touch (P1-10)
+
+1. On the Session Setup page (touch device or no mouse), look at the
+   Practice mode (Analysis/Intuition) and Timer selectors.
+
+Expected: the selected option's description appears as a line of text
+below the buttons and updates when you switch — it is NOT hidden behind a
+hover-only tooltip.
+
+- [ ] Pass
