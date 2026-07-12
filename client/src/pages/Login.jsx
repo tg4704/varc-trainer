@@ -57,7 +57,7 @@ export default function Login() {
       <PageMeta title="Log in — Graspr" description="Sign in to Graspr to keep training CAT VARC reading comprehension." />
       <AuthCard
         title="Welcome back"
-        subtitle="Sign in to keep your streak alive."
+        subtitle="Sign in to pick up where you left off."
         footer={<>By continuing you agree to our <span className="muted">Terms</span> and <span className="muted">Privacy Policy</span>.</>}
       >
         <AuthTabs active="login" />

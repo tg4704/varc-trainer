@@ -221,9 +221,9 @@ export default function SessionSetup() {
           className="fx-sheen mt-8 w-full"
           size="lg"
         >
-          {`Review ${numQuestions}-question${
+          {`Start ${numQuestions}-question${
             deepLinkValid ? ` ${TYPE_LABELS[deepLinkType].toLowerCase()}` : ""
-          } session`}
+          } session →`}
         </Button>
       </div>
 

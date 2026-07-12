@@ -134,9 +134,10 @@ export default function TopNav() {
             <NavPillTooltip label="Reading Lounge" sublabel="Coming Soon">
               <span
                 className="flex cursor-default items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold"
-                style={{ color: "var(--text-2)", opacity: 0.45 }}
+                style={{ color: "var(--text-2)", opacity: 0.55 }}
               >
                 Lounge
+                <span className="mono rounded-full px-1.5 py-0.5 text-[8.5px] uppercase tracking-wide" style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-2)" }}>Soon</span>
               </span>
             </NavPillTooltip>
             <Link
@@ -296,9 +297,8 @@ export default function TopNav() {
                   <div className="my-1 h-px" style={{ background: "var(--glass-border-lo)" }} />
                   <button
                     onClick={() => { setUserOpen(false); logout(); }}
-                    className="w-full rounded-[9px] px-3 py-2 text-left text-[13.5px] transition-colors"
-                    style={{ color: "var(--red)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.12)")}
+                    className="w-full rounded-[9px] px-3 py-2 text-left text-[13.5px] text-foreground transition-colors"
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     Log out

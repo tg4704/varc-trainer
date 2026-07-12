@@ -241,3 +241,40 @@ Expected: the jump is instant, not an animated smooth-scroll. CSS
 animations/transitions are also effectively disabled.
 
 - [ ] Pass
+
+---
+
+# Part C — P2 fixes
+
+## 15. Copy & naming consistency (P2-13)
+
+Check each, expecting the stated result:
+
+- Login page subtitle reads "Sign in to pick up where you left off." (no
+  "streak" — that feature was removed).
+- Home footer Product column reads **Drills / Coach / Lounge** (matching the
+  nav), with a small "Soon" badge on Lounge. Company column has **Blog** and
+  **Contact** (Contact opens `mailto:privacy@graspr.in`); there is no dead
+  "About" text-styled-as-link.
+- Nav "Lounge" pill shows a "Soon" badge (not just dimmed).
+- Home hero: the mono label beside "Start free" reads "No card needed"
+  (not the redundant "Free to start").
+- Session Setup primary button reads "Start N-question session →" (not
+  "Review …", which read like SR review mode).
+- Avatar dropdown "Log out" is neutral-colored, not the destructive red used
+  for "Delete account".
+- Drills feedback: for a correct answer, "You chose A. …teaching." has a
+  single period; for wrong, "…informed. The correct answer was C. …visible."
+  has no double periods.
+
+- [ ] Pass
+
+## 16. Pricing lists only shipped features (P2-14)
+
+1. Visit `/pricing`.
+
+Expected: no bullet mentions "Spaced repetition review queue" or "Streak +
+daily goal tracking" (neither is in the app). They're replaced with
+"Trap-type weakness analytics" and "Voice-to-text reasoning input".
+
+- [ ] Pass

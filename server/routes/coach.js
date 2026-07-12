@@ -220,9 +220,9 @@ ${studentMapText}`;
         thesis: "partial",
         structure: "partial",
         caught_the_turn: false,
-        what_you_missed: "We couldn't grade your reading this time: the AI feedback service had a hiccup. Your notes were saved; continue to the questions.",
+        what_you_missed: "Your notes were saved — retry the grade above, or continue to the questions.",
         one_technique: "Re-check your notes against the passage before answering. Did you capture what each paragraph is doing, not just what it's about?",
-        verdict_line: "Reading feedback unavailable this time.",
+        verdict_line: "The AI grader had a hiccup this time.",
         ungraded: true,
       };
     }

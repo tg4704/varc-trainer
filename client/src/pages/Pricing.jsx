@@ -34,7 +34,7 @@ const TIERS = [
       "Everything in Skimmer",
       "Unlimited Drills, all question types",
       "AI reasoning feedback on every answer",
-      "Spaced repetition review queue",
+      "Trap-type weakness analytics",
     ],
   },
   {
@@ -50,7 +50,7 @@ const TIERS = [
       "AI Reading Coach with Socratic debrief",
       "Full passage library access",
       "Priority AI response times",
-      "Streak + daily goal tracking",
+      "Voice-to-text reasoning input",
     ],
   },
   {

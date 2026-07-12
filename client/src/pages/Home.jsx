@@ -339,7 +339,7 @@ export default function Home() {
               <>
                 <Link to="/register" className="btn btn-primary btn-lg fx-sheen">Start free</Link>
                 <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--teal)", letterSpacing: "0.12em" }}>
-                  Free to start
+                  No card needed
                 </span>
               </>
             )}
@@ -445,12 +445,12 @@ export default function Home() {
           <FooterColumn
             title="Product"
             items={[
-              { label: "RC Trainer", to: "/setup" },
-              { label: "AI Coach", to: "/coach" },
-              { label: "Reading Lounge" },
+              { label: "Drills", to: "/setup" },
+              { label: "Coach", to: "/coach" },
+              { label: "Lounge", soon: true },
             ]}
           />
-          <FooterColumn title="Company" items={[{ label: "About" }, { label: "Blog", to: "/blog" }, { label: "Contact" }]} />
+          <FooterColumn title="Company" items={[{ label: "Blog", to: "/blog" }, { label: "Contact", href: "mailto:privacy@graspr.in" }]} />
           <FooterColumn title="Legal" items={[{ label: "Privacy", to: "/privacy" }, { label: "Terms", to: "/terms" }]} />
         </div>
         <div
@@ -474,9 +474,14 @@ function FooterColumn({ title, items }) {
           <Link key={it.label} to={it.to} className="fx-underline text-[13px] dim">
             {it.label}
           </Link>
-        ) : (
-          <span key={it.label} className="text-[13px] dim">
+        ) : it.href ? (
+          <a key={it.label} href={it.href} className="fx-underline text-[13px] dim">
             {it.label}
+          </a>
+        ) : (
+          <span key={it.label} className="flex items-center gap-1.5 text-[13px] dim">
+            {it.label}
+            {it.soon && <span className="mono rounded-full px-1.5 py-0.5 text-[8.5px] uppercase tracking-wide" style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-2)" }}>Soon</span>}
           </span>
         )
       )}

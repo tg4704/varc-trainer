@@ -43,8 +43,11 @@ export default function FeedbackSections({ attempt }) {
 
   const [tab, setTab] = useState("explanation");
 
-  const correctText = options[correctOptionIndex]?.text;
-  const selectedText = selectedOptionIndex != null ? options[selectedOptionIndex]?.text : null;
+  // Option text usually ends with a period; the sentences below add their own
+  // punctuation, so trim a trailing "." to avoid "…informed.." double periods.
+  const stripDot = (s) => (s ? s.replace(/\s*\.\s*$/, "") : s);
+  const correctText = stripDot(options[correctOptionIndex]?.text);
+  const selectedText = selectedOptionIndex != null ? stripDot(options[selectedOptionIndex]?.text) : null;
   const headColor = skipped ? "var(--text-muted)" : isCorrect ? "var(--green)" : "var(--red)";
 
   const hasExplanation = reasoningScore != null || !!correctExplanation || !!trapExplanation || !!keyTakeaway;
@@ -80,12 +83,12 @@ export default function FeedbackSections({ attempt }) {
           <p className="pl-[41px] text-sm leading-relaxed muted">
             {selectedText && (
               <>
-                You chose <strong className="text-foreground">{LETTERS[selectedOptionIndex]}. {selectedText}</strong>
+                You chose <strong className="text-foreground">{LETTERS[selectedOptionIndex]}. {selectedText}</strong>.
               </>
             )}
             {!skipped && !isCorrect && correctText && (
               <>
-                {". "}The correct answer was{" "}
+                {" "}The correct answer was{" "}
                 <strong style={{ color: "var(--green)" }}>{LETTERS[correctOptionIndex]}. {correctText}</strong>.
               </>
             )}
