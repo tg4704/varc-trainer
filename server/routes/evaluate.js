@@ -4,7 +4,8 @@ const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
+const { callModel, resolveModels, DEFAULT_MODEL, describeError } = require("../ai/provider");
+const { requireEntitlement } = require("../lib/entitlements");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { aiLimiter } = require("../lib/rateLimiters");
@@ -58,7 +59,7 @@ ${reasoningText}`;
 
 // POST /api/attempts/evaluate — analysis mode with AI reasoning evaluation.
 // Pass deferred:true to save the attempt without calling Claude (for timed sessions).
-router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), async (req, res) => {
+router.post("/evaluate", authenticate, aiLimiter, requireEntitlement("drills"), validateBody(evaluateSchema), async (req, res) => {
   const {
     sessionId,
     questionId,
@@ -133,7 +134,7 @@ router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), 
   }
 
   const evalResult = await runEvaluation({
-    userId: req.userId, attemptId: result.lastId, q,
+    userId: req.userId, tierKey: req.userTier, attemptId: result.lastId, q,
     selectedOptionIndex, reasoningText: reasoningText.trim(), quotedLines,
   });
   return res.json({ ...base, ...evalResult });
@@ -143,19 +144,22 @@ router.post("/evaluate", authenticate, aiLimiter, validateBody(evaluateSchema), 
 // fields back to it. Shared by POST /evaluate and POST /:attemptId/retry-evaluation.
 // Never throws — on AI failure it logs and returns { aiError: true, ... } so the
 // attempt itself is never lost.
-async function runEvaluation({ userId, attemptId, q, selectedOptionIndex, reasoningText, quotedLines }) {
+async function runEvaluation({ userId, tierKey, attemptId, q, selectedOptionIndex, reasoningText, quotedLines }) {
+  const models = resolveModels(tierKey, "drills");
   try {
     const response = await callModel({
+      models,
       system: await getPrompt("evaluate_reasoning"),
       messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText, quotedLines) }],
     });
 
-    // Log API call for admin cost tracking (Phase 9)
+    // Log API call for admin cost tracking (Phase 9) — log the model that
+    // actually answered (may be a fallback), so cost tracking stays accurate.
     await logApiCall({
       userId,
       route: "/api/attempts/evaluate",
       provider: "openrouter",
-      model: DEFAULT_MODEL,
+      model: response.model || models[0],
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
       status: "ok",
@@ -195,7 +199,7 @@ async function runEvaluation({ userId, attemptId, q, selectedOptionIndex, reason
       userId,
       route: "/api/attempts/evaluate",
       provider: "openrouter",
-      model: DEFAULT_MODEL,
+      model: models[0],
       status: "error",
       errorMessage: describeError(err),
     });
@@ -208,7 +212,7 @@ async function runEvaluation({ userId, attemptId, q, selectedOptionIndex, reason
 
 // Retry a failed AI evaluation for an attempt the user already submitted, using
 // the reasoning text saved on that attempt. Verifies ownership via the session.
-router.post("/:attemptId/retry-evaluation", authenticate, aiLimiter, async (req, res) => {
+router.post("/:attemptId/retry-evaluation", authenticate, aiLimiter, requireEntitlement("drills"), async (req, res) => {
   const attemptId = parseInt(req.params.attemptId, 10);
   if (!Number.isInteger(attemptId)) {
     return res.status(400).json({ error: "Invalid attempt id" });
@@ -242,7 +246,7 @@ router.post("/:attemptId/retry-evaluation", authenticate, aiLimiter, async (req,
   };
 
   const evalResult = await runEvaluation({
-    userId: req.userId, attemptId, q,
+    userId: req.userId, tierKey: req.userTier, attemptId,
     selectedOptionIndex: attempt.selected_option_index,
     reasoningText: attempt.reasoning_text.trim(),
     quotedLines: null,

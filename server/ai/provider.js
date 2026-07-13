@@ -34,30 +34,68 @@ function getClient() {
 // Check openrouter.ai/models for available model IDs.
 const DEFAULT_MODEL = process.env.AI_MODEL || "anthropic/claude-haiku-4-5";
 
+const { getTier, SAFE_MODEL, ENABLE_TIERS } = require("../config/tiers");
+
+// The ordered model chain to try for a given tier + call type. When tiers are
+// off (or no tier resolved), this is just [DEFAULT_MODEL] — identical to the
+// pre-monetization behavior. When on: [tier primary, tier fallback, SAFE_MODEL].
+function resolveModels(tierKey, callType) {
+  if (!ENABLE_TIERS || !tierKey) return [DEFAULT_MODEL];
+  const tier = getTier(tierKey);
+  const chain = [tier.models?.[callType], tier.fallbackModels?.[callType], SAFE_MODEL];
+  return [...new Set(chain.filter(Boolean))];
+}
+
+// Whether an error is worth retrying on the next model in the chain (transient/
+// provider-specific) vs a genuine client error that'd fail identically everywhere.
+function isRetryable(err) {
+  const status = err?.status;
+  if (status && status >= 400 && status < 500 && status !== 429) return false;
+  return true; // 429, 5xx, timeouts, connection errors
+}
+
 /**
- * callModel({ model?, system?, messages, maxTokens? })
+ * callModel({ model?, models?, system?, messages, maxTokens? })
  *
- * messages: array of { role: "user" | "assistant", content: string }
- * Returns: { text: string, usage: { input_tokens: number, output_tokens: number } }
+ * Pass a single `model`, or `models` as an ordered fallback chain (from
+ * resolveModels). messages: array of { role, content }.
+ * Returns: { text, usage: { input_tokens, output_tokens }, model } — `model`
+ * is the one that actually answered, so the caller logs the real cost.
  */
-async function callModel({ model = DEFAULT_MODEL, system, messages, maxTokens = 1024 }) {
+async function callModel({ model, models, system, messages, maxTokens = 1024 }) {
+  const chain = models && models.length ? models : [model || DEFAULT_MODEL];
   const msgs = [];
   if (system) msgs.push({ role: "system", content: system });
   msgs.push(...messages);
 
-  const response = await getClient().chat.completions.create({
-    model,
-    max_tokens: maxTokens,
-    messages: msgs,
-  });
-
-  return {
-    text: response.choices[0].message.content,
-    usage: {
-      input_tokens: response.usage?.prompt_tokens || 0,
-      output_tokens: response.usage?.completion_tokens || 0,
-    },
-  };
+  let lastErr;
+  for (let i = 0; i < chain.length; i++) {
+    try {
+      const response = await getClient().chat.completions.create({
+        model: chain[i],
+        max_tokens: maxTokens,
+        messages: msgs,
+      });
+      return {
+        text: response.choices[0].message.content,
+        usage: {
+          input_tokens: response.usage?.prompt_tokens || 0,
+          output_tokens: response.usage?.completion_tokens || 0,
+        },
+        model: chain[i],
+      };
+    } catch (err) {
+      lastErr = err;
+      // Only fall through to the next model on a transient/provider error, and
+      // only if there is a next model to try.
+      if (i < chain.length - 1 && isRetryable(err)) {
+        console.warn(`[ai] ${chain[i]} failed (${err?.status || "?"}), trying ${chain[i + 1]}`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 // OpenRouter often nests the actually-useful diagnostic (e.g. "model X is
@@ -72,4 +110,4 @@ function describeError(err) {
   return raw && raw !== base ? `${base}: ${raw}` : base;
 }
 
-module.exports = { callModel, DEFAULT_MODEL, describeError };
+module.exports = { callModel, resolveModels, DEFAULT_MODEL, describeError };

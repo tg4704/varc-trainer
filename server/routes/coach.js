@@ -7,7 +7,8 @@ const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
+const { callModel, resolveModels, DEFAULT_MODEL, describeError } = require("../ai/provider");
+const { requireEntitlement, attachTier } = require("../lib/entitlements");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { aiLimiter } = require("../lib/rateLimiters");
@@ -93,7 +94,7 @@ router.get("/passages", async (req, res, next) => {
 });
 
 // ── POST /api/coach/sessions — start (or resume) a session on a passage ───────
-router.post("/sessions", validateBody(coachCreateSessionSchema), async (req, res, next) => {
+router.post("/sessions", requireEntitlement("coach"), validateBody(coachCreateSessionSchema), async (req, res, next) => {
   try {
     const { passageId } = req.body || {};
     if (!passageId) return res.status(400).json({ error: "passageId is required" });
@@ -143,7 +144,7 @@ router.post("/sessions", validateBody(coachCreateSessionSchema), async (req, res
 // ── POST /api/coach/sessions/:id/reading-map — the b2 differentiator ──────────
 // Grades the student's reading BEFORE they see any question. Any language is
 // accepted (mother-tongue verbalization) — grading is on understanding, not grammar.
-router.post("/sessions/:id/reading-map", aiLimiter, validateBody(coachReadingMapSchema), async (req, res, next) => {
+router.post("/sessions/:id/reading-map", aiLimiter, attachTier, validateBody(coachReadingMapSchema), async (req, res, next) => {
   try {
     const session = await db.get(
       "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]
@@ -183,15 +184,16 @@ ${studentMapText}`;
     // Retry once on a transient/parse failure before falling back — grading the
     // reading is the differentiator, but it must never hard-block the student
     // from reaching the questions if the AI call has a bad moment.
+    const models = resolveModels(req.userTier, "coach");
     let grade = null;
     for (let attempt = 0; attempt < 2 && !grade; attempt++) {
       try {
-        const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 600 });
-        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+        const response = await callModel({ models, system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 600 });
+        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: response.model || models[0], inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
         grade = extractJSON(response.text);
       } catch (err) {
         console.error(`Reading-map grade attempt ${attempt + 1} failed:`, err.message);
-        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: DEFAULT_MODEL, status: "error", errorMessage: describeError(err) });
+        await logApiCall({ userId: req.userId, route: "/api/coach/reading-map", provider: "openrouter", model: models[0], status: "error", errorMessage: describeError(err) });
       }
     }
 
@@ -254,7 +256,7 @@ router.get("/sessions/:id", async (req, res, next) => {
 // ── POST /api/coach/attempts — reasoning verdict for one question ─────────────
 // Mirrors attempts/evaluate.js but writes to coach_attempts. Response shape
 // matches FeedbackSections' expected `attempt` prop so the client can reuse it.
-router.post("/attempts", aiLimiter, validateBody(coachAttemptSchema), async (req, res, next) => {
+router.post("/attempts", aiLimiter, attachTier, validateBody(coachAttemptSchema), async (req, res, next) => {
   try {
     const { coachSessionId, questionId, questionIndex, selectedOptionIndex, reasoningText } = req.body || {};
     if (coachSessionId == null || !questionId || selectedOptionIndex == null) {
@@ -328,9 +330,10 @@ STUDENT SELECTED: Option ${LETTERS[selectedOptionIndex]}
 STUDENT'S REASONING:
 ${reasoningText.trim()}`;
 
+    const models = resolveModels(req.userTier, "coach");
     try {
-      const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }] });
-      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+      const response = await callModel({ models, system: SYSTEM, messages: [{ role: "user", content: userMsg }] });
+      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: response.model || models[0], inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
       const evalResult = extractJSON(response.text);
 
       await db.run(
@@ -348,7 +351,7 @@ ${reasoningText.trim()}`;
         keyTakeaway: evalResult.keyTakeaway,
       });
     } catch (err) {
-      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: DEFAULT_MODEL, status: "error", errorMessage: describeError(err) });
+      await logApiCall({ userId: req.userId, route: "/api/coach/attempts", provider: "openrouter", model: models[0], status: "error", errorMessage: describeError(err) });
       await db.run("UPDATE coach_attempts SET reasoning_text = $1 WHERE id = $2", [reasoningText.trim(), attemptId]);
       return res.json({ ...base, attemptId, aiError: true, aiErrorMessage: "AI feedback unavailable. Your attempt was saved." });
     }
@@ -358,7 +361,7 @@ ${reasoningText.trim()}`;
 // ── POST /api/coach/exchange — optional "Stuck? Discuss" chat ─────────────────
 // Only usable AFTER a question's attempt/verdict exists — this is supplementary
 // discussion, not a gate to revealing the answer (that's the point of the redesign).
-router.post("/exchange", aiLimiter, validateBody(coachExchangeSchema), async (req, res, next) => {
+router.post("/exchange", aiLimiter, attachTier, validateBody(coachExchangeSchema), async (req, res, next) => {
   try {
     const { coachSessionId, questionId, message } = req.body || {};
     if (!coachSessionId || !questionId || !message || !message.trim()) {
@@ -395,16 +398,17 @@ ${historyLines}
 
 Respond as the coach to the student's latest message.`;
 
+    const models = resolveModels(req.userTier, "coach");
     try {
-      const response = await callModel({ system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 300 });
-      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: DEFAULT_MODEL, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
+      const response = await callModel({ models, system: SYSTEM, messages: [{ role: "user", content: userMsg }], maxTokens: 300 });
+      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: response.model || models[0], inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, status: "ok" });
       const reply = response.text.trim();
       conversation.push({ role: "coach", text: reply });
       const newCount = attempt.exchange_count + 1;
       await db.run("UPDATE coach_attempts SET discuss_conversation_json = $1, exchange_count = $2 WHERE id = $3", [JSON.stringify(conversation), newCount, attempt.id]);
       res.json({ reply, exchangeCount: newCount, limitReached: newCount >= MAX_DISCUSS_EXCHANGES });
     } catch (err) {
-      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: DEFAULT_MODEL, status: "error", errorMessage: describeError(err) });
+      await logApiCall({ userId: req.userId, route: "/api/coach/exchange", provider: "openrouter", model: models[0], status: "error", errorMessage: describeError(err) });
       res.status(502).json({ error: "Coach unavailable right now. Try again." });
     }
   } catch (e) { next(e); }

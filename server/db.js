@@ -409,6 +409,10 @@ async function schemaIsStale() {
     // Student Profile card (Profile page): favorite RC topic + short bio.
     await ensureColumn("users", "favorite_topic", "TEXT");
     await ensureColumn("users", "bio", "TEXT");
+    // Monetization (Phase 6): paid tiers expire; NULL = never expires (free
+    // tier, or a manually-granted plan). Resolved by lib/entitlements.js —
+    // an expired paid tier is treated as 'free'. users.tier already exists.
+    await ensureColumn("users", "tier_expires_at", "TIMESTAMPTZ");
     // Unique partial index on google_id (allows multiple NULLs for non-Google users).
     await db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL"
@@ -429,6 +433,25 @@ async function schemaIsStale() {
     await db.exec("CREATE INDEX IF NOT EXISTS idx_attempts_session_id ON attempts(session_id)");
     await db.exec("CREATE INDEX IF NOT EXISTS idx_coach_sessions_user_id ON coach_sessions(user_id)");
     await db.exec("CREATE INDEX IF NOT EXISTS idx_coach_attempts_coach_session_id ON coach_attempts(coach_session_id)");
+    // Monetization (Phase 6): one payment row per Razorpay order. Status flows
+    // created → captured (webhook) → tier granted. Kept even after the tier
+    // expires, as the billing history / audit trail.
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        tier TEXT NOT NULL,
+        months INTEGER NOT NULL DEFAULT 1,
+        amount_inr INTEGER NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'razorpay',
+        razorpay_order_id TEXT UNIQUE,
+        razorpay_payment_id TEXT,
+        status TEXT NOT NULL DEFAULT 'created',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        captured_at TIMESTAMPTZ
+      )
+    `);
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id)");
     await seedQuestions();
     await bootstrapAdmins();
     console.log("[db] Database initialised.");

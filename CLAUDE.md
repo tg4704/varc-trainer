@@ -287,6 +287,12 @@ SENTRY_DSN=...                           # optional — error monitoring, server
 VITE_SENTRY_DSN=...                      # optional — error monitoring, client-side (safe to expose, DSNs aren't secret)
 VITE_POSTHOG_KEY=phc_...                 # optional — client-side analytics, safe to expose (write-only key). Never fires until the user accepts the cookie-consent banner.
 VITE_POSTHOG_HOST=https://us.i.posthog.com
+# ── Monetization (Phase 6 — tiers + Razorpay) ──
+ENABLE_TIERS=false                       # master switch: OFF = no caps + DEFAULT_MODEL everywhere (current behavior). ON = enforce per-tier daily caps + monthly kill-switch + per-tier model routing (server/config/tiers.js).
+USD_TO_INR=95                            # FX for converting api_calls.est_cost_usd → ₹ for the kill-switch.
+RAZORPAY_KEY_ID=rzp_...                  # unset → billing runs in dev mode (no real orders; POST /api/billing/dev-activate grants tiers, non-prod only).
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...              # HMAC secret for verifying the /api/billing/webhook signature (set the same value in the Razorpay dashboard webhook config).
 ```
 
 In production, the frontend uses `VITE_API_URL` to point at the deployed backend instead of the dev proxy.

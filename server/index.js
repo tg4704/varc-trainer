@@ -75,7 +75,12 @@ app.use(cors({
 // expensive prompt, not just a memory/bandwidth problem. 100kb comfortably
 // covers the longest real payload (a full reading-map submission plus
 // article text) with headroom.
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({
+  limit: "100kb",
+  // Stash the raw body so the Razorpay webhook can verify its HMAC signature
+  // over the exact bytes (a re-serialized req.body wouldn't match).
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 
 // Health check — for uptime monitoring (UptimeRobot / Better Stack). Does a
 // real DB round-trip so a healthy HTTP response can't mask a dead database.
@@ -335,6 +340,7 @@ app.use("/api/account", require("./routes/account"));
 app.use("/api/my-questions", require("./routes/myQuestions"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/coach", require("./routes/coach"));
+app.use("/api/billing", require("./routes/billing"));
 
 // ── Serve React build in production ──────────────────────────────────────────
 // When Railway runs `npm run build` for the client, the output lands at client/dist/.

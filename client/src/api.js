@@ -35,6 +35,16 @@ async function request(path, options = {}) {
     const body = await res.json().catch(() => ({}));
     const err = new Error(body.error || `Request failed: ${res.status}`);
     err.status = res.status;
+    // A 402 means a plan limit was hit (daily cap or monthly kill-switch).
+    // Carry the structured upgrade info on the error, and fire an app-wide
+    // event so a global upgrade prompt can react wherever the call came from.
+    if (res.status === 402) {
+      err.reason = body.reason;
+      err.tier = body.tier;
+      err.upgradeTo = body.upgradeTo;
+      err.upgradeName = body.upgradeName;
+      window.dispatchEvent(new CustomEvent("graspr:limit-reached", { detail: body }));
+    }
     // A 401 on an authenticated request (we had a token, this wasn't one of
     // the exempt routes above) means the token is dead — expired, or the
     // user was deleted/reset elsewhere. Surface it app-wide instead of
@@ -275,3 +285,17 @@ export const admin = {
     request(`/api/admin/passages/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
 };
 
+
+// ── Billing (Razorpay) ─────────────────────────────────
+export const billing = {
+  // Public tier list for the pricing page.
+  plans: () => request("/api/billing/plans"),
+  // The signed-in user's current plan + expiry.
+  me: () => request("/api/billing/me"),
+  // Start a purchase → returns Razorpay order details (or devMode order).
+  createOrder: (tier, months = 1) =>
+    request("/api/billing/create-order", { method: "POST", body: JSON.stringify({ tier, months }) }),
+  // Dev-only: grant a tier without paying (disabled in production).
+  devActivate: (tier, months = 1) =>
+    request("/api/billing/dev-activate", { method: "POST", body: JSON.stringify({ tier, months }) }),
+};
