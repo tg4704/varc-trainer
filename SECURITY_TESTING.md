@@ -7,7 +7,7 @@ in each):
 - **Part C — Monitoring & Observability** (tests 22–26): error tracking, health check, analytics events.
 - **Part D — Performance & Infrastructure** (tests 27–30): compression, DB indexes, optimistic UI.
 - **Part E — Testing, Reliability & Release Engineering** (tests 31–39): token-expiry, AI-audit fixes, CI.
-- **Part F — Product, UX & Admin Prompts** (tests 40–42): onboarding checklist, loading animation, admin prompts manager.
+- **Part F — Product, UX & Admin Prompts** (tests 40–43): onboarding checklist, loading animation, admin prompts manager, reasoning-echo avatar fix.
 
 Each test is copy-pasteable — run it, compare to "Expected," check the box.
 
@@ -1069,6 +1069,36 @@ it flips back to "Default" and the textarea reverts.
 
 ---
 
+## 43. "Your reasoning" echo shows the real profile avatar, not a placeholder
+
+`FeedbackSections.jsx`'s reasoning-echo card used to show a hardcoded gradient
+badge with the static text "you" — not driven by the logged-in user's actual
+avatar. It now renders the shared `Avatar` component via `useAuth()`.
+
+In the browser, log in as any user with a customized avatar (e.g. `tester`,
+who has an emoji avatar) and open any attempt review that has reasoning text
+attached — Results page (`/results?sessionId=<id>` → tap a question with
+"Your reasoning" present), Session Review, or a Coach debrief. Quick way to
+find a session with reasoning text:
+```bash
+psql "$DATABASE_URL" -c "
+SELECT a.session_id, a.question_id FROM attempts a
+JOIN sessions s ON a.session_id = s.id JOIN users u ON s.user_id = u.id
+WHERE u.username = '$TEST_USER' AND a.reasoning_text IS NOT NULL AND a.reasoning_text != ''
+ORDER BY a.created_at DESC LIMIT 1;"
+```
+
+**Expected:** the small badge to the left of "YOUR REASONING" matches the
+same avatar shown in the top-right nav (same emoji/icon/initial, same
+gradient) — not the literal text "you". Switch to a different account with a
+different avatar (e.g. an initial-letter avatar) and confirm the badge
+changes to match that account instead — proves it's reading live user data,
+not a cached/static asset.
+
+☐ Pass — reasoning-echo badge matches the logged-in user's actual avatar
+
+---
+
 ## Quick summary checklist
 
 | # | Test | Pass? |
@@ -1115,3 +1145,4 @@ it flips back to "Default" and the textarea reverts.
 | 40 | Onboarding checklist shows unchecked for a fresh account, hides once done | ☐ |
 | 41 | Loading type-in animation appears during Drills + Coach AI waits | ☐ |
 | 42 | Admin AI Prompts CRUD round-trip works, non-admin gets 403 | ☐ |
+| 43 | Reasoning-echo badge shows the real user avatar, not "you" placeholder | ☐ |

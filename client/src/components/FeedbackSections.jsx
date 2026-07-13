@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 import Icon from "./Icon.jsx";
+import Avatar from "./Avatar.jsx";
+import { useAuth } from "../auth.jsx";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -42,6 +44,7 @@ export default function FeedbackSections({ attempt }) {
   } = attempt;
 
   const [tab, setTab] = useState("explanation");
+  const { user } = useAuth();
 
   // Option text usually ends with a period; the sentences below add their own
   // punctuation, so trim a trailing "." to avoid "…informed.." double periods.
@@ -108,12 +111,7 @@ export default function FeedbackSections({ attempt }) {
           className="flex items-start gap-2.5 rounded-[13px] px-4 py-[13px]"
           style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }}
         >
-          <span
-            className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] text-[10.5px] font-bold"
-            style={{ background: "linear-gradient(140deg, var(--teal), var(--periwinkle))", color: "#07130E" }}
-          >
-            you
-          </span>
+          <Avatar avatarId={user?.avatarId} name={user?.name || user?.username} size={24} radius={7} />
           <div>
             <div className="mono mb-1 text-[10px] font-bold uppercase tracking-wide dim">Your reasoning</div>
             <p className="text-[12.5px] leading-[1.55] muted">{reasoningText}</p>
