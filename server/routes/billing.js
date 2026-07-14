@@ -78,7 +78,9 @@ router.post("/create-order", authenticate, async (req, res, next) => {
       return res.status(400).json({ error: "Unknown or non-purchasable plan" });
     }
     const tier = getTier(tierKey);
-    const amountInr = tier.priceInr * months;
+    // Annual (12 mo) is billed at 10× the monthly price — 2 months free.
+    const annualFactor = months >= 12 ? 10 / 12 : 1;
+    const amountInr = Math.round(tier.priceInr * months * annualFactor);
 
     if (!IS_LIVE) {
       // Dev mode — no real order; the client shows a "simulate payment" path.
@@ -113,6 +115,46 @@ router.post("/create-order", authenticate, async (req, res, next) => {
       tierName: tier.name,
       months,
     });
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/billing/verify — client confirms a completed Checkout ───────────
+// Razorpay's Checkout success handler returns order_id + payment_id + signature.
+// Verifying that signature (HMAC with the API secret) lets us grant the tier
+// instantly for good UX, without waiting on the webhook. The webhook is still
+// the reliable backstop (e.g. if the user closes the tab before this fires).
+// Both paths are idempotent, so a double-grant can't happen.
+router.post("/verify", authenticate, async (req, res, next) => {
+  try {
+    if (!IS_LIVE) return res.status(400).json({ error: "Not in live mode" });
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ error: "Missing payment fields" });
+    }
+    const expected = crypto
+      .createHmac("sha256", KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest("hex");
+    const ok =
+      expected.length === razorpay_signature.length &&
+      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpay_signature));
+    if (!ok) return res.status(400).json({ error: "Invalid payment signature" });
+
+    // The order must be this user's (defense-in-depth beyond the signature).
+    const payment = await db.get(
+      "SELECT * FROM payments WHERE razorpay_order_id = $1 AND user_id = $2",
+      [razorpay_order_id, req.userId]
+    );
+    if (!payment) return res.status(404).json({ error: "Order not found" });
+    if (payment.status !== "captured") {
+      await db.run(
+        "UPDATE payments SET status = 'captured', razorpay_payment_id = $1, captured_at = NOW() WHERE id = $2",
+        [razorpay_payment_id, payment.id]
+      );
+      await grantTier(payment.user_id, payment.tier, payment.months);
+    }
+    const user = await db.get("SELECT tier, tier_expires_at FROM users WHERE id = $1", [req.userId]);
+    res.json({ ok: true, tier: user.tier, expiresAt: user.tier_expires_at });
   } catch (e) { next(e); }
 });
 

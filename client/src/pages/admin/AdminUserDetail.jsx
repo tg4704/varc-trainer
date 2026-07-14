@@ -17,6 +17,9 @@ function fmtUsd(n) {
   return `$${n.toFixed(2)}`;
 }
 
+const TIER_LABELS = { free: "Skimmer (free)", inference: "Inference", ninetyninth: "99th Percentile", topper: "Topper" };
+const PAID_TIERS = ["inference", "ninetyninth", "topper"];
+
 export default function AdminUserDetail() {
   const { id } = useParams();
   const { user: me } = useAuth();
@@ -48,6 +51,13 @@ export default function AdminUserDetail() {
     finally { setBusy(false); }
   }
 
+  async function changeTier(tier, months = 1) {
+    setBusy(true);
+    try { await admin.setUserTier(user.id, tier, months); await reload(); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
   const isSelf = me?.id === user.id;
   const answered = totals.answered || 0;
   const accuracy = answered ? Math.round((totals.correct / answered) * 100) : 0;
@@ -64,6 +74,9 @@ export default function AdminUserDetail() {
             <p className="text-sm text-muted-foreground">{user.email}, joined {fmtDate(user.created_at)}</p>
           </div>
           <div className="flex items-center gap-2">
+            {user.tier && user.tier !== "free" && (
+              <Badge variant="default">{TIER_LABELS[user.tier] || user.tier}</Badge>
+            )}
             {user.role === "admin"
               ? <Badge variant="default">admin</Badge>
               : <Badge variant="secondary">user</Badge>}
@@ -115,6 +128,26 @@ export default function AdminUserDetail() {
             Reset all data
           </Button>
         </div>
+      </CardContent></Card>
+
+      {/* Plan */}
+      <Card><CardContent className="p-4">
+        <div className="text-sm font-semibold mb-1">Plan</div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Current: <span className="font-medium text-foreground">{TIER_LABELS[user.tier] || user.tier || "Skimmer (free)"}</span>
+          {user.tier_expires_at ? ` · expires ${fmtDate(user.tier_expires_at)}` : " · no expiry"}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {PAID_TIERS.map((t) => (
+            <Button key={t} variant="outline" size="sm" disabled={busy} onClick={() => changeTier(t, 1)}>
+              Grant {TIER_LABELS[t]} (1 mo)
+            </Button>
+          ))}
+          <Button variant="ghost" size="sm" disabled={busy || (user.tier || "free") === "free"} onClick={() => changeTier("free")}>
+            Revoke to free
+          </Button>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Granting extends an existing paid plan by the months given; revoking drops to free immediately.</p>
       </CardContent></Card>
 
       {/* Recent sessions */}

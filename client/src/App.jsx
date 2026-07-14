@@ -4,6 +4,7 @@ import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import DashboardSkeleton from "./components/DashboardSkeleton.jsx";
 import TopNav from "./components/TopNav.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
+import UpgradePrompt from "./components/UpgradePrompt.jsx";
 import { AuthProvider } from "./auth.jsx";
 import { NavGuardProvider } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -13,6 +14,7 @@ import Pricing from "./pages/Pricing.jsx";
 import Blog from "./pages/Blog.jsx";
 import Privacy from "./pages/Privacy.jsx";
 import Terms from "./pages/Terms.jsx";
+import Refunds from "./pages/Refunds.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
@@ -118,6 +120,7 @@ function AppShell() {
           <Route path="/blog" element={<Blog />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
+          <Route path="/refunds" element={<Refunds />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
@@ -183,6 +186,7 @@ function AppShell() {
         </ErrorBoundary>
       </main>
       <CookieConsent />
+      <UpgradePrompt />
     </div>
     </NavGuardProvider>
   );

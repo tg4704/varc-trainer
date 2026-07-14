@@ -98,7 +98,7 @@ router.get("/users/:id", async (req, res, next) => {
     if (!userId) return res.status(400).json({ error: "invalid user id" });
 
     const user = await db.get(
-      "SELECT id, username, email, role, created_at FROM users WHERE id = $1",
+      "SELECT id, username, email, role, tier, tier_expires_at, created_at FROM users WHERE id = $1",
       [userId]
     );
     if (!user) return res.status(404).json({ error: "user not found" });
@@ -171,6 +171,37 @@ router.patch("/users/:id", async (req, res, next) => {
     }
 
     res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ── PATCH /api/admin/users/:id/tier ────────────────────────────────────────
+// Grant / extend / revoke a paid tier manually (support, comps, testing).
+// Body: { tier: 'free'|'inference'|'ninetyninth'|'topper', months? }.
+router.patch("/users/:id/tier", async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!userId) return res.status(400).json({ error: "invalid user id" });
+    const { getTier, isValidPaidTier } = require("../config/tiers");
+    const tier = String(req.body?.tier || "");
+    const months = Math.min(36, Math.max(1, parseInt(req.body?.months, 10) || 1));
+
+    if (tier === "free") {
+      const info = await db.run("UPDATE users SET tier = 'free', tier_expires_at = NULL WHERE id = $1", [userId]);
+      if (info.rowCount === 0) return res.status(404).json({ error: "user not found" });
+    } else if (isValidPaidTier(tier)) {
+      const info = await db.run(
+        `UPDATE users
+            SET tier = $1,
+                tier_expires_at = GREATEST(NOW(), COALESCE(tier_expires_at, NOW())) + ($2 || ' months')::interval
+          WHERE id = $3`,
+        [tier, String(months), userId]
+      );
+      if (info.rowCount === 0) return res.status(404).json({ error: "user not found" });
+    } else {
+      return res.status(400).json({ error: "unknown tier" });
+    }
+    const updated = await db.get("SELECT tier, tier_expires_at FROM users WHERE id = $1", [userId]);
+    res.json({ ok: true, tier: updated.tier, tierName: getTier(updated.tier).name, expiresAt: updated.tier_expires_at });
   } catch (e) { next(e); }
 });
 

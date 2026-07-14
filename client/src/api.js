@@ -235,6 +235,8 @@ export const admin = {
   getUserDashboard: (id) => request(`/api/admin/users/${id}/dashboard`),
   patchUser: (id, body) =>
     request(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  setUserTier: (id, tier, months = 1) =>
+    request(`/api/admin/users/${id}/tier`, { method: "PATCH", body: JSON.stringify({ tier, months }) }),
   resetUserData: (id) => request(`/api/admin/users/${id}/data`, { method: "DELETE" }),
 
   listQuestions: (filters = {}) => {
@@ -295,6 +297,9 @@ export const billing = {
   // Start a purchase → returns Razorpay order details (or devMode order).
   createOrder: (tier, months = 1) =>
     request("/api/billing/create-order", { method: "POST", body: JSON.stringify({ tier, months }) }),
+  // Confirm a completed Checkout (order/payment/signature from Razorpay's handler).
+  verify: (payload) =>
+    request("/api/billing/verify", { method: "POST", body: JSON.stringify(payload) }),
   // Dev-only: grant a tier without paying (disabled in production).
   devActivate: (tier, months = 1) =>
     request("/api/billing/dev-activate", { method: "POST", body: JSON.stringify({ tier, months }) }),

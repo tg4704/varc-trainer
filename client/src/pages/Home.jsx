@@ -457,7 +457,7 @@ export default function Home() {
             ]}
           />
           <FooterColumn title="Company" items={[{ label: "Blog", to: "/blog" }, { label: "Contact", href: "mailto:privacy@graspr.in" }]} />
-          <FooterColumn title="Legal" items={[{ label: "Privacy", to: "/privacy" }, { label: "Terms", to: "/terms" }]} />
+          <FooterColumn title="Legal" items={[{ label: "Privacy", to: "/privacy" }, { label: "Terms", to: "/terms" }, { label: "Refunds", to: "/refunds" }]} />
         </div>
         <div
           className="mx-auto flex max-w-[1000px] flex-wrap items-center justify-between gap-3 px-7 py-4"

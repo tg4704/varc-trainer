@@ -10,6 +10,13 @@
 const db = require("../db");
 const { getTier, PAID_TIERS, DEFAULT_TIER, ENABLE_TIERS, USD_TO_INR } = require("../config/tiers");
 
+// The monthly ₹ kill-switch is OFF by default — the report's ceilings sit below
+// what the advertised daily caps cost when fully used, so hard-enforcing them
+// would cut a heavy paying user off mid-cycle (a broken promise). Parked as a
+// deliberate decision: revisit as a soft-degrade (drop to a cheaper model past
+// the ceiling) rather than a hard block. Daily caps stay enforced regardless.
+const ENABLE_KILL_SWITCH = process.env.ENABLE_KILL_SWITCH === "true";
+
 // Start-of-today and start-of-month as timestamptz instants, in IST (the day a
 // user's cap resets is their local day, not UTC).
 const DAY_START = "date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'";
@@ -68,10 +75,12 @@ async function checkEntitlement(user, kind) {
   const tierKey = effectiveTierKey(user);
   const tier = getTier(tierKey);
 
-  // Kill-switch first — a runaway user is blocked regardless of daily caps.
-  const spent = await monthCostInr(user.id);
-  if (spent >= tier.monthlyCostCeilingInr) {
-    return { allowed: false, reason: "cost_ceiling", tier: tierKey, upgradeTo: nextTierUp(tierKey) };
+  // Kill-switch (off by default — see ENABLE_KILL_SWITCH note above).
+  if (ENABLE_KILL_SWITCH) {
+    const spent = await monthCostInr(user.id);
+    if (spent >= tier.monthlyCostCeilingInr) {
+      return { allowed: false, reason: "cost_ceiling", tier: tierKey, upgradeTo: nextTierUp(tierKey) };
+    }
   }
 
   const cap = tier.caps[kind];
