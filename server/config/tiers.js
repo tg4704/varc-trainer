@@ -54,7 +54,7 @@ const TIERS = {
     fallbackModels: { drills: "google/gemma-4-31b-it", coach: "google/gemma-4-31b-it" },
     monthlyCostCeilingInr: 45,
     aiRateLimitPerMin: 30,
-    features: ["Everything in Skimmer", "25 AI reasonings/day", "4 Coach passages/day", "Trap-type weakness analytics"],
+    features: ["Everything in Skimmer", "25 AI reasonings/day", "4 Coach passages/day"],
   },
   ninetyninth: {
     key: "ninetyninth",

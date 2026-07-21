@@ -38,7 +38,7 @@ function fmtDate(iso) {
 // (public) /plans call returns. Kept in sync with the server config's shape.
 const FALLBACK = [
   { key: "free", name: "Skimmer", tagline: "Get a feel for trap-recognition.", priceInr: 0, caps: { drills: 10, coach: 1 }, monthlyCaps: { drills: null, coach: null }, features: ["Unlimited Drills practice", "10 AI reasonings/day", "1 Coach passage/day", "Accuracy & trap dashboard"] },
-  { key: "inference", name: "Inference", tagline: "Build the single most-tested RC skill.", priceInr: 99, caps: { drills: 25, coach: 4 }, monthlyCaps: { drills: null, coach: null }, features: ["Everything in Skimmer", "25 AI reasonings/day", "4 Coach passages/day", "Trap-type weakness analytics"] },
+  { key: "inference", name: "Inference", tagline: "Build the single most-tested RC skill.", priceInr: 99, caps: { drills: 25, coach: 4 }, monthlyCaps: { drills: null, coach: null }, features: ["Everything in Skimmer", "25 AI reasonings/day", "4 Coach passages/day"] },
   { key: "ninetyninth", name: "Consistent", tagline: "Full AI coaching, every surface.", priceInr: 299, caps: { drills: null, coach: null }, monthlyCaps: { drills: 1400, coach: 200 }, features: ["Everything in Inference", "No daily limit", "1400 AI reasonings/month", "200 Coach passages/month", "Better & faster AI responses"] },
   { key: "topper", name: "Topper", tagline: "For aspirants who want every edge.", priceInr: 699, caps: { drills: null, coach: null }, monthlyCaps: { drills: 3000, coach: 500 }, features: ["Everything in Consistent", "No daily limit", "3000 AI reasonings/month", "500 Coach passages/month", "Best-quality AI responses"] },
 ];
@@ -514,7 +514,6 @@ function ComparisonTable({ tiers, highlightKey }) {
     { label: "Coach passages per month", cell: (t) => <Cell muted={t.monthlyCaps?.coach == null}>{monthText(t.monthlyCaps?.coach)}</Cell> },
     { label: "AI response quality & speed", cell: (t) => <Cell>{QUALITY[t.key] || "Standard"}</Cell> },
     { label: "Accuracy & trap dashboard", cell: () => <CheckCell on /> },
-    { label: "Trap-type weakness analytics", cell: (t) => <CheckCell on={t.key !== "free"} /> },
     { label: "1-on-1 AI coaching on every question", cell: (t) => <CheckCell on={t.key === "ninetyninth" || t.key === "topper"} /> },
   ];
 
