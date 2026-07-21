@@ -17,14 +17,15 @@ export function domOffsetToTextOffset(root, node, nodeOffset) {
   return charCount;
 }
 
-// Splits `text` into segments, each tagged with at most one covering
-// annotation (highest-priority type wins on overlap: note > highlight >
-// underline). Used to render the passage as plain text interleaved with
-// styled <mark> spans.
+// Splits `text` into segments, each tagged with EVERY annotation covering it
+// (`anns`, ordered note > highlight > underline). A segment covered by both a
+// highlight and an underline keeps both — the styles compose (see
+// mergedAnnotationStyle) rather than one silently winning. `ann` is the
+// highest-priority one, kept for click-target / tooltip purposes.
 const PRIORITY = { note: 3, highlight: 2, underline: 1 };
 
 export function buildTextSegments(text, annotations) {
-  if (!annotations || annotations.length === 0) return [{ text, ann: null }];
+  if (!annotations || annotations.length === 0) return [{ text, anns: [], ann: null }];
 
   const bounds = new Set([0, text.length]);
   annotations.forEach((a) => {
@@ -41,9 +42,26 @@ export function buildTextSegments(text, annotations) {
     const covering = annotations
       .filter((a) => a.start <= start && a.end >= end)
       .sort((a, b) => (PRIORITY[b.type] || 0) - (PRIORITY[a.type] || 0));
-    segments.push({ text: text.slice(start, end), ann: covering[0] || null });
+    segments.push({ text: text.slice(start, end), anns: covering, ann: covering[0] || null });
   }
   return segments;
+}
+
+// Composes the styles of every annotation covering one segment. Later (lower
+// priority) types only fill in properties the higher-priority one didn't set,
+// so a highlight+underline overlap shows the teal wash AND the underline,
+// while two conflicting borders don't fight.
+export function mergedAnnotationStyle(anns) {
+  if (!anns || anns.length === 0) return null;
+  const style = {};
+  anns.forEach((a) => {
+    const s = ANNOTATION_STYLES[a.type];
+    if (!s) return;
+    Object.entries(s).forEach(([k, v]) => {
+      if (style[k] === undefined) style[k] = v;
+    });
+  });
+  return style;
 }
 
 export const ANNOTATION_STYLES = {

@@ -1,4 +1,4 @@
-// Phase 2 (restructure) — ② Coach.
+// Phase 2 (restructure) - ② Coach.
 // Full passage → reading-map grade (BEFORE questions) → questions with reasoning
 // verdict → optional "Stuck? Discuss" chat. See content-pipeline/READING_GRADER.md
 // and PHASE0_ARCHITECTURE.md for the design this implements.
@@ -8,7 +8,7 @@ const db = require("../db");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, resolveModels, DEFAULT_MODEL, describeError } = require("../ai/provider");
-const { requireEntitlement, attachTier } = require("../lib/entitlements");
+const { requireEntitlement, attachTier, requireGuidedCoaching } = require("../lib/entitlements");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { aiLimiter } = require("../lib/rateLimiters");
@@ -26,17 +26,7 @@ router.use(authenticate);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Models occasionally wrap JSON in ```json fences despite instructions not to.
-// Strip fences and grab the first {...} block before parsing.
-function extractJSON(text) {
-  let t = text.trim();
-  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) t = fenced[1].trim();
-  const start = t.indexOf("{");
-  const end = t.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) t = t.slice(start, end + 1);
-  return JSON.parse(t);
-}
+const { extractJSON } = require("../lib/extractJSON");
 
 function hydrateQuestion(row) {
   return {
@@ -56,6 +46,25 @@ function stripQuestion(q) {
   return { id: q.id, type: q.type, question: q.question, options: q.options.map((o) => ({ text: o.text })) };
 }
 
+// The canonical reading key is the answer key for the reading-map step, and it
+// overlaps almost entirely with what main-idea / tone / title questions test —
+// on a sample passage its `thesis` answered both the inference and the title
+// question and its `tone` answered the tone question (3 of 4). So it stays
+// server-side for the whole working session and is released only once the
+// session is COMPLETED, which is exactly when the summary screen draws its
+// "your map vs the model reading" comparison. Returns null at every other point.
+function readingKeyIfRevealed(session, passage) {
+  if (!session || session.status !== "completed") return null;
+  try {
+    const key = JSON.parse(passage.reading_key_json || "{}");
+    // Guard against the legacy `{}` rows — an empty key would render an empty
+    // comparison column rather than simply hiding it.
+    return key && key.thesis ? key : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getPassageQuestions(passageId) {
   const rows = await db.all(
     "SELECT * FROM questions WHERE passage_id = $1 AND is_active = 1 ORDER BY id ASC",
@@ -64,7 +73,7 @@ async function getPassageQuestions(passageId) {
   return rows.map(hydrateQuestion);
 }
 
-// ── GET /api/coach/passages — picker list ──────────────────────────────────────
+// ── GET /api/coach/passages - picker list ──────────────────────────────────────
 router.get("/passages", async (req, res, next) => {
   try {
     const topic = (req.query.topic || "").trim();
@@ -77,11 +86,11 @@ router.get("/passages", async (req, res, next) => {
               (SELECT COUNT(*) FROM questions WHERE passage_id = p.id AND is_active = 1) AS "questionCount",
               EXISTS(
                 SELECT 1 FROM coach_sessions cs
-                WHERE cs.passage_id = p.id AND cs.user_id = $${params.length + 1} AND cs.status = 'completed'
+                WHERE cs.passage_id = p.id AND cs.user_id = $${params.length + 1} AND cs.status = 'completed' AND cs.deleted_at IS NULL
               ) AS "completed",
               (
                 SELECT cs2.id FROM coach_sessions cs2
-                WHERE cs2.passage_id = p.id AND cs2.user_id = $${params.length + 1} AND cs2.status = 'active'
+                WHERE cs2.passage_id = p.id AND cs2.user_id = $${params.length + 1} AND cs2.status = 'active' AND cs2.deleted_at IS NULL
                 ORDER BY cs2.id DESC LIMIT 1
               ) AS "activeSessionId"
        FROM passages p
@@ -93,8 +102,37 @@ router.get("/passages", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── POST /api/coach/sessions — start (or resume) a session on a passage ───────
-router.post("/sessions", requireEntitlement("coach"), validateBody(coachCreateSessionSchema), async (req, res, next) => {
+// Meters a NEW passage against the daily/monthly Coach cap, but lets a user
+// re-open a passage they already started for free.
+//
+// Why: the cap counts rows in coach_sessions, and requireEntitlement used to
+// run before the route body's resume lookup. So a free user (1 passage/day)
+// who started a passage, left, and came back was told "you've used all 1 of
+// today's Coach passages" and locked out of their OWN half-finished session
+// for the rest of the IST day — even though resuming creates no new row and
+// costs no additional quota.
+//
+// Falls through to the normal cap check on any error, so a lookup failure
+// can't be used to dodge metering.
+async function meterNewCoachPassage(req, res, next) {
+  try {
+    const passageId = req.body?.passageId;
+    if (passageId) {
+      const existing = await db.get(
+        "SELECT id FROM coach_sessions WHERE passage_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
+        [passageId, req.userId]
+      );
+      // Resuming: skip the cap, but still resolve the tier for model routing.
+      if (existing) return attachTier(req, res, next);
+    }
+  } catch {
+    // fall through to the metered path below
+  }
+  return requireEntitlement("coach")(req, res, next);
+}
+
+// ── POST /api/coach/sessions - start (or resume) a session on a passage ───────
+router.post("/sessions", meterNewCoachPassage, validateBody(coachCreateSessionSchema), async (req, res, next) => {
   try {
     const { passageId } = req.body || {};
     if (!passageId) return res.status(400).json({ error: "passageId is required" });
@@ -104,7 +142,7 @@ router.post("/sessions", requireEntitlement("coach"), validateBody(coachCreateSe
 
     // Resume an existing active session for this user+passage rather than duplicating.
     let session = await db.get(
-      "SELECT * FROM coach_sessions WHERE passage_id = $1 AND user_id = $2 AND status = 'active'",
+      "SELECT * FROM coach_sessions WHERE passage_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
       [passageId, req.userId]
     );
     if (!session) {
@@ -141,13 +179,13 @@ router.post("/sessions", requireEntitlement("coach"), validateBody(coachCreateSe
   } catch (e) { next(e); }
 });
 
-// ── POST /api/coach/sessions/:id/reading-map — the b2 differentiator ──────────
+// ── POST /api/coach/sessions/:id/reading-map - the b2 differentiator ──────────
 // Grades the student's reading BEFORE they see any question. Any language is
-// accepted (mother-tongue verbalization) — grading is on understanding, not grammar.
-router.post("/sessions/:id/reading-map", aiLimiter, attachTier, validateBody(coachReadingMapSchema), async (req, res, next) => {
+// accepted (mother-tongue verbalization) - grading is on understanding, not grammar.
+router.post("/sessions/:id/reading-map", attachTier, aiLimiter, validateBody(coachReadingMapSchema), async (req, res, next) => {
   try {
     const session = await db.get(
-      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL", [req.params.id, req.userId]
     );
     if (!session) return res.status(404).json({ error: "Coach session not found" });
 
@@ -166,7 +204,7 @@ router.post("/sessions/:id/reading-map", aiLimiter, attachTier, validateBody(coa
     const readingMap = { mode, crux: crux || null, mainPoint: mainPoint || null, tone: tone || null, structure: structure || null, theTurn: theTurn || null };
 
     const studentMapText = mode === "quick"
-      ? `Paragraph crux words (one entry per paragraph, in the student's own words — may be in any language):\n${(crux || []).map((c, i) => `¶${i + 1}: ${c || "(blank)"}`).join("\n")}`
+      ? `Paragraph crux words (one entry per paragraph, in the student's own words - may be in any language):\n${(crux || []).map((c, i) => `¶${i + 1}: ${c || "(blank)"}`).join("\n")}`
       : `Main point: ${mainPoint || "(blank)"}\nTone: ${tone || "(blank)"}\nStructure (one line per paragraph): ${(structure || []).map((s, i) => `\n¶${i + 1}: ${s || "(blank)"}`).join("")}\nThe turn: ${theTurn || "(not given)"}`;
 
     const SYSTEM = await getPrompt("coach_reading_grade");
@@ -181,7 +219,7 @@ Key turn: ${readingKey.key_turn}
 STUDENT'S READING MAP (${mode} mode):
 ${studentMapText}`;
 
-    // Retry once on a transient/parse failure before falling back — grading the
+    // Retry once on a transient/parse failure before falling back - grading the
     // reading is the differentiator, but it must never hard-block the student
     // from reaching the questions if the AI call has a bad moment.
     const models = resolveModels(req.userTier, "coach");
@@ -198,14 +236,14 @@ ${studentMapText}`;
     }
 
     if (!grade) {
-      // Fallback: don't block the session — record that grading failed and let
+      // Fallback: don't block the session - record that grading failed and let
       // the student proceed. They can still be graded manually via Discuss later.
       grade = {
         reading_mode: "mixed",
         thesis: "partial",
         structure: "partial",
         caught_the_turn: false,
-        what_you_missed: "Your notes were saved — retry the grade above, or continue to the questions.",
+        what_you_missed: "Your notes were saved - retry the grade above, or continue to the questions.",
         one_technique: "Re-check your notes against the passage before answering. Did you capture what each paragraph is doing, not just what it's about?",
         verdict_line: "The AI grader had a hiccup this time.",
         ungraded: true,
@@ -221,11 +259,11 @@ ${studentMapText}`;
   } catch (e) { next(e); }
 });
 
-// ── GET /api/coach/sessions/:id — full session state ───────────────────────────
+// ── GET /api/coach/sessions/:id - full session state ───────────────────────────
 router.get("/sessions/:id", async (req, res, next) => {
   try {
     const session = await db.get(
-      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL", [req.params.id, req.userId]
     );
     if (!session) return res.status(404).json({ error: "Coach session not found" });
 
@@ -242,6 +280,8 @@ router.get("/sessions/:id", async (req, res, next) => {
         status: session.status,
         readingMap: session.reading_map_json ? JSON.parse(session.reading_map_json) : null,
         readingGrade: session.reading_grade_json ? JSON.parse(session.reading_grade_json) : null,
+        // null until the session is completed - see readingKeyIfRevealed above.
+        readingKey: readingKeyIfRevealed(session, passage),
         passage: { id: passage.id, title: passage.title, topic: passage.topic, genre: passage.genre, body: passage.body, wordCount: passage.word_count },
         questions: questions.map((q) => (attemptByQ.has(q.id) ? q : stripQuestion(q))),
       },
@@ -253,10 +293,10 @@ router.get("/sessions/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── POST /api/coach/attempts — reasoning verdict for one question ─────────────
+// ── POST /api/coach/attempts - reasoning verdict for one question ─────────────
 // Mirrors attempts/evaluate.js but writes to coach_attempts. Response shape
 // matches FeedbackSections' expected `attempt` prop so the client can reuse it.
-router.post("/attempts", aiLimiter, attachTier, validateBody(coachAttemptSchema), async (req, res, next) => {
+router.post("/attempts", attachTier, aiLimiter, validateBody(coachAttemptSchema), async (req, res, next) => {
   try {
     const { coachSessionId, questionId, questionIndex, selectedOptionIndex, reasoningText } = req.body || {};
     if (coachSessionId == null || !questionId || selectedOptionIndex == null) {
@@ -267,7 +307,7 @@ router.post("/attempts", aiLimiter, attachTier, validateBody(coachAttemptSchema)
     }
 
     const session = await db.get(
-      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [coachSessionId, req.userId]
+      "SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL", [coachSessionId, req.userId]
     );
     if (!session) return res.status(404).json({ error: "Coach session not found" });
 
@@ -323,8 +363,8 @@ QUESTION TYPE: ${q.type}
 OPTIONS:
 ${optionLines}
 
-CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
-${q.trapIndex != null ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} — "${q.options[q.trapIndex].text}"\nTRAP TYPE: ${q.trapType}\nTRAP TYPE MEANINGS:\n${buildTrapMeaningsBlock(presentTrapTypes)}` : ""}
+CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} - "${q.options[q.correctIndex].text}"
+${q.trapIndex != null ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} - "${q.options[q.trapIndex].text}"\nTRAP TYPE: ${q.trapType}\nTRAP TYPE MEANINGS:\n${buildTrapMeaningsBlock(presentTrapTypes)}` : ""}
 
 STUDENT SELECTED: Option ${LETTERS[selectedOptionIndex]}
 STUDENT'S REASONING:
@@ -358,10 +398,10 @@ ${reasoningText.trim()}`;
   } catch (e) { next(e); }
 });
 
-// ── POST /api/coach/exchange — optional "Stuck? Discuss" chat ─────────────────
-// Only usable AFTER a question's attempt/verdict exists — this is supplementary
+// ── POST /api/coach/exchange - optional "Stuck? Discuss" chat ─────────────────
+// Only usable AFTER a question's attempt/verdict exists - this is supplementary
 // discussion, not a gate to revealing the answer (that's the point of the redesign).
-router.post("/exchange", aiLimiter, attachTier, validateBody(coachExchangeSchema), async (req, res, next) => {
+router.post("/exchange", attachTier, aiLimiter, requireGuidedCoaching, validateBody(coachExchangeSchema), async (req, res, next) => {
   try {
     const { coachSessionId, questionId, message } = req.body || {};
     if (!coachSessionId || !questionId || !message || !message.trim()) {
@@ -369,7 +409,7 @@ router.post("/exchange", aiLimiter, attachTier, validateBody(coachExchangeSchema
     }
     if (message.trim().length > MAX_MSG_LENGTH) return res.status(400).json({ error: `message must be ${MAX_MSG_LENGTH} characters or fewer` });
 
-    const session = await db.get("SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [coachSessionId, req.userId]);
+    const session = await db.get("SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL", [coachSessionId, req.userId]);
     if (!session) return res.status(404).json({ error: "Coach session not found" });
 
     const attempt = await db.get("SELECT * FROM coach_attempts WHERE coach_session_id = $1 AND question_id = $2", [coachSessionId, questionId]);
@@ -388,7 +428,7 @@ router.post("/exchange", aiLimiter, attachTier, validateBody(coachExchangeSchema
 ${qRow.paragraph}
 
 QUESTION: ${q.question}
-CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
+CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} - "${q.options[q.correctIndex].text}"
 ${q.trapType ? `TRAP TYPE: ${q.trapType} (${buildTrapMeaningsBlock([q.trapType])})` : ""}
 STUDENT'S ORIGINAL REASONING: ${attempt.reasoning_text || "(none given)"}
 PRIOR AI FEEDBACK: ${attempt.correct_explanation || ""} ${attempt.trap_explanation || ""}
@@ -417,7 +457,7 @@ Respond as the coach to the student's latest message.`;
 // ── POST /api/coach/sessions/:id/complete ───────────────────────────────────────
 router.post("/sessions/:id/complete", async (req, res, next) => {
   try {
-    const session = await db.get("SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2", [req.params.id, req.userId]);
+    const session = await db.get("SELECT * FROM coach_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL", [req.params.id, req.userId]);
     if (!session) return res.status(404).json({ error: "Coach session not found" });
     await db.run("UPDATE coach_sessions SET status = 'completed', completed_at = NOW() WHERE id = $1", [session.id]);
     res.json({ ok: true });
@@ -435,7 +475,7 @@ router.get("/history", async (req, res, next) => {
        FROM coach_sessions cs
        JOIN passages p ON p.id = cs.passage_id
        LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id
-       WHERE cs.user_id = $1
+       WHERE cs.user_id = $1 AND cs.deleted_at IS NULL
        GROUP BY cs.id, p.title, p.topic
        ORDER BY cs.created_at DESC`,
       [req.userId]
@@ -444,7 +484,7 @@ router.get("/history", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── GET /api/coach/stats — Dashboard Coach tab ─────────────────────────────────
+// ── GET /api/coach/stats - Dashboard Coach tab ─────────────────────────────────
 router.get("/stats", async (req, res, next) => {
   try {
     const row = await db.get(
@@ -452,13 +492,13 @@ router.get("/stats", async (req, res, next) => {
               COALESCE(SUM(ca.is_correct), 0) AS total_correct, AVG(ca.reasoning_score) AS "avgReasoningScore"
        FROM coach_sessions cs
        LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id
-       WHERE cs.user_id = $1`,
+       WHERE cs.user_id = $1 AND cs.deleted_at IS NULL`,
       [req.userId]
     );
     const byType = await db.all(
       `SELECT question_type, COUNT(*) AS attempts, SUM(is_correct) AS correct
        FROM coach_attempts
-       WHERE coach_session_id IN (SELECT id FROM coach_sessions WHERE user_id = $1)
+       WHERE coach_session_id IN (SELECT id FROM coach_sessions WHERE user_id = $1 AND deleted_at IS NULL)
        GROUP BY question_type`,
       [req.userId]
     );
@@ -469,7 +509,7 @@ router.get("/stats", async (req, res, next) => {
        FROM coach_sessions cs
        JOIN passages p ON p.id = cs.passage_id
        LEFT JOIN coach_attempts ca ON ca.coach_session_id = cs.id
-       WHERE cs.user_id = $1
+       WHERE cs.user_id = $1 AND cs.deleted_at IS NULL
        GROUP BY cs.id, p.title
        ORDER BY cs.created_at DESC
        LIMIT 10`,
@@ -492,10 +532,13 @@ router.delete("/sessions/:id", async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: "invalid session id" });
-    const session = await db.get("SELECT id FROM coach_sessions WHERE id = $1 AND user_id = $2", [id, req.userId]);
+    const session = await db.get("SELECT id FROM coach_sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL", [id, req.userId]);
     if (!session) return res.status(404).json({ error: "Coach session not found" });
-    await db.run("DELETE FROM coach_attempts WHERE coach_session_id = $1", [id]);
-    await db.run("DELETE FROM coach_sessions WHERE id = $1 AND user_id = $2", [id, req.userId]);
+    // Soft delete. A hard DELETE gave the passage allowance back, because usage
+    // is metered by counting coach_sessions rows. The attempts are left in place
+    // so the row stays diagnosable; nothing reads them once the parent is
+    // flagged deleted.
+    await db.run("UPDATE coach_sessions SET deleted_at = NOW() WHERE id = $1 AND user_id = $2", [id, req.userId]);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

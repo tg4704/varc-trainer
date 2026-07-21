@@ -1,4 +1,4 @@
-// ② Coach — passage picker. Replaces the old paste-your-own-article flow:
+// ② Coach - passage picker. Replaces the old paste-your-own-article flow:
 // Coach now runs on admin-curated passages (with a canonical reading_key) so the
 // reading-map grade (the differentiator) has something authoritative to grade against.
 import { useEffect, useState } from "react";
@@ -7,6 +7,7 @@ import { coach } from "../api.js";
 import { track } from "../analytics.js";
 import { Badge } from "../components/ui/badge.jsx";
 import { cn } from "../lib/utils.js";
+import SideDock from "../components/SideDock.jsx";
 
 const TOPICS = ["", "economics", "humanities", "philosophy", "science", "social"];
 
@@ -45,6 +46,7 @@ export default function CoachLanding() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 md:px-9">
+      <SideDock />
       <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="display text-[34px]">Coach</h1>

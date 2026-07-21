@@ -1,4 +1,4 @@
-// Minimal in-session bar for a VARC Coach passage — mirrors Drills'
+// Minimal in-session bar for a VARC Coach passage - mirrors Drills'
 // SessionTopBar shell (Exit left, progress center) so the two practice
 // surfaces feel like one product. Coach has no timer, but its progress model
 // has two phases: mapping the passage first, then answering N questions.

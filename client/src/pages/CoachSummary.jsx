@@ -1,7 +1,7 @@
-// ② Coach — session summary / review screen. Rebuilt to match the Drills
+// ② Coach - session summary / review screen. Rebuilt to match the Drills
 // Results page: accuracy-ring hero, shareable card, and a click-to-open
 // per-question review (reusing FeedbackSections) instead of always-expanded
-// inline cards — plus the Socratic discuss transcript when one exists.
+// inline cards - plus the Socratic discuss transcript when one exists.
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { coach } from "../api.js";
@@ -10,6 +10,9 @@ import TypeBadge from "../components/TypeBadge.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import ShareResultsModal from "../components/ShareResultsModal.jsx";
 import Modal from "../components/Modal.jsx";
+import ReadingGradeCard from "../components/ReadingGradeCard.jsx";
+import ReadingMapCard from "../components/ReadingMapCard.jsx";
+import Icon from "../components/Icon.jsx";
 import { cn } from "../lib/utils.js";
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -25,6 +28,9 @@ export default function CoachSummary() {
   const [error, setError] = useState(null);
   const [openIdx, setOpenIdx] = useState(null);
   const [showShare, setShowShare] = useState(false);
+  // Collapsed by default: the summary's job is the verdict, and the passage is
+  // long enough to bury the stats and per-question review under a scroll.
+  const [passageOpen, setPassageOpen] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -45,7 +51,9 @@ export default function CoachSummary() {
   if (!data) return null;
 
   const { coachSession, attempts } = data;
-  const { passage, questions, readingGrade } = coachSession;
+  // readingKey is only sent once the session is completed (server gates it —
+  // it would otherwise answer the main-idea/tone/title questions).
+  const { passage, questions, readingGrade, readingMap, readingKey } = coachSession;
   const correct = attempts.filter((a) => a.is_correct).length;
   const totalAttempted = attempts.length;
   const accuracyPct = totalAttempted ? Math.round((correct / totalAttempted) * 100) : 0;
@@ -100,13 +108,51 @@ export default function CoachSummary() {
         </div>
       </div>
 
-      {/* Reading grade recap */}
-      {readingGrade && (
-        <div className="accent-card accent-periwinkle mt-8">
-          <div className="fb-label">Your reading: {readingGrade.reading_mode?.replace(/-/g, " ")}</div>
-          <p className="fb-body">{readingGrade.verdict_line}</p>
-        </div>
-      )}
+      {/* Reading grade recap - full "how you read" feedback */}
+      {readingGrade && <ReadingGradeCard grade={readingGrade} className="mt-8" />}
+
+      {/* Side-by-side: what they wrote vs the canonical reading. Safe here and
+          only here - the questions are behind them, so revealing the key can no
+          longer give away the main-idea/tone/title answers. */}
+      {/* The passage comes BEFORE the map comparison: you re-read the passage to
+          make sense of how your map differed from the model reading, so it
+          should be above the thing it explains. Still collapsed by default -
+          expanding it shouldn't push the comparison off-screen by default. */}
+      <section className="glass mt-4 overflow-hidden rounded-[16px]">
+        <button
+          type="button"
+          onClick={() => setPassageOpen((o) => !o)}
+          aria-expanded={passageOpen}
+          aria-controls="summary-passage-body"
+          className="fx-ring flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.04]"
+        >
+          <span className="min-w-0">
+            <span className="eyebrow">The passage</span>
+            <span className="mt-0.5 block truncate text-sm text-foreground">{passage.title}</span>
+          </span>
+          <span className="flex flex-none items-center gap-2">
+            <span className="mono text-[11px] dim">{passage.wordCount?.toLocaleString() ?? "-"} words</span>
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full transition-transform"
+              style={{ background: "rgba(255,255,255,0.06)", transform: passageOpen ? "rotate(180deg)" : "none" }}
+            >
+              <Icon name="chevD" size={13} stroke={2.4} />
+            </span>
+          </span>
+        </button>
+        {passageOpen && (
+          <div id="summary-passage-body" className="px-4 pb-5 pt-1">
+            <p
+              className="font-reading whitespace-pre-wrap"
+              style={{ fontSize: 16.5, lineHeight: 1.75, color: "#C9D0E0" }}
+            >
+              {passage.body}
+            </p>
+          </div>
+        )}
+      </section>
+
+      {readingMap && <ReadingMapCard map={readingMap} readingKey={readingKey} className="mt-4" />}
 
       {/* Stat cards */}
       <div className="mt-5 grid grid-cols-3 gap-4">
@@ -118,13 +164,13 @@ export default function CoachSummary() {
         <div className="glass glasscard p-[18px]">
           <div className="eyebrow">Avg reasoning</div>
           <div className="mono mt-2 text-[22px] leading-none" style={{ color: avgReasoning >= 4 ? "var(--green)" : "var(--text)" }}>
-            {avgReasoning ? `${avgReasoning}/5` : "—"}
+            {avgReasoning ? `${avgReasoning}/5` : "-"}
           </div>
           <div className="mt-1 text-xs dim">score across questions</div>
         </div>
         <div className="glass glasscard p-[18px]">
           <div className="eyebrow">Words read</div>
-          <div className="mono mt-2 text-[22px] leading-none text-foreground">{passage.wordCount?.toLocaleString() ?? "—"}</div>
+          <div className="mono mt-2 text-[22px] leading-none text-foreground">{passage.wordCount?.toLocaleString() ?? "-"}</div>
           <div className="mt-1 text-xs dim">passage length</div>
         </div>
       </div>
@@ -172,6 +218,7 @@ export default function CoachSummary() {
 
       {openIdx != null && (
         <CoachQuestionModal
+          passage={passage}
           questions={questions}
           attempts={attempts}
           index={openIdx}
@@ -198,7 +245,7 @@ export default function CoachSummary() {
 // Per-question detail: options with your-answer/correct highlighting via
 // FeedbackSections (same field shape as Drills attempts), plus the Socratic
 // discuss transcript when the student used it.
-function CoachQuestionModal({ questions, attempts, index, onNavigate, onClose }) {
+function CoachQuestionModal({ passage, questions, attempts, index, onNavigate, onClose }) {
   const q = questions[index];
   const a = attempts.find((at) => at.question_index === index);
   const total = questions.length;
@@ -247,7 +294,49 @@ function CoachQuestionModal({ questions, attempts, index, onNavigate, onClose })
           </button>
         </div>
 
+        {passage?.text && (
+          <p className="serif-read mb-4 text-[14px] leading-[1.75] muted">{passage.text}</p>
+        )}
+
         <h2 id="coach-review-title" className="display mb-4 text-[19px] leading-[1.4]">{q.question}</h2>
+
+        {/* Options for reference */}
+        <div className="mb-5">
+          <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--text-muted)" }}>Options</div>
+          <div className="flex flex-col gap-2">
+            {q.options?.map((o, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-sm"
+                style={{
+                  background: a.selected_option_index === i
+                    ? "rgba(93,202,165,0.1)"
+                    : q.correctIndex === i
+                    ? "rgba(74,222,128,0.08)"
+                    : "rgba(255,255,255,0.02)",
+                  border: `1px solid ${
+                    a.selected_option_index === i
+                      ? "rgba(93,202,165,0.3)"
+                      : q.correctIndex === i
+                      ? "rgba(74,222,128,0.2)"
+                      : "rgba(255,255,255,0.08)"
+                  }`,
+                }}
+              >
+                <span
+                  className="flex h-5 w-5 flex-none items-center justify-center rounded-full font-bold"
+                  style={{
+                    color: a.selected_option_index === i || q.correctIndex === i ? "var(--teal)" : "var(--text-muted)",
+                    fontSize: "12px"
+                  }}
+                >
+                  {LETTERS[i]}
+                </span>
+                <span className="leading-[1.4] text-foreground">{o.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <FeedbackSections attempt={feedbackAttempt} />
 

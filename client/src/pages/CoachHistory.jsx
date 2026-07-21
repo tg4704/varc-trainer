@@ -1,4 +1,4 @@
-// VARC Coach — History page
+// VARC Coach - History page
 // Lists all past coach sessions; in-progress ones can be resumed, completed ones open the summary.
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -7,7 +7,7 @@ import { getActiveCoachSessionId } from "../coachSession.js";
 import { Badge } from "../components/ui/badge.jsx";
 
 function fmtDate(s) {
-  if (!s) return "—";
+  if (!s) return "-";
   return new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
