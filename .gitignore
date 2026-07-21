@@ -30,3 +30,10 @@ Thumbs.db
 
 # Claude Code internal config
 .claude/
+
+# Design handoff archive — kept locally, contents already built into client/src
+UI redesign project.zip
+
+# Agent/skill tooling artifacts
+.agents/
+skills-lock.json

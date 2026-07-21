@@ -71,12 +71,21 @@ PASSAGE (350–500 words):
   previous one (concession, counterexample, reversal) — this positive/negative tracking across
   paragraphs is the actual CAT skill being tested.
 
-READING KEY (this is graded against the student's reading map later):
-- thesis: the author's actual argument in one sentence
-- tone: a short phrase
-- paragraph_functions: one line per paragraph stating what it DOES (sets up / concedes /
-  reverses / illustrates), not what it's about
-- key_turn: the single pivotal shift/tension
+READING KEY — MANDATORY. This is the answer key for the reading-map step: the student writes a
+map BEFORE seeing any question, and the grader scores it against this. A missing or empty key
+does not fail loudly — the grader just silently grades against "undefined" and produces
+confident-sounding commentary that measures nothing. All four fields are required and the
+importer rejects the set outright if any are missing, empty, or the wrong shape.
+- thesis: the author's actual ARGUMENT in one sentence (not the topic). Non-empty string.
+- tone: a short phrase. Non-empty string.
+- paragraph_functions: an array with EXACTLY ONE ENTRY PER PARAGRAPH of the body, in order.
+  Each states what that paragraph DOES (sets up / concedes / reverses / illustrates /
+  qualifies), never what it is about. If the body has 4 paragraphs this array has 4 entries —
+  a count mismatch is a hard import rejection, because it means the key doesn't describe
+  this passage and the grader's "structure" band becomes meaningless.
+- key_turn: the single pivotal shift/tension a strong reader must catch. Non-empty string.
+  This is what separates argument-mapping from information-gathering — be specific about
+  WHERE it happens and what a reader who misses it would wrongly conclude.
 
 QUESTIONS (produce {QUESTIONS}, spread across types; bias toward inference):
 - Types allowed: inference, main_idea, function, tone, application, concept_set,
@@ -134,11 +143,11 @@ OUTPUT JSON (exactly this shape):
 ## PROMPT B — Short drills for ③ Drills (paste, edit the top line)
 
 ```
-TOPIC = economics   |   COUNT = 5
+TOPIC = economics   |   COUNT = 5   |   DIFFICULTY = medium
 
 You are a CAT VARC item-setter. Produce {COUNT} standalone single-question RC drills, each a
-SHORT paragraph (90–120 words) with ONE question. CAT register and difficulty. Output ONLY valid
-JSON (schema at the end). Original text only — never reproduce real articles.
+SHORT paragraph (90–120 words) with ONE question, at {DIFFICULTY} difficulty. CAT register. Output
+ONLY valid JSON (schema at the end). Original text only — never reproduce real articles.
 
 Each paragraph: a self-contained argument with an implied point and a measured tone.
 Each question: inferential/structural (bias toward `inference`), exactly ONE defensible correct
@@ -146,14 +155,24 @@ option + THREE tagged distractors. Same archetype list and rules as CAT (at most
 distractor; distractors tempting, each with a nameable reason). Mark the most-dangerous distractor
 isTrap:true (sets trapIndex/trapType); other wrong options isTrap:false but still trapType-tagged.
 
+Calibrate every item to {DIFFICULTY} and set each item's "difficulty" field to it:
+- easy: plainer paragraph, the correct option paraphrases a stated idea with light inference; the
+  trap is clearly over-stated or off-topic (a careful reader rejects it fast).
+- medium: true exam level; the correct option needs a real inferential step; the trap differs from
+  the answer by scope or emphasis and is tempting to a 90th-percentile student.
+- tough: denser paragraph; the answer turns on a subtle distinction (scope, degree, which claim is
+  actually supported); the trap is a near-miss (real_but_unstated / partially_correct) that would
+  catch a 95th-percentile student.
+
 Vary topics/subtopics across the {COUNT} items and skew the type mix toward inference.
 
-OUTPUT JSON:
+OUTPUT JSON (every item MUST include "difficulty"):
 {
   "kind": "drills",
   "items": [
     {
       "topic": "<economics|philosophy|science|humanities|social>",
+      "difficulty": "<easy|medium|tough>",
       "paragraph": "<90–120 words>",
       "type": "inference",
       "question": "...",
@@ -190,7 +209,14 @@ produced against these gates. Be adversarial — assume it's wrong until proven 
 4. DISTRACTOR GATE: does every wrong option have a concrete reason matching its tag, AND is none
    of them secretly also-correct? Over-reliance on absolute words → FAIL.
 5. READING-KEY GATE (passage_set only): do paragraph_functions describe FUNCTION (not topic),
-   and does thesis capture the argument (not the subject)?
+   and does thesis capture the argument (not the subject)? Also COUNT them: there must be
+   exactly one entry per body paragraph, in order. And confirm thesis / tone / key_turn are
+   all present and non-empty — an empty `reading_key: {}` passes a naive "is it an object"
+   check but breaks grading silently.
+6. STRUCTURE GATE (passage_set only): does the body actually contain 3-5 paragraphs separated
+   by blank lines (`\n\n`)? A single unbroken block is a hard import rejection — Coach asks the
+   student for one crux entry per paragraph, so one block gives them one box and leaves the
+   grader nothing to score.
 
 For each question return: { index, verdict: "pass"|"fail", failed_gates:[...], reason,
 fixed_question? }  — if fixable, include the corrected question in the SAME output JSON shape so
@@ -198,6 +224,26 @@ I can use it directly. Then output the FULL corrected JSON of only the passing/f
 ```
 
 ---
+
+## Import contract — what gets HARD-REJECTED
+
+`POST /api/admin/import` (`server/routes/admin.js`) validates shape before writing anything. A
+`passage_set` is rejected outright — nothing is inserted — if any of these fail:
+
+| Rule | Why |
+|---|---|
+| `passage.body` has 3–5 paragraphs separated by blank lines | Coach's reading map is one crux entry per paragraph; a single block leaves the grader's structure band nothing to score |
+| `reading_key.thesis` / `.tone` / `.key_turn` are non-empty strings | an empty `{}` used to pass the old `typeof === "object"` check and silently broke grading |
+| `reading_key.paragraph_functions` is a non-empty array of non-empty strings | same |
+| `paragraph_functions.length` equals the body's paragraph count | a mismatch means the key doesn't describe this passage |
+| every question passes `validateQuestionPayload` | one bad question rejects the whole set (atomic) |
+
+Soft (imported anyway, reported in `errors[]`): body outside 350–500 words.
+
+> These mirror the rules above. If you change one, change both — the prompt and the importer are
+> two halves of the same contract, and the 2026-07-20 QA found the gap between them the hard way
+> (all 5 seeded passages had `reading_key_json = '{}'`; they were hand-inserted and never went
+> through this importer, which at the time would have accepted them regardless).
 
 ## Notes for import
 

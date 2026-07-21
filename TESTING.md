@@ -174,6 +174,46 @@ reset does NOT hijack in-page anchors).
 
 - [ ] Pass
 
+
+## 8. Modals: animation, Esc, focus trap, backdrop (P1-6)
+
+Applies to every modal (Session-setup "Ready to begin?", Practice
+end/leave/flag, Share results, Reset/Delete account, Change password,
+Results & Coach question-review, Coach leave).
+
+1. Open any modal (e.g. Session Setup → "Start … session").
+
+Expected: backdrop fades in and the panel slides up (unless the OS has
+"reduce motion" on, then it appears instantly).
+
+2. Press **Tab** repeatedly.
+
+Expected: focus cycles ONLY within the modal's controls — it never lands
+on the page behind it. Shift+Tab cycles backward.
+
+3. Press **Esc**.
+
+Expected: the modal closes (for the leave/end guards, Esc = the safe
+"Stay/Keep reviewing" default). Focus returns to the control that opened it.
+
+4. Reopen and click the dark backdrop outside the panel.
+
+Expected: dismissible modals close; the in-session leave/end guards do
+NOT close on backdrop click (they require an explicit choice).
+
+- [ ] Pass
+
+## 9. Leave-session options are readable on touch (P1-10 / P2)
+
+1. On a touch device (or with no mouse), open the Drills leave modal
+   (Exit mid-session) and the Coach leave modal.
+
+Expected: each option's description ("Deletes this session…", "Keeps the
+questions you've answered…", etc.) is visible as text under the button —
+NOT hidden behind a hover tooltip. No "Hover an option…" instruction.
+
+- [ ] Pass
+
 ## 10. Coach: passage panel & chat scroll behave on all sizes (P1-7 / P1-8)
 
 **Mobile passage panel (375px):**
