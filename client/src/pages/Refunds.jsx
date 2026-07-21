@@ -4,8 +4,8 @@ import PageMeta from "../components/PageMeta.jsx";
 
 export default function Refunds() {
   return (
-    <LegalDoc title="Refund & Cancellation Policy" updated="14 July 2026">
-      <PageMeta title="Refund & Cancellation Policy — Graspr" description="How Graspr paid plans, refunds, and cancellations work." />
+    <LegalDoc title="Refund & Cancellation Policy" updated="17 July 2026">
+      <PageMeta title="Refund & Cancellation Policy · Graspr" description="How Graspr paid plans, refunds, and cancellations work." />
       <p>
         This policy covers Graspr's paid plans, operated by Tarun Gupta, an individual based in
         Bangalore, Karnataka, India. It sits alongside our{" "}
@@ -14,46 +14,78 @@ export default function Refunds() {
 
       <Section title="How our plans work">
         <p>
-          Graspr paid plans (Inference, 99th Percentile, Topper) are <strong>one-time purchases for a
-          fixed number of months</strong> — not auto-renewing subscriptions. You pay once, your plan
-          is active for the period you bought, and it simply expires at the end. Nothing is charged
-          automatically, so there is no recurring billing to cancel.
+          Graspr paid tiers (Inference, 99th Percentile, Topper) come in two forms:
         </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>
+            <strong>Monthly (auto-renews):</strong> a recurring subscription billed once a month via
+            Razorpay autopay (UPI Autopay or a card mandate). It renews automatically each month until
+            you cancel.
+          </li>
+          <li>
+            <strong>Till CAT (one-time pass):</strong> a single payment that unlocks the tier until the
+            CAT exam date. It does <strong>not</strong> auto-renew and simply expires on that date,
+            so there's nothing to cancel.
+          </li>
+        </ul>
       </Section>
 
-      <Section title="Cancellation">
+      <Section title="Cancelling a monthly subscription">
         <p>
-          Because there's no auto-renewal, you don't need to cancel anything to avoid a future
-          charge. If you decide not to continue, just let your plan lapse — your account stays, and
-          you drop back to the free Skimmer tier when the paid period ends. You keep all your
-          practice history either way.
+          You can cancel anytime from{" "}
+          <Link to="/my-plan" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>My Plan</Link>.
+          Cancellation takes effect <strong>at the end of the period you've already paid for</strong>.
+          It stops the plan from renewing, rather than ending it immediately:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>You keep full access to your tier until the current paid period ends.</li>
+          <li>
+            Your Razorpay autopay mandate is cancelled, so <strong>you will not be charged again</strong>.
+          </li>
+          <li>
+            The current period is not pro-rated or refunded, because you keep full access to it (see
+            Refunds below).
+          </li>
+          <li>When the paid period ends you return to the free Skimmer tier. Your practice history stays.</li>
+        </ul>
+        <p>
+          The one-time Till CAT pass has no auto-renewal, so there's nothing to cancel; it simply
+          expires on the exam date.
         </p>
       </Section>
 
       <Section title="Refunds">
         <p>
-          Our plans unlock AI features that cost us money to run per use, so refunds are limited —
-          but we aim to be fair:
+          Our paid tiers unlock AI features that cost us money each time they're used, so we keep
+          refunds simple and predictable:
         </p>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
-            <strong>Within 7 days, if barely used:</strong> if you bought a plan within the last 7
-            days and have used only a small part of its AI features (a handful of AI reasonings or
-            Coach passages), email us and we'll refund it in full.
+            <strong>Cancellation is not a refund.</strong> Cancelling a monthly plan stops future
+            renewals; it does not refund the current period, since you keep full access to it.
           </li>
           <li>
-            <strong>Billing errors:</strong> if you were charged twice, charged the wrong amount, or
-            charged for a plan you didn't get, we'll refund the difference in full — no time limit.
+            <strong>Renewals are non-refundable.</strong> Once a monthly renewal has been charged,
+            that month is not refundable. To avoid the next charge, cancel before your renewal date;
+            you can see it on{" "}
+            <Link to="/my-plan" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>My Plan</Link>.
           </li>
           <li>
-            <strong>After substantial use, or after 7 days:</strong> plans are generally
-            non-refundable once you've meaningfully used the AI features or the period is well
-            underway, since the cost has already been incurred on your behalf.
+            <strong>Goodwill window (first purchase only):</strong> if this was your first payment for
+            a tier, you made it within the last 7 days, and you've used almost none of its AI features
+            (a handful of AI reasonings or Coach passages at most), email us and we'll refund it in
+            full. This is a one-time courtesy, not available on renewals.
+          </li>
+          <li>
+            <strong>Billing errors, always refunded:</strong> if you were charged twice, charged the
+            wrong amount, or charged for something you didn't receive, we'll refund the difference in
+            full, with no time limit.
           </li>
         </ul>
         <p>
-          We don't offer partial or pro-rated refunds for unused days of an active plan. If
-          something's genuinely wrong, reach out — we'd rather sort it out than lose your trust.
+          Outside these cases, payments are non-refundable, and we don't pro-rate unused days of an
+          active plan. If something's genuinely wrong, reach out; we'd rather sort it out than lose
+          your trust.
         </p>
       </Section>
 
@@ -61,17 +93,28 @@ export default function Refunds() {
         <p>
           Email{" "}
           <a href="mailto:privacy@graspr.in" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>privacy@graspr.in</a>{" "}
-          from the address on your account, with the approximate date and plan you purchased. Approved
-          refunds are processed back to your original payment method via Razorpay, typically within
-          5–7 business days.
+          from the email address on your account, telling us the plan, the approximate date, and the
+          reason. Approved refunds go back to your original payment method via Razorpay, typically
+          within 5 to 7 business days (your bank may take a little longer to show it).
         </p>
       </Section>
 
-      <Section title="Failed or pending payments">
+      <Section title="Failed, retried, or paused payments">
         <p>
-          If a payment fails but money left your account, it's usually an authorization hold that
-          your bank releases automatically within a few business days. If it doesn't, email us with
-          the details and we'll help trace it with Razorpay.
+          If a payment fails but money left your account, it's usually a temporary authorization hold
+          your bank releases on its own within a few business days. For monthly plans, if an
+          automatic renewal fails, Razorpay may retry it; you keep access until your paid-through
+          date, and if the charge still can't be collected the subscription pauses and access ends at
+          that date. If anything looks wrong, email us with the details and we'll trace it with
+          Razorpay.
+        </p>
+      </Section>
+
+      <Section title="Suspension for misuse">
+        <p>
+          We may suspend or cancel access without a refund if a plan is used in breach of our{" "}
+          <Link to="/terms" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>Terms of Service</Link>,
+          for example fraud, payment chargebacks, or automated abuse of the AI features.
         </p>
       </Section>
 
