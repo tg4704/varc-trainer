@@ -256,6 +256,9 @@ export const admin = {
     request(`/api/admin/questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteQuestion: (id) =>
     request(`/api/admin/questions/${id}`, { method: "DELETE" }),
+  // action: 'activate' | 'deactivate' | 'delete' ('delete' is a hard delete)
+  bulkQuestions: (ids, action) =>
+    request("/api/admin/questions/bulk", { method: "POST", body: JSON.stringify({ ids, action }) }),
   flagQuestion: (id, reason) =>
     request(`/api/admin/questions/${id}/flag`, {
       method: "POST",
@@ -291,6 +294,11 @@ export const admin = {
     request(`/api/admin/passages${active !== "" ? `?active=${active}` : ""}`),
   setPassageActive: (id, isActive) =>
     request(`/api/admin/passages/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+
+  // Deleting also removes each passage's questions; passages with Coach sessions
+  // are refused and returned in `skipped`.
+  bulkPassages: (ids, action) =>
+    request("/api/admin/passages/bulk", { method: "POST", body: JSON.stringify({ ids, action }) }),
 
   listBulletins: () => request("/api/admin/bulletins"),
   createBulletin: (title, body) =>

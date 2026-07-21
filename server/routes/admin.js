@@ -453,6 +453,32 @@ router.delete("/questions/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── POST /api/admin/questions/bulk ─────────────────────────────────────────
+// Body: { ids: string[], action: 'activate' | 'deactivate' | 'delete' }
+// 'delete' here is a HARD delete (unlike DELETE /questions/:id, which soft-deletes
+// by clearing is_active) - the bulk UI offers activate/deactivate separately, so a
+// bulk "delete" that only deactivated would be an indistinguishable duplicate.
+// attempts.question_id is a plain TEXT column with no FK, so past attempt history
+// survives the row going away.
+router.post("/questions/bulk", async (req, res, next) => {
+  try {
+    const { ids, action } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids (non-empty array) is required" });
+    }
+    if (!["activate", "deactivate", "delete"].includes(action)) {
+      return res.status(400).json({ error: "action must be activate, deactivate or delete" });
+    }
+    if (ids.length > 500) return res.status(400).json({ error: "at most 500 ids per request" });
+
+    const info = action === "delete"
+      ? await db.run("DELETE FROM questions WHERE id = ANY($1)", [ids])
+      : await db.run("UPDATE questions SET is_active = $1 WHERE id = ANY($2)", [action === "activate" ? 1 : 0, ids]);
+
+    res.json({ ok: true, affected: info.rowCount });
+  } catch (e) { next(e); }
+});
+
 // ── POST /api/admin/questions/:id/flag ─────────────────────────────────────
 // Admin flags a question for review (the 'admin' source). User thumbs-down
 // and AI self-audit will populate this same table in later phases.
@@ -553,6 +579,57 @@ router.patch("/passages/:id", async (req, res, next) => {
     const info = await db.run("UPDATE passages SET is_active = $1 WHERE id = $2", [req.body.isActive ? 1 : 0, id]);
     if (info.rowCount === 0) return res.status(404).json({ error: "not found" });
     res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/admin/passages/bulk ──────────────────────────────────────────
+// Body: { ids: number[], action: 'activate' | 'deactivate' | 'delete' }
+// Deleting a passage also deletes its questions (questions.passage_id FKs to it).
+// A passage any student has actually run in Coach is NOT deletable - coach_sessions
+// FKs to it, and those rows are real user history we don't want to lose. Those ids
+// come back in `skipped` so the UI can say which ones were left alone and why.
+router.post("/passages/bulk", async (req, res, next) => {
+  try {
+    const { ids: rawIds, action } = req.body || {};
+    if (!Array.isArray(rawIds) || rawIds.length === 0) {
+      return res.status(400).json({ error: "ids (non-empty array) is required" });
+    }
+    if (!["activate", "deactivate", "delete"].includes(action)) {
+      return res.status(400).json({ error: "action must be activate, deactivate or delete" });
+    }
+    const ids = rawIds.map((i) => parseInt(i, 10)).filter(Boolean);
+    if (ids.length === 0) return res.status(400).json({ error: "no valid ids" });
+    if (ids.length > 500) return res.status(400).json({ error: "at most 500 ids per request" });
+
+    if (action !== "delete") {
+      const info = await db.run(
+        "UPDATE passages SET is_active = $1 WHERE id = ANY($2)",
+        [action === "activate" ? 1 : 0, ids]
+      );
+      return res.json({ ok: true, affected: info.rowCount, skipped: [] });
+    }
+
+    const used = await db.all(
+      "SELECT DISTINCT passage_id FROM coach_sessions WHERE passage_id = ANY($1)",
+      [ids]
+    );
+    const blocked = new Set(used.map((r) => r.passage_id));
+    const deletable = ids.filter((id) => !blocked.has(id));
+
+    let affected = 0;
+    if (deletable.length > 0) {
+      await db.transaction(async (client) => {
+        await client.query("DELETE FROM questions WHERE passage_id = ANY($1)", [deletable]);
+        const info = await client.query("DELETE FROM passages WHERE id = ANY($1)", [deletable]);
+        affected = info.rowCount;
+      });
+    }
+
+    res.json({
+      ok: true,
+      affected,
+      skipped: [...blocked].map((id) => ({ id, reason: "has Coach sessions" })),
+    });
   } catch (e) { next(e); }
 });
 

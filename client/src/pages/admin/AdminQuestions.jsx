@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
+import BulkActionBar, { RowCheckbox } from "../../components/admin/BulkActionBar.jsx";
 
 const TYPES = [
   "", "inference", "main_idea", "function", "tone", "detail", "application",
@@ -26,6 +27,7 @@ export default function AdminQuestions() {
   const [product, setProduct] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [selected, setSelected] = useState([]);
 
   const reload = () => {
     const filters = {};
@@ -37,11 +39,20 @@ export default function AdminQuestions() {
     admin.listQuestions(filters).then(setData).catch((e) => setError(e.message));
   };
 
+  // Filters changing swaps out which rows are on screen, so any prior selection
+  // would be invisible-but-live - drop it rather than act on rows nobody can see.
   useEffect(() => {
+    setSelected([]);
     const t = setTimeout(reload, q ? 200 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, type, topic, active, product]);
+
+  const rows = data?.questions ?? [];
+  const allSelected = rows.length > 0 && selected.length === rows.length;
+
+  const toggleRow = (id, on) =>
+    setSelected((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)));
 
   return (
     <div className="space-y-4">
@@ -95,10 +106,29 @@ export default function AdminQuestions() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      <BulkActionBar
+        noun="question"
+        selected={selected}
+        onClear={() => setSelected([])}
+        onRun={async (action) => {
+          await admin.bulkQuestions(selected, action);
+          setSelected([]);
+          reload();
+        }}
+      />
+
       <Card className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[760px]">
+        <table className="w-full text-sm min-w-[800px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
+              <th className="px-3 py-2 w-8">
+                <RowCheckbox
+                  label="Select all questions"
+                  checked={allSelected}
+                  indeterminate={selected.length > 0 && !allSelected}
+                  onChange={(on) => setSelected(on ? rows.map((r) => r.id) : [])}
+                />
+              </th>
               <th className="text-left font-medium px-3 py-2">ID</th>
               <th className="text-left font-medium px-3 py-2">Type</th>
               <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Topic</th>
@@ -112,11 +142,18 @@ export default function AdminQuestions() {
             </tr>
           </thead>
           <tbody>
-            {data?.questions?.length === 0 && (
-              <tr><td colSpan={10} className="text-center text-muted-foreground py-6">No questions match</td></tr>
+            {rows.length === 0 && (
+              <tr><td colSpan={11} className="text-center text-muted-foreground py-6">No questions match</td></tr>
             )}
-            {data?.questions?.map((q) => (
+            {rows.map((q) => (
               <tr key={q.id} className="border-t border-border">
+                <td className="px-3 py-2">
+                  <RowCheckbox
+                    label={`Select question ${q.id}`}
+                    checked={selected.includes(q.id)}
+                    onChange={(on) => toggleRow(q.id, on)}
+                  />
+                </td>
                 <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{q.id}</td>
                 <td className="px-3 py-2"><Badge variant={q.type}>{q.type}</Badge></td>
                 <td className="px-3 py-2 hidden md:table-cell capitalize text-muted-foreground">{q.topic}</td>
