@@ -1,4 +1,4 @@
-// Universal top nav — floating glass pill shown on every logged-in,
+// Universal top nav - floating glass pill shown on every logged-in,
 // non-session page (Home, Dashboard, Coach hub, Drills setup, Profile, My
 // Questions, Results, etc). Replaces the old fragmented model (floating pill
 // on Home only / glass sidebar on hub pages / plain bar everywhere else)
@@ -8,7 +8,7 @@
 // from here rather than navigating to Profile.
 //
 // In-session pages (/practice, /coach/practice) get their own minimal
-// session bar (Exit / progress / timer) instead of this — see App.jsx.
+// session bar (Exit / progress / timer) instead of this - see App.jsx.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -21,6 +21,7 @@ import { scrollIntoViewMotionSafe } from "../lib/utils.js";
 import Modal from "./Modal.jsx";
 import Avatar from "./Avatar.jsx";
 import { ResetDataModal, DeleteAccountModal } from "./AccountDangerModals.jsx";
+import { AUTH } from "../lib/limits.js";
 
 export default function TopNav() {
   const { pathname } = useLocation();
@@ -32,14 +33,21 @@ export default function TopNav() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showResetData, setShowResetData] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [exporting, setExporting] = useState(false);
   const userRef = useRef(null);
   // The avatar dropdown is portaled to <body> so it escapes this nav's
-  // backdrop-filter — a backdrop-filter nested inside another backdrop-filter
+  // backdrop-filter - a backdrop-filter nested inside another backdrop-filter
   // renders as a flat translucent panel (no visible blur). Its position is
   // measured from the trigger button on open.
   const userMenuRef = useRef(null);
   const [userRect, setUserRect] = useState(null);
+
+  // Focus-restore target for modals launched from the account dropdown.
+  // A getter (not a plain ref) because userRef wraps the trigger in a
+  // positioning <div>; the focusable element is the button inside it, and it
+  // has to be resolved at close time rather than captured at open time.
+  const accountButton = () => userRef.current?.querySelector("button") || null;
 
   useEffect(() => {
     const onScroll = () => {
@@ -62,12 +70,12 @@ export default function TopNav() {
   }, [userOpen]);
 
   async function handleExport() {
-    setUserOpen(false);
     setExporting(true);
     try {
       await exportAccountData();
+      setShowExportConfirm(false);
     } catch {
-      // Non-critical UX — silent failure is fine, user can just retry from the menu.
+      // Non-critical UX - silent failure is fine, user can just retry from the menu.
     } finally {
       setExporting(false);
     }
@@ -82,7 +90,7 @@ export default function TopNav() {
   }
 
   // Dark, high-opacity fill (not the lighter `--glass-floating` white tint used
-  // for cards) — a portaled dropdown sits directly over colored nav pills
+  // for cards) - a portaled dropdown sits directly over colored nav pills
   // (active Dashboard button, avatar gradient), and a low-opacity white tint
   // lets that color bleed through the blur as a visible smudge. Same recipe as
   // QuestionStepper's popover, which doesn't have this problem.
@@ -98,21 +106,35 @@ export default function TopNav() {
   const isActive = (to) => pathname === to || (to !== "/" && pathname.startsWith(to));
 
   return (
-    <div className="sticky top-[18px] z-50 px-4 md:px-6">
+    <div
+      className="sticky z-50"
+      style={{
+        top: scrolled ? 18 : 0,
+        paddingInline: scrolled ? "clamp(16px, 2vw, 24px)" : 0,
+        transition: "top 360ms cubic-bezier(.2,.8,.2,1), padding-inline 360ms cubic-bezier(.2,.8,.2,1)",
+      }}
+    >
       <nav
-        className="mx-auto grid max-w-[1180px] grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[18px] py-2.5 pl-4 pr-2.5 transition-shadow md:pl-[22px] md:pr-[14px]"
+        className="mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2.5 pl-4 pr-2.5 md:pl-[22px] md:pr-[14px]"
         style={{
-          background: scrolled ? "rgba(20,23,31,0.7)" : "rgba(255,255,255,0.06)",
+          width: "100%",
+          maxWidth: scrolled ? 1180 : "100%",
+          borderRadius: scrolled ? 18 : 0,
+          background: scrolled ? "rgba(20,23,31,0.7)" : "rgba(20,23,31,0.32)",
           backdropFilter: "blur(22px) saturate(150%)",
           WebkitBackdropFilter: "blur(22px) saturate(150%)",
-          border: "1px solid rgba(255,255,255,0.1)",
+          border: scrolled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,255,255,0.08)",
+          borderLeftWidth: scrolled ? 1 : 0,
+          borderRightWidth: scrolled ? 1 : 0,
+          borderTopWidth: scrolled ? 1 : 0,
           boxShadow: scrolled
             ? "0 1px 0 rgba(255,255,255,0.1) inset, 0 16px 44px rgba(0,0,0,0.5)"
-            : "0 1px 0 rgba(255,255,255,0.08) inset, 0 8px 24px rgba(0,0,0,0.3)",
+            : "0 1px 0 rgba(255,255,255,0.08) inset, 0 12px 36px rgba(0,0,0,0.22)",
+          transition: "max-width 360ms cubic-bezier(.2,.8,.2,1), border-radius 360ms cubic-bezier(.2,.8,.2,1), background 360ms cubic-bezier(.2,.8,.2,1), border-color 360ms cubic-bezier(.2,.8,.2,1), border-width 360ms cubic-bezier(.2,.8,.2,1), box-shadow 360ms cubic-bezier(.2,.8,.2,1)",
           // Forces its own GPU compositing layer. Without this, the inline
           // background/box-shadow swap on every scroll event (the `scrolled`
           // toggle above) can leave a stale, smudged composited frame behind
-          // on an element with backdrop-filter — a known Chromium artifact
+          // on an element with backdrop-filter - a known Chromium artifact
           // when backdrop-filter styles mutate outside a CSS transition.
           transform: "translateZ(0)",
           isolation: "isolate",
@@ -126,7 +148,7 @@ export default function TopNav() {
         </Link>
 
         {/* Center group: the three practice surfaces, as distinct top-level
-            buttons rather than a single dropdown — each is one click away.
+            buttons rather than a single dropdown - each is one click away.
             Hidden below md: the avatar dropdown carries Drills/Coach/Dashboard
             on phones instead (logged-out gets logo + auth buttons only). */}
         {user ? (
@@ -168,20 +190,9 @@ export default function TopNav() {
           </div>
         ) : (
           <div className="hidden items-center justify-center gap-1 md:flex">
-            <button
-              type="button"
-              onClick={() => {
-                if (pathname === "/") {
-                  scrollIntoViewMotionSafe(document.getElementById("toolkit"));
-                } else {
-                  navigate("/#toolkit");
-                }
-              }}
-              className="rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
-              style={{ background: "transparent", color: "var(--text-2)" }}
-            >
-              Toolkit
-            </button>
+            <SectionLink id="why" label="Why Graspr?" pathname={pathname} navigate={navigate} />
+            <SectionLink id="try" label="Demo" pathname={pathname} navigate={navigate} />
+            <SectionLink id="how" label="How it works?" pathname={pathname} navigate={navigate} />
             <Link
               to="/pricing"
               className="rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
@@ -272,15 +283,16 @@ export default function TopNav() {
                     <div className="my-1 h-px" style={{ background: "var(--glass-border-lo)" }} />
                   </div>
                   <DropdownItem to="/profile" onClick={() => setUserOpen(false)}>Profile</DropdownItem>
-                  {/* My Questions temporarily disabled — see App.jsx route redirect */}
+                  <DropdownItem to="/my-plan" onClick={() => setUserOpen(false)}>My Plan</DropdownItem>
+                  {/* My Questions temporarily disabled - see App.jsx route redirect */}
                   {user.role === "admin" && (
                     <DropdownItem to="/admin" onClick={() => setUserOpen(false)}>Admin</DropdownItem>
                   )}
                   <DropdownButton onClick={() => { setUserOpen(false); setShowChangePassword(true); }}>
                     Change Password
                   </DropdownButton>
-                  <DropdownButton onClick={handleExport} disabled={exporting}>
-                    {exporting ? "Preparing export…" : "Export my data"}
+                  <DropdownButton onClick={() => { setUserOpen(false); setShowExportConfirm(true); }}>
+                    Export my data
                   </DropdownButton>
                   <DropdownButton onClick={() => { setUserOpen(false); setShowResetData(true); }}>
                     Reset all data
@@ -311,20 +323,64 @@ export default function TopNav() {
         )}
       </nav>
 
-      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+      {/* returnFocusTo: each of these is launched from the account dropdown,
+          whose item unmounts in the same click that opens the modal. Without an
+          explicit target, focus restoration lands on <body> and a keyboard user
+          restarts from the top of the page. Point at the avatar button, which
+          is stable across the dropdown opening and closing. */}
+      {showChangePassword && (
+        <ChangePasswordModal
+          onClose={() => setShowChangePassword(false)}
+          returnFocusTo={accountButton}
+        />
+      )}
+      {showExportConfirm && (
+        <ExportDataModal
+          busy={exporting}
+          onConfirm={handleExport}
+          onClose={() => { if (!exporting) setShowExportConfirm(false); }}
+          returnFocusTo={accountButton}
+        />
+      )}
       {showResetData && (
         <ResetDataModal
           onClose={() => setShowResetData(false)}
           onDone={() => { setShowResetData(false); navigate("/dashboard"); }}
+          returnFocusTo={accountButton}
         />
       )}
       {showDeleteAccount && (
         <DeleteAccountModal
           onClose={() => setShowDeleteAccount(false)}
           onDeleted={() => { setShowDeleteAccount(false); logout(); navigate("/"); }}
+          returnFocusTo={accountButton}
         />
       )}
     </div>
+  );
+}
+
+// Logged-out nav item that scrolls to a section of the Home page. On Home it
+// smooth-scrolls directly; from any other route it navigates to /#id and
+// ScrollToTop (App.jsx) scrolls to the target once Home mounts.
+function SectionLink({ id, label, pathname, navigate }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (pathname === "/") {
+          scrollIntoViewMotionSafe(document.getElementById(id));
+        } else {
+          navigate(`/#${id}`);
+        }
+      }}
+      className="rounded-[9px] px-3.5 py-2 text-[13.5px] font-semibold transition-colors"
+      style={{ background: "transparent", color: "var(--text-2)" }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-2)")}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -360,7 +416,32 @@ function DropdownButton({ onClick, children, disabled }) {
   );
 }
 
-function ChangePasswordModal({ onClose }) {
+function ExportDataModal({ busy, onConfirm, onClose, returnFocusTo }) {
+  return (
+    <Modal onClose={onClose} labelledBy="export-data-title" closeOnBackdrop={!busy} returnFocusTo={returnFocusTo}>
+      <div className="glass-floating w-full max-w-md p-7">
+        <h2 id="export-data-title" className="display text-[22px]">Export my data</h2>
+        <p className="mt-3 text-[14px] leading-relaxed muted">
+          This downloads a JSON file with your profile, all your Drills sessions and attempts,
+          Coach sessions, and spaced-repetition cards. It doesn't change or delete anything.
+        </p>
+        <p className="mt-2.5 text-[13px] dim">
+          The file may contain personal data - keep it somewhere safe.
+        </p>
+        <div className="mt-6 flex justify-end gap-2.5">
+          <button type="button" onClick={onClose} disabled={busy} className="btn btn-glass fx-ring disabled:opacity-50">
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm} disabled={busy} className="btn btn-primary fx-sheen fx-ring">
+            {busy ? "Preparing…" : "Download export"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ChangePasswordModal({ onClose, returnFocusTo }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [msg, setMsg] = useState(null);
@@ -385,7 +466,7 @@ function ChangePasswordModal({ onClose }) {
   }
 
   return (
-    <Modal onClose={busy ? undefined : onClose} labelledBy="change-password-title">
+    <Modal onClose={busy ? undefined : onClose} labelledBy="change-password-title" returnFocusTo={returnFocusTo}>
       <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} className="glass-floating w-full max-w-sm p-6 space-y-3 animate-slide-up">
         <h2 id="change-password-title" className="font-semibold text-foreground">Change password</h2>
         <input
@@ -394,6 +475,7 @@ function ChangePasswordModal({ onClose }) {
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
           autoComplete="current-password"
+          maxLength={AUTH.PASSWORD_MAX}
           className="input"
           required
         />
@@ -403,7 +485,8 @@ function ChangePasswordModal({ onClose }) {
           value={next}
           onChange={(e) => setNext(e.target.value)}
           autoComplete="new-password"
-          minLength={6}
+          minLength={AUTH.PASSWORD_MIN}
+          maxLength={AUTH.PASSWORD_MAX}
           className="input"
           required
         />

@@ -24,4 +24,16 @@
     <loc>https://www.graspr.in/terms</loc>
     <priority>0.3</priority>
   </url>
+  <url>
+    <loc>https://www.graspr.in/refunds</loc>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://www.graspr.in/cookies</loc>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://www.graspr.in/faq</loc>
+    <priority>0.5</priority>
+  </url>
 </urlset>
