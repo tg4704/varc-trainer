@@ -27,6 +27,24 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
 const IS_LIVE = Boolean(KEY_ID && KEY_SECRET);
 const IS_PROD = process.env.NODE_ENV === "production";
 
+// Dev-mode billing simulation (grant a tier without a real charge) is allowed
+// ONLY outside production. Without this, a production deploy that hasn't had
+// its Razorpay keys set yet - exactly the pre-KYC state - would fall into the
+// !IS_LIVE simulation branches and hand out real paid tiers for free to anyone
+// who clicked "Choose plan". /dev-activate already had this guard; the
+// create-order / create-subscription / cancel-subscription branches did not.
+const DEV_BILLING = !IS_LIVE && !IS_PROD;
+
+// Production with no payment provider configured: refuse cleanly instead of
+// simulating. 503 (not 4xx) - the caller did nothing wrong, the server just
+// isn't set up to take money yet.
+function paymentsUnavailable(res) {
+  return res.status(503).json({
+    error: "Payments aren't available right now. Please try again later.",
+    reason: "payments_unconfigured",
+  });
+}
+
 let _rzp = null;
 function razorpay() {
   if (!_rzp) {
@@ -265,7 +283,8 @@ router.post("/create-order", authenticate, async (req, res, next) => {
     // the actual grant, so a fractional "Till CAT" duration is fine to round here.
     const storedMonths = Math.max(1, Math.round(q.months));
 
-    if (!IS_LIVE) {
+    if (!IS_LIVE && IS_PROD) return paymentsUnavailable(res);
+    if (DEV_BILLING) {
       // Dev mode - no real order; the client shows a "simulate payment" path.
       const devOrderId = `dev_order_${Date.now()}`;
       await db.run(
@@ -457,7 +476,8 @@ router.post("/create-subscription", authenticate, async (req, res, next) => {
       });
     }
 
-    if (!IS_LIVE) {
+    if (!IS_LIVE && IS_PROD) return paymentsUnavailable(res);
+    if (DEV_BILLING) {
       // Dev mode - simulate an active subscription + one month of access.
       await grantTier(req.userId, tierKey, 1);
       const devSubId = `dev_sub_${Date.now()}`;
@@ -515,6 +535,11 @@ router.post("/cancel-subscription", authenticate, async (req, res, next) => {
   try {
     const sub = await subs.getActiveSubscription(req.userId);
     if (!sub) return res.status(404).json({ error: "No active subscription to cancel." });
+    // Deliberately NOT gated on DEV_BILLING like create-order/create-subscription
+    // are. Cancelling only ever *removes* access, so it can't be abused, and a
+    // user holding a subscription created before the keys were configured (or
+    // by the old unguarded dev branch) must still be able to get out of it.
+    // Routing them to the live path instead would just throw without keys.
     if (!IS_LIVE) {
       await db.run(
         "UPDATE subscriptions SET status = 'cancelled', cancel_at_cycle_end = true, cancelled_at = NOW() WHERE id = $1",

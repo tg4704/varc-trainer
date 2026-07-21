@@ -49,6 +49,10 @@ export default function Pricing() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tiers, setTiers] = useState(FALLBACK);
+  // Whether the server can actually take money (Razorpay keys configured). In
+  // dev this is false but simulation is allowed, so checkout still works; in
+  // production false means "not set up yet" and the CTA must not pretend.
+  const [canPay, setCanPay] = useState(true);
   const [seasons, setSeasons] = useState([]); // [{ year, label, months, discountPct, prices }]
   const [current, setCurrent] = useState(null); // { tier, ... } for logged-in
   // "monthly" | "cat:<year>" - the season is part of the selection now that
@@ -63,6 +67,10 @@ export default function Pricing() {
       if (d?.tiers?.length) setTiers(d.tiers);
       if (d?.seasons?.length) setSeasons(d.seasons);
       else if (d?.season) setSeasons([d.season]);
+      // devMode (no keys, non-prod) still simulates a purchase, so only treat
+      // "can't pay" as true when the server is live-capable OR we're in a dev
+      // build. `import.meta.env.PROD` distinguishes the two.
+      if (typeof d?.live === "boolean") setCanPay(d.live || !import.meta.env.PROD);
     }).catch(() => {});
     if (user) billing.me().then(setCurrent).catch(() => {});
   }, [user]);
@@ -207,6 +215,10 @@ export default function Pricing() {
       }
       return { label: "Current plan", disabled: true };
     }
+    // Payments not configured on the server (no Razorpay keys). Show the plan
+    // and its price, but don't offer a checkout that can't complete - the
+    // server now returns 503 rather than simulating a grant.
+    if (!canPay) return { label: "Coming soon", disabled: true };
     const label = user ? (currentKey === "free" ? "Choose plan" : "Switch to this") : "Start free";
     return { label, onClick: () => openReview(t.key) };
   }
