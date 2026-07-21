@@ -11,6 +11,21 @@ const VALID_TRAPS  = [
   "too_broad", "distortion", "wrong_question", "wrong_location", "mislabelled",
   "wordplay", "tone_mismatch",
 ];
+const VALID_DIFFICULTIES = ["easy", "medium", "tough"];
+
+// Upper bounds on the free-text fields. Until these existed, every text field
+// here was capped only by express.json's 100kb body limit - a single question
+// could carry ~100KB of prose into a `paragraph` column that then gets read
+// into a session payload and, for Coach rows, fed to the model as prompt
+// context. Sized well above any legitimate value (a 500-word passage is ~3KB)
+// so they only ever catch a mistake or an abuse, never real authoring.
+// Keep in sync with QUESTION in client/src/lib/limits.js.
+const FIELD_MAX = {
+  paragraph: 9000,
+  question: 600,
+  sourceLines: 2000,
+  option: 600,
+};
 
 function validateQuestionPayload(body) {
   const required = ["topic", "paragraph", "question", "type", "options", "correctIndex", "sourceLines"];
@@ -19,14 +34,27 @@ function validateQuestionPayload(body) {
       return `Missing required field: ${k}`;
     }
   }
+  for (const k of ["paragraph", "question", "sourceLines"]) {
+    if (typeof body[k] !== "string") return `${k} must be a string`;
+    if (body[k].length > FIELD_MAX[k]) {
+      return `${k} is too long (${body[k].length} characters, max ${FIELD_MAX[k]})`;
+    }
+  }
   if (!VALID_TOPICS.includes(body.topic)) return `topic must be one of: ${VALID_TOPICS.join(", ")}`;
   if (!VALID_TYPES.includes(body.type))   return `type must be one of: ${VALID_TYPES.join(", ")}`;
+  // Difficulty is optional here (defaults to 'medium' downstream); imports enforce it.
+  if (body.difficulty != null && !VALID_DIFFICULTIES.includes(body.difficulty)) {
+    return `difficulty must be one of: ${VALID_DIFFICULTIES.join(", ")}`;
+  }
   if (!Array.isArray(body.options) || body.options.length !== 4) {
     return "options must be an array of exactly 4";
   }
   for (let i = 0; i < 4; i++) {
     if (!body.options[i] || typeof body.options[i].text !== "string" || !body.options[i].text.trim()) {
       return `Option ${i} needs text`;
+    }
+    if (body.options[i].text.length > FIELD_MAX.option) {
+      return `Option ${i} is too long (${body.options[i].text.length} characters, max ${FIELD_MAX.option})`;
     }
   }
   const ci = body.correctIndex;
@@ -51,4 +79,4 @@ function normalizeOptions(options, correctIndex, trapIndex, trapType) {
   }));
 }
 
-module.exports = { validateQuestionPayload, normalizeOptions, VALID_TOPICS, VALID_TYPES, VALID_TRAPS };
+module.exports = { validateQuestionPayload, normalizeOptions, VALID_TOPICS, VALID_TYPES, VALID_TRAPS, VALID_DIFFICULTIES };

@@ -5,7 +5,7 @@ import Dashboard from "../Dashboard.jsx";
 import { Eye } from "lucide-react";
 
 // Read-only impersonation: shows the user's dashboard exactly as they see it,
-// with a clear "Viewing as" banner. No write actions are possible — fetcher
+// with a clear "Viewing as" banner. No write actions are possible - fetcher
 // only hits the admin endpoint.
 export default function AdminUserDashboard() {
   const { id } = useParams();

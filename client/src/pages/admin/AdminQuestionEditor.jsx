@@ -5,9 +5,11 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input, Textarea } from "../../components/ui/input.jsx";
 import { Card, CardContent } from "../../components/ui/card.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
+import { QUESTION } from "../../lib/limits.js";
 
 const TYPES = ["inference", "tone", "title", "detail", "application"];
 const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const DIFFICULTIES = ["easy", "medium", "tough"];
 const TRAP_TYPES = ["too_extreme", "out_of_scope", "real_but_unstated", "partially_correct"];
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -15,6 +17,7 @@ function blankQuestion() {
   return {
     topic: "economics",
     type: "inference",
+    difficulty: "medium",
     paragraph: "",
     question: "",
     options: [
@@ -44,6 +47,7 @@ export default function AdminQuestionEditor() {
       setQ({
         topic: question.topic,
         type: question.type,
+        difficulty: question.difficulty || "medium",
         paragraph: question.paragraph,
         question: question.question,
         options: question.options.map(o => ({ text: o.text })),
@@ -69,6 +73,7 @@ export default function AdminQuestionEditor() {
       const payload = {
         topic: q.topic,
         type: q.type,
+        difficulty: q.difficulty,
         paragraph: q.paragraph,
         question: q.question,
         options: q.options,
@@ -148,17 +153,25 @@ export default function AdminQuestionEditor() {
               {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </Field>
+          <Field label="Difficulty">
+            <select value={q.difficulty || "medium"} onChange={e => setQ(p => ({...p, difficulty: e.target.value}))}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+              {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </Field>
         </div>
 
         <Field label="Paragraph">
           <Textarea rows={6} value={q.paragraph}
             onChange={e => setQ(p => ({...p, paragraph: e.target.value}))}
+            maxLength={QUESTION.PARAGRAPH_MAX}
             placeholder="The short passage (90–120 words)…" />
         </Field>
 
         <Field label="Question">
           <Textarea rows={2} value={q.question}
             onChange={e => setQ(p => ({...p, question: e.target.value}))}
+            maxLength={QUESTION.QUESTION_MAX}
             placeholder="Which of the following…?" />
         </Field>
 
@@ -173,7 +186,8 @@ export default function AdminQuestionEditor() {
                 <div className="flex-none w-8 pt-3 text-center font-bold text-muted-foreground">{LETTERS[i]}</div>
                 <div className="flex-1">
                   <Textarea rows={2} value={o.text}
-                    onChange={e => setOptionText(i, e.target.value)} />
+                    onChange={e => setOptionText(i, e.target.value)}
+                    maxLength={QUESTION.OPTION_MAX} />
                   <div className="mt-1 flex gap-3 text-xs">
                     <label className="flex items-center gap-1 cursor-pointer">
                       <input type="radio" name="correct" checked={q.correctIndex === i}
@@ -206,6 +220,7 @@ export default function AdminQuestionEditor() {
         <Field label="Source lines (from the paragraph, where the answer comes from)">
           <Textarea rows={3} value={q.sourceLines}
             onChange={e => setQ(p => ({...p, sourceLines: e.target.value}))}
+            maxLength={QUESTION.SOURCE_LINES_MAX}
             placeholder="The exact 2–4 sentences that justify the correct answer (server-only)" />
         </Field>
 

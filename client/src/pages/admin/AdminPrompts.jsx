@@ -1,5 +1,5 @@
 // Edit the AI system prompts (server/ai/prompts.js) without a redeploy. A
-// prompt with no DB override falls back to its hardcoded default — "Reset to
+// prompt with no DB override falls back to its hardcoded default - "Reset to
 // default" just deletes the override row rather than needing to know/paste
 // the original text back in.
 import { useEffect, useState } from "react";
@@ -79,7 +79,7 @@ export default function AdminPrompts() {
       <div>
         <h1 className="text-xl font-bold text-foreground">AI Prompts</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Edit the system prompts every AI call uses. Changes take effect on the next AI call — no
+          Edit the system prompts every AI call uses. Changes take effect on the next AI call - no
           redeploy needed.
         </p>
       </div>

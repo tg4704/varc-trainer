@@ -7,7 +7,7 @@ import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
 
 function fmtDate(s) {
-  if (!s) return "—";
+  if (!s) return "-";
   return new Date(s).toLocaleDateString();
 }
 
@@ -32,7 +32,7 @@ export default function AdminUsers() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Users</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data ? `${data.total} total` : "—"}
+            {data ? `${data.total} total` : "-"}
           </p>
         </div>
         <Input

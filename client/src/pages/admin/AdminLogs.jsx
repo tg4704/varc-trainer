@@ -1,5 +1,5 @@
 // Row-level browser over api_calls, for diagnosing a specific AI failure
-// (e.g. "AI feedback unavailable") — AdminCosts.jsx only shows aggregates;
+// (e.g. "AI feedback unavailable") - AdminCosts.jsx only shows aggregates;
 // this shows every individual call with its persisted error message,
 // filterable by date range, user, token count, surface, and status.
 import { Fragment, useEffect, useState } from "react";
@@ -8,14 +8,14 @@ import { Card, CardContent } from "../../components/ui/card.jsx";
 
 function fmtUsd(n) {
   n = Number(n);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   if (Math.abs(n) < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
 }
 function fmtNum(n) { return (Number(n) || 0).toLocaleString(); }
 function fmtDateTime(iso) {
   const d = new Date(iso);
-  if (isNaN(d)) return "—";
+  if (isNaN(d)) return "-";
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
@@ -72,7 +72,7 @@ export default function AdminLogs() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">API Logs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every AI call — tokens, cost, and the actual provider error when one failed.
+          Every AI call - tokens, cost, and the actual provider error when one failed.
         </p>
       </div>
 
@@ -98,13 +98,13 @@ export default function AdminLogs() {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">User ID</span>
+            <span className="text-xs text-muted-foreground">User (ID or username)</span>
             <input
-              type="number"
+              type="text"
               placeholder="Any"
               value={filters.userId}
               onChange={(e) => updateFilter("userId", e.target.value)}
-              className="border border-border rounded-md px-2 py-1.5 text-sm w-24 bg-background"
+              className="border border-border rounded-md px-2 py-1.5 text-sm w-36 bg-background"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -231,7 +231,7 @@ export default function AdminLogs() {
                       <td colSpan={10} className="px-3 py-3">
                         <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Error message</div>
                         <pre className="text-xs whitespace-pre-wrap font-mono text-destructive">
-                          {r.errorMessage || "(no error message captured — this call predates error-message logging)"}
+                          {r.errorMessage || "(no error message captured - this call predates error-message logging)"}
                         </pre>
                       </td>
                     </tr>

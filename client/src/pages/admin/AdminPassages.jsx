@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
 
-// A passage row gates whether it appears in the Coach picker at all — separate
+// A passage row gates whether it appears in the Coach picker at all - separate
 // from activating its individual questions (Admin → Questions). Imported passages
 // land inactive; activate here once you've reviewed the passage + its questions.
 export default function AdminPassages() {
@@ -37,7 +37,7 @@ export default function AdminPassages() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Passages (② Coach)</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data ? `${data.total} matching` : "—"}. Activating a passage here is what makes it
+            {data ? `${data.total} matching` : "-"}. Activating a passage here is what makes it
             appear in the Coach picker, separate from activating its questions.
           </p>
         </div>

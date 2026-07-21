@@ -9,6 +9,7 @@ import {
   ScrollText,
   Flag,
   MessageSquareText,
+  Megaphone,
 } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 
@@ -22,6 +23,7 @@ const NAV = [
   { to: "/admin/logs",      label: "API Logs",  icon: ScrollText },
   { to: "/admin/flags",     label: "Flags",     icon: Flag },
   { to: "/admin/prompts",   label: "AI Prompts", icon: MessageSquareText },
+  { to: "/admin/bulletins", label: "Bulletins", icon: Megaphone },
 ];
 
 export default function AdminLayout() {

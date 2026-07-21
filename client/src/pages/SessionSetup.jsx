@@ -5,6 +5,7 @@ import { saveActiveSession } from "../session.js";
 import { track } from "../analytics.js";
 import { Button } from "../components/ui/button.jsx";
 import Modal from "../components/Modal.jsx";
+import SideDock from "../components/SideDock.jsx";
 
 const TYPE_LABELS = {
   inference: "Inference", tone: "Tone", title: "Title", detail: "Detail",
@@ -34,22 +35,38 @@ const TIMER_MODES = [
   { value: "countdown", title: "Countdown", desc: "Set a time limit. The session ends automatically at 0:00." },
 ];
 
+const DIFFICULTIES = [
+  { value: "easy", title: "Easy", desc: "Warm-ups" },
+  { value: "medium", title: "Medium", desc: "Exam-level" },
+  { value: "tough", title: "Tough", desc: "The hardest" },
+];
+
 export default function SessionSetup() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Deep-link from Dashboard's "Drill →" CTAs (?type=<questionType>) — always
+  // Deep-link from Dashboard's "Drill →" CTAs (?type=<questionType>) - always
   // wins over the inference-only toggle below when present.
   const deepLinkType = searchParams.get("type");
   const deepLinkValid = deepLinkType && TYPE_LABELS[deepLinkType];
 
   const [practiceMode, setPracticeMode] = useState("analysis");
+  const [difficulties, setDifficulties] = useState(["easy", "medium", "tough"]);
   const [numQuestions, setNumQuestions] = useState(10);
+
+  // Multi-select: toggle a level, but never allow deselecting the last one.
+  function toggleDifficulty(value) {
+    setDifficulties((prev) =>
+      prev.includes(value)
+        ? (prev.length === 1 ? prev : prev.filter((d) => d !== value))
+        : [...prev, value]
+    );
+  }
   const [timerMode, setTimerMode] = useState("untimed");
   const [timerScope, setTimerScope] = useState("per_question");
   const [perQuestionSeconds, setPerQuestionSeconds] = useState(60);
   const [perSessionMinutes, setPerSessionMinutes] = useState(10);
-  // feedbackMode only matters for untimed analysis — timed always defers
+  // feedbackMode only matters for untimed analysis - timed always defers
   const [feedbackMode, setFeedbackMode] = useState("instant");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -66,7 +83,7 @@ export default function SessionSetup() {
     setBusy(true);
     setError(null);
 
-    const config = { numQuestions, timerMode };
+    const config = { numQuestions, timerMode, difficulties };
     if (deepLinkValid) config.typeFilter = deepLinkType;
 
     if (timerMode !== "untimed") {
@@ -96,22 +113,19 @@ export default function SessionSetup() {
   const showFeedbackTiming = !showTimerOptions && practiceMode === "analysis";
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12">
+    <div className="max-w-5xl mx-auto px-4 py-12">
+      <SideDock />
       <h1 className="display text-[34px]">Start a Drills session</h1>
       <p className="mt-2 muted">Set the shape of your practice. You can change this any time.</p>
 
-      <div className="glass mt-8 p-6 md:p-7">
-        <Section title="Practice mode" flush>
-          <SquareToggle options={PRACTICE_MODES} value={practiceMode} onChange={setPracticeMode} />
-        </Section>
-
+      <div className="glass mt-8 p-6 md:p-8">
         {/* Deep-link from Dashboard's "Drill →" CTAs (?type=<weak type>) still
             silently filters the session; it just no longer has a Focus control
-            here — the on-page focus toggle was removed by request. A slim
+            here - the on-page focus toggle was removed by request. A slim
             inline note lets the user clear it if they arrived via that link. */}
         {deepLinkValid && (
           <div
-            className="mt-5 flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
+            className="mb-6 flex items-center justify-between gap-3 rounded-[12px] px-4 py-3"
             style={{ background: "rgba(139,157,255,0.08)", border: "1px solid rgba(139,157,255,0.3)" }}
           >
             <div className="text-sm font-semibold text-foreground">
@@ -129,8 +143,41 @@ export default function SessionSetup() {
           </div>
         )}
 
-        {/* Number of questions — value bubble rides the thumb */}
-        <Section title="How many questions?">
+        {/* Landscape two-column layout so the whole setup fits without scrolling. */}
+        <div className="grid gap-x-10 gap-y-7 lg:grid-cols-2">
+        <div className="flex flex-col gap-7">
+        <Section title="Practice mode" flush>
+          <SquareToggle options={PRACTICE_MODES} value={practiceMode} onChange={setPracticeMode} />
+        </Section>
+
+        <Section title="Difficulty" flush>
+          <div className="grid grid-cols-3 gap-2.5">
+            {DIFFICULTIES.map((d) => {
+              const on = difficulties.includes(d.value);
+              return (
+                <button
+                  key={d.value}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleDifficulty(d.value)}
+                  className="rounded-[12px] px-3 py-3 text-center transition-colors"
+                  style={on
+                    ? { background: "rgba(93,202,165,0.12)", border: "1px solid rgba(93,202,165,0.5)" }
+                    : { background: "rgba(255,255,255,0.03)", border: "1px solid var(--glass-border-lo)" }}
+                >
+                  <div className="text-sm font-semibold" style={{ color: on ? "var(--teal)" : "var(--text-2)" }}>{d.title}</div>
+                  <div className="mt-0.5 text-[11px] dim">{d.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs dim">Pick one or more levels. Questions are drawn from your selection.</p>
+        </Section>
+        </div>{/* end left column */}
+
+        <div className="flex flex-col gap-7">
+        {/* Number of questions - value bubble rides the thumb */}
+        <Section title="How many questions?" flush>
           <div className="relative pt-8">
             {/* Value bubble positioned above the thumb. 16px ≈ native thumb width. */}
             <div
@@ -163,14 +210,14 @@ export default function SessionSetup() {
         </Section>
 
         {/* Timer mode */}
-        <Section title="Timer">
+        <Section title="Timer" flush>
           <SquareToggle options={TIMER_MODES} value={timerMode} onChange={setTimerMode} />
         </Section>
 
         {/* Conditional row: timer options (scope + countdown duration) when timed,
             or feedback timing when untimed analysis. Mutually exclusive. */}
         {(showTimerOptions || showFeedbackTiming) && (
-          <Section title={showTimerOptions ? "Timer options" : "Feedback timing"}>
+          <Section flush title={showTimerOptions ? "Timer options" : "Feedback timing"}>
             <div className="grid sm:grid-cols-2 gap-4">
               {showTimerOptions ? (
                 <>
@@ -212,6 +259,8 @@ export default function SessionSetup() {
             </div>
           </Section>
         )}
+        </div>{/* end right column */}
+        </div>{/* end grid */}
 
         {error && <p className="mt-6 text-sm text-destructive">{error}</p>}
 
@@ -230,7 +279,7 @@ export default function SessionSetup() {
       {showConfirm && (
         <ConfirmStartModal
           rows={buildSummary({
-            practiceMode, numQuestions, deepLinkValid, deepLinkType,
+            practiceMode, difficulties, numQuestions, deepLinkValid, deepLinkType,
             timerMode, timerScope, perQuestionSeconds, perSessionMinutes, feedbackMode,
           })}
           busy={busy}
@@ -248,6 +297,9 @@ export default function SessionSetup() {
 function buildSummary(s) {
   const rows = [
     ["Mode", PRACTICE_MODES.find((m) => m.value === s.practiceMode)?.title],
+    ["Difficulty", s.difficulties?.length === DIFFICULTIES.length
+      ? "All levels"
+      : DIFFICULTIES.filter((d) => s.difficulties?.includes(d.value)).map((d) => d.title).join(", ")],
     ["Questions", String(s.numQuestions)],
     // Focus row only appears for a Dashboard deep-link; there's no on-page focus control.
     ...(s.deepLinkValid ? [["Focus", TYPE_LABELS[s.deepLinkType]]] : []),
@@ -304,7 +356,7 @@ function ConfirmStartModal({ rows, busy, error, onBack, onBegin }) {
   );
 }
 
-// `flush` removes the top margin — used for the two Sections that sit inside
+// `flush` removes the top margin - used for the two Sections that sit inside
 // the top 2-column grid (the grid handles their placement). Standalone
 // Sections below keep the mt-8 rhythm.
 function Section({ title, children, flush = false }) {
@@ -316,7 +368,7 @@ function Section({ title, children, flush = false }) {
   );
 }
 
-// The selected option's description shows as a single line below the group —
+// The selected option's description shows as a single line below the group -
 // visible on touch (a hover tooltip never appears on phones) but still compact
 // (only the active option's copy, not a paragraph per option).
 function SquareToggle({ options, value, onChange }) {

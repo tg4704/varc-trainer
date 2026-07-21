@@ -20,14 +20,14 @@ const REASON_LABELS = {
 };
 
 function humanReason(raw) {
-  if (!raw) return "—";
+  if (!raw) return "-";
   const [code, ...rest] = raw.split(": ");
   const label = REASON_LABELS[code] || code;
   return rest.length ? `${label}: ${rest.join(": ")}` : label;
 }
 
 function fmtDate(s) {
-  if (!s) return "—";
+  if (!s) return "-";
   return new Date(s).toLocaleString();
 }
 
@@ -39,7 +39,7 @@ export default function AdminFlags() {
 
   const reload = () => admin.listFlags(status).then(setData).catch((e) => setError(e.message));
   // NB: wrap in a block so the effect returns undefined, not the Promise from
-  // reload() — React would otherwise call the Promise as a cleanup function on
+  // reload() - React would otherwise call the Promise as a cleanup function on
   // unmount ("n is not a function" crash).
   useEffect(() => { reload(); }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -97,7 +97,7 @@ export default function AdminFlags() {
                 </td>
                 <td className="px-3 py-2 hidden md:table-cell"><Badge variant="secondary">{f.source}</Badge></td>
                 <td className="px-3 py-2 text-muted-foreground max-w-xs">{humanReason(f.reason)}</td>
-                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{f.flagged_by_username || "—"}</td>
+                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{f.flagged_by_username || "-"}</td>
                 <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">{fmtDate(f.created_at)}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   <div className="flex gap-1 justify-end">

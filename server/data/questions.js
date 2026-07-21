@@ -4,7 +4,7 @@ const questions = [
   {
     id: "q001",
     topic: "economics",
-    paragraph: `Central banks in emerging economies face a dilemma that their developed-world counterparts rarely encounter with such intensity. When capital flows reverse — as they did sharply in 2013 during the "taper tantrum" — the currency depreciates, imports become costlier, and inflation rises even as growth slows. Raising interest rates to defend the currency chokes domestic investment; leaving rates unchanged invites further outflows. Unlike the Federal Reserve, these banks cannot rely on the global reserve status of their currency as a buffer. Their credibility, once lost to currency crises, takes years to rebuild, making preemptive action both essential and politically costly.`,
+    paragraph: `Central banks in emerging economies face a dilemma that their developed-world counterparts rarely encounter with such intensity. When capital flows reverse - as they did sharply in 2013 during the "taper tantrum" - the currency depreciates, imports become costlier, and inflation rises even as growth slows. Raising interest rates to defend the currency chokes domestic investment; leaving rates unchanged invites further outflows. Unlike the Federal Reserve, these banks cannot rely on the global reserve status of their currency as a buffer. Their credibility, once lost to currency crises, takes years to rebuild, making preemptive action both essential and politically costly.`,
     question: "Which of the following can be most reasonably inferred from the passage?",
     type: "inference",
     options: [
@@ -43,7 +43,7 @@ const questions = [
   {
     id: "q002",
     topic: "economics",
-    paragraph: `The gig economy's rise is often framed as a story of worker liberation — flexible hours, multiple income streams, escape from rigid employment. But this framing obscures a transfer of risk. Traditional employment absorbed volatility: a salaried worker received income whether or not demand for their employer's product fluctuated that week. Gig workers bear that volatility directly; their income mirrors demand with little buffer. Meanwhile, the fixed costs of working — vehicles, equipment, insurance — remain constant. The result is that gig work can be highly lucrative in boom periods and deeply precarious in downturns, a dynamic that resembles self-employment more than it resembles secure wage labour.`,
+    paragraph: `The gig economy's rise is often framed as a story of worker liberation - flexible hours, multiple income streams, escape from rigid employment. But this framing obscures a transfer of risk. Traditional employment absorbed volatility: a salaried worker received income whether or not demand for their employer's product fluctuated that week. Gig workers bear that volatility directly; their income mirrors demand with little buffer. Meanwhile, the fixed costs of working - vehicles, equipment, insurance - remain constant. The result is that gig work can be highly lucrative in boom periods and deeply precarious in downturns, a dynamic that resembles self-employment more than it resembles secure wage labour.`,
     question: "The author's primary purpose in this passage is to:",
     type: "tone",
     options: [
@@ -82,7 +82,7 @@ const questions = [
   {
     id: "q003",
     topic: "economics",
-    paragraph: `Price ceilings on essential goods are politically appealing precisely because their costs are diffuse and delayed while their benefits are immediate and visible. A rent cap reduces housing costs for current tenants today; the shortage it creates for future tenants materialises slowly and is harder to trace to the policy. Economists across the ideological spectrum generally agree that below-market price ceilings reduce supply over time, yet public support for them remains robust. This gap between expert consensus and popular preference is not a failure of public intelligence — it reflects rational political behaviour in a world where short-term visibility dominates electoral incentives.`,
+    paragraph: `Price ceilings on essential goods are politically appealing precisely because their costs are diffuse and delayed while their benefits are immediate and visible. A rent cap reduces housing costs for current tenants today; the shortage it creates for future tenants materialises slowly and is harder to trace to the policy. Economists across the ideological spectrum generally agree that below-market price ceilings reduce supply over time, yet public support for them remains robust. This gap between expert consensus and popular preference is not a failure of public intelligence - it reflects rational political behaviour in a world where short-term visibility dominates electoral incentives.`,
     question: "Which of the following best captures the author's explanation for sustained public support for price ceilings?",
     type: "inference",
     options: [
@@ -115,13 +115,13 @@ const questions = [
     trapIndex: 0,
     trapType: "real_but_unstated",
     sourceLines:
-      "This gap between expert consensus and popular preference is not a failure of public intelligence — it reflects rational political behaviour in a world where short-term visibility dominates electoral incentives.",
+      "This gap between expert consensus and popular preference is not a failure of public intelligence - it reflects rational political behaviour in a world where short-term visibility dominates electoral incentives.",
   },
 
   {
     id: "q004",
     topic: "economics",
-    paragraph: `Comparative advantage, Ricardo's enduring insight, holds that countries benefit from specialising in goods they produce at lower relative cost, even if another country can produce everything more efficiently. Yet the theory's application to trade policy is contested. Critics note that it assumes constant returns to scale and ignores the dynamic advantages that accrue to industries as they scale — learning-by-doing, infrastructure spillovers, and technological lock-in. A country that imports manufactured goods because it currently lacks comparative advantage may permanently forgo the dynamic gains that manufacturing would have generated. Static efficiency and dynamic capability are not always aligned.`,
+    paragraph: `Comparative advantage, Ricardo's enduring insight, holds that countries benefit from specialising in goods they produce at lower relative cost, even if another country can produce everything more efficiently. Yet the theory's application to trade policy is contested. Critics note that it assumes constant returns to scale and ignores the dynamic advantages that accrue to industries as they scale - learning-by-doing, infrastructure spillovers, and technological lock-in. A country that imports manufactured goods because it currently lacks comparative advantage may permanently forgo the dynamic gains that manufacturing would have generated. Static efficiency and dynamic capability are not always aligned.`,
     question: "Which title best captures the central argument of this passage?",
     type: "title",
     options: [
@@ -201,7 +201,7 @@ const questions = [
   {
     id: "q006",
     topic: "humanities",
-    paragraph: `The novel as a form emerged alongside the rise of print capitalism and the literate middle class in eighteenth-century Europe. Its defining feature — interiority, the sustained representation of a character's inner life — was both a technical innovation and a cultural symptom. For the first time, readers were invited into the private consciousness of fictional individuals, a practice that trained new habits of introspection and empathy across class lines. Some historians argue that the novel did not merely reflect individualism but actively produced it by making the inner life seem the most real thing about a person.`,
+    paragraph: `The novel as a form emerged alongside the rise of print capitalism and the literate middle class in eighteenth-century Europe. Its defining feature - interiority, the sustained representation of a character's inner life - was both a technical innovation and a cultural symptom. For the first time, readers were invited into the private consciousness of fictional individuals, a practice that trained new habits of introspection and empathy across class lines. Some historians argue that the novel did not merely reflect individualism but actively produced it by making the inner life seem the most real thing about a person.`,
     question: "The phrase 'cultural symptom' as used in the passage most nearly suggests that:",
     type: "detail",
     options: [
@@ -234,36 +234,36 @@ const questions = [
     trapIndex: 1,
     trapType: "real_but_unstated",
     sourceLines:
-      "Its defining feature — interiority, the sustained representation of a character's inner life — was both a technical innovation and a cultural symptom.",
+      "Its defining feature - interiority, the sustained representation of a character's inner life - was both a technical innovation and a cultural symptom.",
   },
 
   {
     id: "q007",
     topic: "humanities",
-    paragraph: `Walter Benjamin's concept of the "aura" — the unique presence of an artwork in a particular place and time — describes something that mechanical reproduction destroys. A photograph of a painting can be distributed globally, but it lacks the ritual context, the physical wear of centuries, the sense of standing before the original. Benjamin did not simply mourn this loss. He saw in reproduced art a democratic potential: images freed from the authority of the original could circulate among the masses and escape the class-bound reverence that had enclosed art in museums and private collections. The destruction of aura was, for Benjamin, simultaneously a loss and an opening.`,
+    paragraph: `Walter Benjamin's concept of the "aura" - the unique presence of an artwork in a particular place and time - describes something that mechanical reproduction destroys. A photograph of a painting can be distributed globally, but it lacks the ritual context, the physical wear of centuries, the sense of standing before the original. Benjamin did not simply mourn this loss. He saw in reproduced art a democratic potential: images freed from the authority of the original could circulate among the masses and escape the class-bound reverence that had enclosed art in museums and private collections. The destruction of aura was, for Benjamin, simultaneously a loss and an opening.`,
     question: "Which of the following best describes Benjamin's attitude toward mechanical reproduction as presented in the passage?",
     type: "tone",
     options: [
       {
-        text: "Entirely celebratory — he believed reproduction made art fully accessible and superior to the original.",
+        text: "Entirely celebratory - he believed reproduction made art fully accessible and superior to the original.",
         isCorrect: false,
         isTrap: true,
         trapType: "too_extreme",
       },
       {
-        text: "Ambivalent — he acknowledged a genuine loss while recognising a democratic gain.",
+        text: "Ambivalent - he acknowledged a genuine loss while recognising a democratic gain.",
         isCorrect: true,
         isTrap: false,
         trapType: null,
       },
       {
-        text: "Primarily mournful — his concern for the aura outweighed any appreciation for wider access.",
+        text: "Primarily mournful - his concern for the aura outweighed any appreciation for wider access.",
         isCorrect: false,
         isTrap: false,
         trapType: null,
       },
       {
-        text: "Politically radical — he used the concept to argue for the abolition of museums.",
+        text: "Politically radical - he used the concept to argue for the abolition of museums.",
         isCorrect: false,
         isTrap: false,
         trapType: null,
@@ -279,7 +279,7 @@ const questions = [
   {
     id: "q008",
     topic: "humanities",
-    paragraph: `Oral traditions are not simply pre-literate placeholders waiting to be superseded by writing. Many cultures have maintained oral forms deliberately alongside literacy, using them for purposes that writing serves poorly: the affirmation of social bonds, the public transmission of law through memorised verse, the performance of history as shared identity rather than recorded fact. The distinction between memory and record is not merely technological but functional. Memory, in this sense, is not a degraded form of record; it is a different kind of knowing — one whose authority derives from the community that sustains it, not the medium that preserves it.`,
+    paragraph: `Oral traditions are not simply pre-literate placeholders waiting to be superseded by writing. Many cultures have maintained oral forms deliberately alongside literacy, using them for purposes that writing serves poorly: the affirmation of social bonds, the public transmission of law through memorised verse, the performance of history as shared identity rather than recorded fact. The distinction between memory and record is not merely technological but functional. Memory, in this sense, is not a degraded form of record; it is a different kind of knowing - one whose authority derives from the community that sustains it, not the medium that preserves it.`,
     question: "Which of the following would the author most likely agree with?",
     type: "application",
     options: [
@@ -318,7 +318,7 @@ const questions = [
   {
     id: "q009",
     topic: "humanities",
-    paragraph: `The Enlightenment's faith in universal reason coexisted, uncomfortably, with the practice of colonial domination. Thinkers who championed human freedom and rational governance often excluded colonised peoples from the category of the rational subject — not through oversight but through active theoretical work. Locke grounded property rights in labour yet denied that indigenous land use constituted labour. Kant's cosmopolitanism was undercut by his hierarchical racial anthropology. This tension was not incidental; it was load-bearing. The universalist vocabulary of Enlightenment thought provided legitimacy for an order that was simultaneously proclaimed universal and structurally exclusionary.`,
+    paragraph: `The Enlightenment's faith in universal reason coexisted, uncomfortably, with the practice of colonial domination. Thinkers who championed human freedom and rational governance often excluded colonised peoples from the category of the rational subject - not through oversight but through active theoretical work. Locke grounded property rights in labour yet denied that indigenous land use constituted labour. Kant's cosmopolitanism was undercut by his hierarchical racial anthropology. This tension was not incidental; it was load-bearing. The universalist vocabulary of Enlightenment thought provided legitimacy for an order that was simultaneously proclaimed universal and structurally exclusionary.`,
     question: "The author uses the phrase 'load-bearing' to suggest that the tension described was:",
     type: "detail",
     options:[
@@ -398,7 +398,7 @@ const questions = [
   {
     id: "q011",
     topic: "philosophy",
-    paragraph: `Descartes' method of radical doubt was not scepticism as an end but scepticism as a tool. By doubting everything that could be doubted — sense experience, mathematical truths, the existence of the external world — he hoped to find something that could not be doubted, a bedrock on which certain knowledge could be rebuilt. The cogito — "I think, therefore I am" — was that bedrock. Yet critics have noted a circularity: Descartes uses the reliability of clear and distinct perception to validate God's existence and then uses God's existence to guarantee the reliability of clear and distinct perception. This circle, if real, would undermine the project from within.`,
+    paragraph: `Descartes' method of radical doubt was not scepticism as an end but scepticism as a tool. By doubting everything that could be doubted - sense experience, mathematical truths, the existence of the external world - he hoped to find something that could not be doubted, a bedrock on which certain knowledge could be rebuilt. The cogito - "I think, therefore I am" - was that bedrock. Yet critics have noted a circularity: Descartes uses the reliability of clear and distinct perception to validate God's existence and then uses God's existence to guarantee the reliability of clear and distinct perception. This circle, if real, would undermine the project from within.`,
     question: "The critics' objection described in the passage is best understood as claiming that:",
     type: "inference",
     options: [
@@ -437,7 +437,7 @@ const questions = [
   {
     id: "q012",
     topic: "philosophy",
-    paragraph: `Utilitarianism's aggregative logic has a well-known uncomfortable consequence: it can in principle justify harming a minority if the aggregate benefit to the majority is sufficiently large. Defenders of the theory have responded in several ways. Some bite the bullet and accept that this follows from the logic, arguing that our resistance to it reflects parochial intuitions rather than sound moral thinking. Others introduce side-constraints — rights that cannot be violated even when doing so would maximise utility — effectively conceding that utility alone is not the complete moral story. The debate reveals a tension between our formal moral theories and the moral intuitions those theories are supposed to systematise.`,
+    paragraph: `Utilitarianism's aggregative logic has a well-known uncomfortable consequence: it can in principle justify harming a minority if the aggregate benefit to the majority is sufficiently large. Defenders of the theory have responded in several ways. Some bite the bullet and accept that this follows from the logic, arguing that our resistance to it reflects parochial intuitions rather than sound moral thinking. Others introduce side-constraints - rights that cannot be violated even when doing so would maximise utility - effectively conceding that utility alone is not the complete moral story. The debate reveals a tension between our formal moral theories and the moral intuitions those theories are supposed to systematise.`,
     question: "Which of the following best describes the function of 'side-constraints' as discussed in the passage?",
     type: "detail",
     options: [
@@ -470,13 +470,13 @@ const questions = [
     trapIndex: 0,
     trapType: "too_extreme",
     sourceLines:
-      "Others introduce side-constraints — rights that cannot be violated even when doing so would maximise utility — effectively conceding that utility alone is not the complete moral story.",
+      "Others introduce side-constraints - rights that cannot be violated even when doing so would maximise utility - effectively conceding that utility alone is not the complete moral story.",
   },
 
   {
     id: "q013",
     topic: "philosophy",
-    paragraph: `The problem of personal identity asks what makes a person at one time the same person as a person at another. Locke located identity in psychological continuity — specifically, memory. You are the same person as the child who broke the window if and only if you can remember doing so. This view has an elegant intuitive basis but faces a counterexample: an elderly person with advanced amnesia has lost most memories yet we do not typically say they have become a different person. Parfit later argued that personal identity itself may not be what matters in survival — what matters is psychological continuity regardless of whether it constitutes strict identity.`,
+    paragraph: `The problem of personal identity asks what makes a person at one time the same person as a person at another. Locke located identity in psychological continuity - specifically, memory. You are the same person as the child who broke the window if and only if you can remember doing so. This view has an elegant intuitive basis but faces a counterexample: an elderly person with advanced amnesia has lost most memories yet we do not typically say they have become a different person. Parfit later argued that personal identity itself may not be what matters in survival - what matters is psychological continuity regardless of whether it constitutes strict identity.`,
     question: "Which of the following, if true, would most directly challenge Locke's memory-based account of personal identity?",
     type: "application",
     options: [
@@ -487,7 +487,7 @@ const questions = [
         trapType: "out_of_scope",
       },
       {
-        text: "Memory is not continuous — we forget most of our experiences — yet we do not think we become different people as memories fade.",
+        text: "Memory is not continuous - we forget most of our experiences - yet we do not think we become different people as memories fade.",
         isCorrect: true,
         isTrap: false,
         trapType: null,
@@ -515,7 +515,7 @@ const questions = [
   {
     id: "q014",
     topic: "philosophy",
-    paragraph: `Wittgenstein's later philosophy dissolves philosophical problems rather than solving them. Traditional problems — the existence of the external world, the nature of meaning, the problem of other minds — arise, he argued, when we take words out of their ordinary contexts and ask them to do metaphysical work they were never designed for. The question "How do I know the external world exists?" sounds like a genuine puzzle only because it uses the word "know" in an unusual way, severed from the practical contexts that give it meaning. Return the word to those contexts and the problem evaporates. Philosophy's task is therapeutic: not to answer questions but to cure the conceptual confusions from which they arise.`,
+    paragraph: `Wittgenstein's later philosophy dissolves philosophical problems rather than solving them. Traditional problems - the existence of the external world, the nature of meaning, the problem of other minds - arise, he argued, when we take words out of their ordinary contexts and ask them to do metaphysical work they were never designed for. The question "How do I know the external world exists?" sounds like a genuine puzzle only because it uses the word "know" in an unusual way, severed from the practical contexts that give it meaning. Return the word to those contexts and the problem evaporates. Philosophy's task is therapeutic: not to answer questions but to cure the conceptual confusions from which they arise.`,
     question: "What is the most accurate title for this passage?",
     type: "title",
     options: [
@@ -554,7 +554,7 @@ const questions = [
   {
     id: "q015",
     topic: "philosophy",
-    paragraph: `The trolley problem — sacrifice one to save five — has been extensively studied in experimental philosophy and moral psychology. What the studies consistently find is that people's judgments shift dramatically based on framing: most approve of pulling a lever to divert a trolley (impersonal, indirect harm) but disapprove of pushing a large man off a bridge to achieve the same outcome (personal, direct contact). The utilitarian calculus is identical in both cases. What changes is the phenomenology of causing harm. These findings suggest that our moral intuitions are partly a response to the means of harm, not only its magnitude, complicating any account that treats consequences as the sole moral variable.`,
+    paragraph: `The trolley problem - sacrifice one to save five - has been extensively studied in experimental philosophy and moral psychology. What the studies consistently find is that people's judgments shift dramatically based on framing: most approve of pulling a lever to divert a trolley (impersonal, indirect harm) but disapprove of pushing a large man off a bridge to achieve the same outcome (personal, direct contact). The utilitarian calculus is identical in both cases. What changes is the phenomenology of causing harm. These findings suggest that our moral intuitions are partly a response to the means of harm, not only its magnitude, complicating any account that treats consequences as the sole moral variable.`,
     question: "The author uses the trolley problem primarily to illustrate which point?",
     type: "inference",
     options: [
@@ -595,7 +595,7 @@ const questions = [
   {
     id: "q016",
     topic: "science",
-    paragraph: `The replication crisis in psychology — the failure of many landmark findings to reproduce in independent studies — has been attributed to several causes: small sample sizes that amplify random variation, publication bias toward positive results, and in some cases outright fraud. But a subtler issue is researcher degrees of freedom: the many legitimate analytic choices available when processing data. Whether to exclude outliers, which covariates to include, at what point to stop collecting data — each decision can shift a p-value from above to below the conventional 0.05 threshold. When these choices are made after seeing the data, the result is a form of unconscious bias that looks like rigorous science.`,
+    paragraph: `The replication crisis in psychology - the failure of many landmark findings to reproduce in independent studies - has been attributed to several causes: small sample sizes that amplify random variation, publication bias toward positive results, and in some cases outright fraud. But a subtler issue is researcher degrees of freedom: the many legitimate analytic choices available when processing data. Whether to exclude outliers, which covariates to include, at what point to stop collecting data - each decision can shift a p-value from above to below the conventional 0.05 threshold. When these choices are made after seeing the data, the result is a form of unconscious bias that looks like rigorous science.`,
     question: "According to the passage, 'researcher degrees of freedom' refers to:",
     type: "detail",
     options: [
@@ -628,13 +628,13 @@ const questions = [
     trapIndex: 2,
     trapType: "out_of_scope",
     sourceLines:
-      "A subtler issue is researcher degrees of freedom: the many legitimate analytic choices available when processing data. Whether to exclude outliers, which covariates to include, at what point to stop collecting data — each decision can shift a p-value from above to below the conventional 0.05 threshold.",
+      "A subtler issue is researcher degrees of freedom: the many legitimate analytic choices available when processing data. Whether to exclude outliers, which covariates to include, at what point to stop collecting data - each decision can shift a p-value from above to below the conventional 0.05 threshold.",
   },
 
   {
     id: "q017",
     topic: "science",
-    paragraph: `CRISPR-Cas9's speed and precision relative to earlier gene-editing tools have generated enormous excitement, but the technology's most consequential applications may not be the glamorous ones — editing human embryos or curing rare genetic diseases. Agricultural applications could affect many more lives: crops engineered for drought resistance, disease immunity, or enhanced nutritional profiles. The barrier here is less technical than regulatory and political. Many jurisdictions classify CRISPR-edited crops similarly to transgenic GMOs, despite the conceptual difference: CRISPR edits existing genes rather than introducing foreign DNA. Reclassification could accelerate adoption; resistance to that reclassification reflects concerns that are social and economic as much as scientific.`,
+    paragraph: `CRISPR-Cas9's speed and precision relative to earlier gene-editing tools have generated enormous excitement, but the technology's most consequential applications may not be the glamorous ones - editing human embryos or curing rare genetic diseases. Agricultural applications could affect many more lives: crops engineered for drought resistance, disease immunity, or enhanced nutritional profiles. The barrier here is less technical than regulatory and political. Many jurisdictions classify CRISPR-edited crops similarly to transgenic GMOs, despite the conceptual difference: CRISPR edits existing genes rather than introducing foreign DNA. Reclassification could accelerate adoption; resistance to that reclassification reflects concerns that are social and economic as much as scientific.`,
     question: "The author's argument about CRISPR's most consequential applications implies that:",
     type: "inference",
     options: [
@@ -673,7 +673,7 @@ const questions = [
   {
     id: "q018",
     topic: "science",
-    paragraph: `Dark matter remains one of physics' most embarrassing open questions. Its existence is inferred from gravitational effects — galaxy rotation curves, gravitational lensing, the large-scale structure of the universe — that cannot be explained by ordinary matter alone. Yet despite decades of increasingly sensitive direct detection experiments, no dark matter particle has ever been observed. The two dominant candidate particles — WIMPs and axions — have been pushed into parameter spaces that make them ever harder to detect. Some physicists now take seriously the possibility that dark matter interacts gravitationally but not through any other known force, making direct detection in a laboratory fundamentally impossible.`,
+    paragraph: `Dark matter remains one of physics' most embarrassing open questions. Its existence is inferred from gravitational effects - galaxy rotation curves, gravitational lensing, the large-scale structure of the universe - that cannot be explained by ordinary matter alone. Yet despite decades of increasingly sensitive direct detection experiments, no dark matter particle has ever been observed. The two dominant candidate particles - WIMPs and axions - have been pushed into parameter spaces that make them ever harder to detect. Some physicists now take seriously the possibility that dark matter interacts gravitationally but not through any other known force, making direct detection in a laboratory fundamentally impossible.`,
     question: "Which of the following best states the central tension described in the passage?",
     type: "title",
     options: [
@@ -684,7 +684,7 @@ const questions = [
         trapType: "too_extreme",
       },
       {
-        text: "Dark Matter: Strong Indirect Evidence, No Direct Detection — The Physics Community's Dilemma",
+        text: "Dark Matter: Strong Indirect Evidence, No Direct Detection - The Physics Community's Dilemma",
         isCorrect: true,
         isTrap: false,
         trapType: null,
@@ -712,30 +712,30 @@ const questions = [
   {
     id: "q019",
     topic: "science",
-    paragraph: `The gut microbiome — the community of trillions of microorganisms inhabiting the human intestine — influences host health through mechanisms that were barely understood a decade ago. Recent research links microbiome composition to immune function, mental health via the gut-brain axis, and metabolic outcomes including obesity and type-2 diabetes. But enthusiasm has outpaced evidence in some quarters. Many microbiome-based interventions marketed to consumers — specific probiotic strains, prebiotic supplements, faecal transplants for conditions beyond C. difficile — lack the large-scale randomised controlled trial evidence that would justify clinical use. The field is genuinely exciting; the consumer market for microbiome products is substantially ahead of the science.`,
+    paragraph: `The gut microbiome - the community of trillions of microorganisms inhabiting the human intestine - influences host health through mechanisms that were barely understood a decade ago. Recent research links microbiome composition to immune function, mental health via the gut-brain axis, and metabolic outcomes including obesity and type-2 diabetes. But enthusiasm has outpaced evidence in some quarters. Many microbiome-based interventions marketed to consumers - specific probiotic strains, prebiotic supplements, faecal transplants for conditions beyond C. difficile - lack the large-scale randomised controlled trial evidence that would justify clinical use. The field is genuinely exciting; the consumer market for microbiome products is substantially ahead of the science.`,
     question: "The author's attitude toward the gut microbiome field can best be described as:",
     type: "tone",
     options: [
       {
-        text: "Dismissive — the author believes microbiome research is overhyped and scientifically unreliable.",
+        text: "Dismissive - the author believes microbiome research is overhyped and scientifically unreliable.",
         isCorrect: false,
         isTrap: false,
         trapType: null,
       },
       {
-        text: "Uncritically enthusiastic — the author supports widespread adoption of microbiome-based products.",
+        text: "Uncritically enthusiastic - the author supports widespread adoption of microbiome-based products.",
         isCorrect: false,
         isTrap: false,
         trapType: null,
       },
       {
-        text: "Cautiously optimistic — the author finds the science genuinely promising but flags the gap between research and consumer applications.",
+        text: "Cautiously optimistic - the author finds the science genuinely promising but flags the gap between research and consumer applications.",
         isCorrect: true,
         isTrap: false,
         trapType: null,
       },
       {
-        text: "Deeply sceptical — the author implies that gut-brain axis research has been fabricated to sell products.",
+        text: "Deeply sceptical - the author implies that gut-brain axis research has been fabricated to sell products.",
         isCorrect: false,
         isTrap: true,
         trapType: "too_extreme",
@@ -751,7 +751,7 @@ const questions = [
   {
     id: "q020",
     topic: "science",
-    paragraph: `Antibiotic resistance is routinely framed as a consequence of overuse — and overuse is indeed a major driver. But the framing misses an evolutionary inevitability: resistance would emerge even with perfectly rational antibiotic use, simply more slowly. Every antibiotic application creates selective pressure; the minority of bacterial cells carrying resistance genes survive and reproduce. The question is not whether resistance will evolve but at what rate. Slowing the rate buys time for new antibiotic development and reduces the immediate burden on healthcare systems. Treating resistance as a preventable problem rather than a manageable one leads to policy responses that are moralistic rather than strategic.`,
+    paragraph: `Antibiotic resistance is routinely framed as a consequence of overuse - and overuse is indeed a major driver. But the framing misses an evolutionary inevitability: resistance would emerge even with perfectly rational antibiotic use, simply more slowly. Every antibiotic application creates selective pressure; the minority of bacterial cells carrying resistance genes survive and reproduce. The question is not whether resistance will evolve but at what rate. Slowing the rate buys time for new antibiotic development and reduces the immediate burden on healthcare systems. Treating resistance as a preventable problem rather than a manageable one leads to policy responses that are moralistic rather than strategic.`,
     question: "The author would most likely argue that the most effective policy approach to antibiotic resistance should:",
     type: "application",
     options: [
@@ -792,7 +792,7 @@ const questions = [
   {
     id: "q021",
     topic: "social",
-    paragraph: `The concept of social capital — the networks, norms, and trust that facilitate collective action — has become one of sociology's most exported ideas, adopted by economists, political scientists, and policymakers. But its migration across disciplines has not been frictionless. Economists tend to treat social capital as a stock that generates returns like physical capital, amenable to measurement and optimisation. Sociologists are often uneasy with this framing, arguing that networks embedded in histories of class, race, and power cannot be reduced to a fungible resource. What one discipline sees as a tool for efficient policy design, another sees as a category that smuggles in market assumptions about human relationships.`,
+    paragraph: `The concept of social capital - the networks, norms, and trust that facilitate collective action - has become one of sociology's most exported ideas, adopted by economists, political scientists, and policymakers. But its migration across disciplines has not been frictionless. Economists tend to treat social capital as a stock that generates returns like physical capital, amenable to measurement and optimisation. Sociologists are often uneasy with this framing, arguing that networks embedded in histories of class, race, and power cannot be reduced to a fungible resource. What one discipline sees as a tool for efficient policy design, another sees as a category that smuggles in market assumptions about human relationships.`,
     question: "The passage suggests that the sociologists' unease with the economists' framing of social capital stems from:",
     type: "inference",
     options: [
@@ -831,7 +831,7 @@ const questions = [
   {
     id: "q022",
     topic: "social",
-    paragraph: `Urban gentrification debates typically focus on displacement — the involuntary relocation of low-income residents as rents rise in newly desirable neighbourhoods. This is a real harm. But scholarship that focuses exclusively on displacement can miss a second dynamic: exclusionary displacement, where low-income households are prevented from moving into improving neighbourhoods in the first place, not through eviction but through price barriers. The visible drama of eviction draws attention and empathy; the invisible failure of low-income households to access better neighbourhoods draws neither. A complete account of neighbourhood change must address both who is pushed out and who is locked out.`,
+    paragraph: `Urban gentrification debates typically focus on displacement - the involuntary relocation of low-income residents as rents rise in newly desirable neighbourhoods. This is a real harm. But scholarship that focuses exclusively on displacement can miss a second dynamic: exclusionary displacement, where low-income households are prevented from moving into improving neighbourhoods in the first place, not through eviction but through price barriers. The visible drama of eviction draws attention and empathy; the invisible failure of low-income households to access better neighbourhoods draws neither. A complete account of neighbourhood change must address both who is pushed out and who is locked out.`,
     question: "The author introduces 'exclusionary displacement' primarily to:",
     type: "inference",
     options: [
@@ -870,7 +870,7 @@ const questions = [
   {
     id: "q023",
     topic: "social",
-    paragraph: `Contact theory, first proposed by Gordon Allport in 1954, holds that intergroup prejudice declines when members of different groups interact under conditions of equal status, common goals, institutional support, and the possibility of genuine friendship. The theory has been extensively tested and generally supported, but with important qualifications. Positive contact can reduce prejudice toward the specific individuals encountered without generalising to the outgroup as a whole — meeting one admirable member of a stigmatised group does not necessarily revise one's view of that group. This 'sub-typing' effect means that contact works best when the individuals encountered are seen as representative of their group, not as exceptions.`,
+    paragraph: `Contact theory, first proposed by Gordon Allport in 1954, holds that intergroup prejudice declines when members of different groups interact under conditions of equal status, common goals, institutional support, and the possibility of genuine friendship. The theory has been extensively tested and generally supported, but with important qualifications. Positive contact can reduce prejudice toward the specific individuals encountered without generalising to the outgroup as a whole - meeting one admirable member of a stigmatised group does not necessarily revise one's view of that group. This 'sub-typing' effect means that contact works best when the individuals encountered are seen as representative of their group, not as exceptions.`,
     question: "According to the passage, contact theory's effectiveness is limited by the fact that:",
     type: "detail",
     options: [
@@ -903,13 +903,13 @@ const questions = [
     trapIndex: 0,
     trapType: "real_but_unstated",
     sourceLines:
-      "Positive contact can reduce prejudice toward the specific individuals encountered without generalising to the outgroup as a whole — meeting one admirable member of a stigmatised group does not necessarily revise one's view of that group.",
+      "Positive contact can reduce prejudice toward the specific individuals encountered without generalising to the outgroup as a whole - meeting one admirable member of a stigmatised group does not necessarily revise one's view of that group.",
   },
 
   {
     id: "q024",
     topic: "social",
-    paragraph: `Surveillance capitalism, as theorised by Shoshana Zuboff, involves the extraction of human behavioural data as raw material, its refinement into predictive products, and the sale of those products to advertisers seeking to influence future behaviour. What distinguishes it from earlier forms of capitalism is not data collection per se — insurance companies have always collected data — but the unilateral nature of the extraction and the ambition of the prediction. Traditional data collection was disclosed and bounded; surveillance capitalism collects comprehensively, often without meaningful consent, and aims to predict and modify behaviour across all domains of life, not merely purchasing decisions.`,
+    paragraph: `Surveillance capitalism, as theorised by Shoshana Zuboff, involves the extraction of human behavioural data as raw material, its refinement into predictive products, and the sale of those products to advertisers seeking to influence future behaviour. What distinguishes it from earlier forms of capitalism is not data collection per se - insurance companies have always collected data - but the unilateral nature of the extraction and the ambition of the prediction. Traditional data collection was disclosed and bounded; surveillance capitalism collects comprehensively, often without meaningful consent, and aims to predict and modify behaviour across all domains of life, not merely purchasing decisions.`,
     question: "According to the passage, the distinctive feature of surveillance capitalism compared to earlier data-collecting industries is:",
     type: "detail",
     options: [
@@ -942,13 +942,13 @@ const questions = [
     trapIndex: 0,
     trapType: "too_extreme",
     sourceLines:
-      "What distinguishes it from earlier forms of capitalism is not data collection per se — insurance companies have always collected data — but the unilateral nature of the extraction and the ambition of the prediction.",
+      "What distinguishes it from earlier forms of capitalism is not data collection per se - insurance companies have always collected data - but the unilateral nature of the extraction and the ambition of the prediction.",
   },
 
   {
     id: "q025",
     topic: "social",
-    paragraph: `The sociology of expertise asks why publics trust some knowledge-producers and not others — and why, at certain historical moments, that trust collapses. One consistent finding is that perceived conflicts of interest matter more than actual ones. A scientist funded by industry whose results favour the funder faces reputational damage regardless of whether the funding influenced the findings. The perception of compromise undermines authority even when the science is sound. This creates a genuine dilemma: many fields depend on industry collaboration for the resources to conduct research, yet that collaboration systematically erodes the credibility that makes research actionable. Trust and funding exist in structural tension.`,
+    paragraph: `The sociology of expertise asks why publics trust some knowledge-producers and not others - and why, at certain historical moments, that trust collapses. One consistent finding is that perceived conflicts of interest matter more than actual ones. A scientist funded by industry whose results favour the funder faces reputational damage regardless of whether the funding influenced the findings. The perception of compromise undermines authority even when the science is sound. This creates a genuine dilemma: many fields depend on industry collaboration for the resources to conduct research, yet that collaboration systematically erodes the credibility that makes research actionable. Trust and funding exist in structural tension.`,
     question: "The 'genuine dilemma' described in the passage refers to:",
     type: "inference",
     options: [

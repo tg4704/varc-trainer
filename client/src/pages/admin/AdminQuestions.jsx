@@ -11,7 +11,7 @@ const TYPES = [
   "concept_set", "vocab_in_context", "weaken_strengthen", "title",
 ];
 const TOPICS = ["", "economics", "humanities", "philosophy", "science", "social"];
-// passage_id NULL = ③ Drills, set = ② Coach — see questionsRepo.js.
+// passage_id NULL = ③ Drills, set = ② Coach - see questionsRepo.js.
 const PRODUCTS = [
   { value: "", label: "All products" },
   { value: "drills", label: "Drills only" },
@@ -49,7 +49,7 @@ export default function AdminQuestions() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Questions</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data ? `${data.total} matching` : "—"}
+            {data ? `${data.total} matching` : "-"}
           </p>
         </div>
         <Button asChild>

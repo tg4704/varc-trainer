@@ -4,7 +4,7 @@ import { Card, CardContent } from "../../components/ui/card.jsx";
 
 function fmtUsd(n) {
   n = Number(n);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   if (Math.abs(n) < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
 }

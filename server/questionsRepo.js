@@ -1,5 +1,5 @@
 // Phase 8: shared accessor for questions. All routes read from the DB through
-// this module — never from server/data/questions.js at runtime.
+// this module - never from server/data/questions.js at runtime.
 const db = require("./db");
 
 // Convert a DB row into the shape the rest of the app expects (matching the
@@ -24,6 +24,7 @@ function hydrate(row) {
     trapType: row.trap_type,
     sourceLines: row.source_lines,
     source: row.source,
+    difficulty: row.difficulty || "medium",
     authorUserId: row.author_user_id,
     isActive: row.is_active === 1,
   };
@@ -40,7 +41,7 @@ async function findById(id) {
 
 // ③ Drills question pool for a given user:
 //   - seed questions, curated AI-generated drills, or the user's own questions (Phase 10)
-//   - passage_id IS NULL only — passage-linked questions belong to ② Coach, never to Drills
+//   - passage_id IS NULL only - passage-linked questions belong to ② Coach, never to Drills
 async function listForUser(userId) {
   const rows = await db.all(
     `SELECT * FROM questions
@@ -52,7 +53,7 @@ async function listForUser(userId) {
   return rows.map(hydrate);
 }
 
-// All active, standalone (non-passage) questions — admin/global view used by the
+// All active, standalone (non-passage) questions - admin/global view used by the
 // dashboard's recent-attempts lookup. Excludes passage-linked (② Coach) questions.
 async function listAllActive() {
   const rows = await db.all(

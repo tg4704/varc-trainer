@@ -4,9 +4,11 @@ const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
-const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
-const { VALID_TYPES } = require("../lib/validateQuestion");
+const { callModel, resolveModels, describeError } = require("../ai/provider");
+const { requireEntitlement, attachTier } = require("../lib/entitlements");
+const { VALID_TYPES, VALID_DIFFICULTIES } = require("../lib/validateQuestion");
 const { aiLimiter } = require("../lib/rateLimiters");
+const { extractJSON } = require("../lib/extractJSON");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
@@ -39,10 +41,10 @@ async function getOwnedSession(id, userId) {
   );
 }
 
-// POST /api/sessions — create a configured session
+// POST /api/sessions - create a configured session
 router.post("/", authenticate, async (req, res, next) => {
   try {
-    let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice", typeFilter } = req.body || {};
+    let { numQuestions, timerMode, timerScope, timerSeconds, feedbackMode = "instant", sessionType = "practice", typeFilter, difficulties } = req.body || {};
 
     numQuestions = parseInt(numQuestions, 10);
     if (!numQuestions || numQuestions < 1 || numQuestions > MAX_QUESTIONS) {
@@ -60,6 +62,15 @@ router.post("/", authenticate, async (req, res, next) => {
     if (typeFilter != null && !VALID_TYPES.includes(typeFilter)) {
       return res.status(400).json({ error: "Invalid typeFilter" });
     }
+    // Difficulty selection (Drills): a non-empty subset of easy/medium/tough.
+    // Omitted → all three (back-compat / "everything").
+    if (difficulties == null) {
+      difficulties = [...VALID_DIFFICULTIES];
+    } else if (!Array.isArray(difficulties) || difficulties.length === 0
+        || !difficulties.every((d) => VALID_DIFFICULTIES.includes(d))) {
+      return res.status(400).json({ error: "difficulties must be a non-empty subset of: " + VALID_DIFFICULTIES.join(", ") });
+    }
+    const difficultySet = new Set(difficulties);
 
     if (timerMode === "untimed") {
       timerScope = null;
@@ -76,24 +87,29 @@ router.post("/", authenticate, async (req, res, next) => {
       } else {
         timerSeconds = null; // count_up has no fixed duration
       }
-      // Timed sessions always defer — override any passed value
+      // Timed sessions always defer - override any passed value
       feedbackMode = "deferred";
     }
 
     // Pre-select all questions for this session so order is stable across refreshes.
     const allQuestions = await questionsRepo.listForUser(req.userId);
     // Inference-focused (or any type-focused) drill mode: restrict the pool to a
-    // single question type. Data: inference is ~50% of real CAT RC — the single
+    // single question type. Data: inference is ~50% of real CAT RC - the single
     // highest-leverage skill, worth a dedicated drill mode rather than diluting it
     // into the general shuffle.
-    const pool = typeFilter ? allQuestions.filter((q) => q.type === typeFilter) : allQuestions;
-    if (typeFilter && pool.length === 0) {
-      return res.status(400).json({ error: `No ${typeFilter} questions available yet. Try again once more are added, or start a general session.` });
+    // Difficulty filter (composes with typeFilter). A question with no stored
+    // difficulty is treated as 'medium' (matches hydrate()'s fallback).
+    const byDifficulty = allQuestions.filter((q) => difficultySet.has(q.difficulty || "medium"));
+    const pool = typeFilter ? byDifficulty.filter((q) => q.type === typeFilter) : byDifficulty;
+    if (pool.length === 0) {
+      const diffLabel = difficulties.length === VALID_DIFFICULTIES.length ? "" : ` at the selected difficulty (${difficulties.join(", ")})`;
+      const typeLabel = typeFilter ? `${typeFilter} ` : "";
+      return res.status(400).json({ error: `No ${typeLabel}questions available yet${diffLabel}. Try a different selection or add more questions.` });
     }
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     let questionIds = shuffled.slice(0, numQuestions).map((q) => q.id);
     // If the pool is smaller than requested, repeat within the SAME (filtered) pool
-    // to fill the session — never silently fall back to other question types.
+    // to fill the session - never silently fall back to other question types.
     if (questionIds.length < numQuestions) {
       const extra = [...pool].sort(() => Math.random() - 0.5);
       while (questionIds.length < numQuestions) {
@@ -112,7 +128,7 @@ router.post("/", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/sessions — list the user's sessions (most recent first)
+// GET /api/sessions - list the user's sessions (most recent first)
 router.get("/", authenticate, async (req, res, next) => {
   try {
     const rows = await db.all(
@@ -123,7 +139,7 @@ router.get("/", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/sessions/active — the user's most recent active session, if any
+// GET /api/sessions/active - the user's most recent active session, if any
 router.get("/active", authenticate, async (req, res, next) => {
   try {
     const s = await db.get(
@@ -134,7 +150,7 @@ router.get("/active", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/sessions/:id — config + attempt rows (for the results screen)
+// GET /api/sessions/:id - config + attempt rows (for the results screen)
 router.get("/:id", authenticate, async (req, res, next) => {
   try {
     const s = await getOwnedSession(req.params.id, req.userId);
@@ -152,7 +168,7 @@ router.get("/:id", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/sessions/:id/review — full attempt data for the Session Review screen.
+// GET /api/sessions/:id/review - full attempt data for the Session Review screen.
 // Returns paragraph, question text, options, selected/correct/trap indices, and
 // all AI feedback fields. Safe to expose after the session is complete because
 // correctIndex/trapIndex come from the attempt record (already seen by the user).
@@ -172,7 +188,7 @@ router.get("/:id/review", authenticate, async (req, res, next) => {
     );
 
     // Attach question display data (paragraph, question text, options) from DB.
-    // We do NOT include correctIndex/trapIndex from the questions table — those
+    // We do NOT include correctIndex/trapIndex from the questions table - those
     // come from the attempt's own fields which were set at answer time.
     const enriched = await Promise.all(attempts.map(async (a) => {
       const q = await questionsRepo.findById(a.question_id);
@@ -183,6 +199,7 @@ router.get("/:id/review", authenticate, async (req, res, next) => {
         options: q?.options ?? [],
         topic: q?.topic ?? "",
         type: q?.type ?? "",
+        difficulty: q?.difficulty ?? "medium",
       };
     }));
 
@@ -190,7 +207,7 @@ router.get("/:id/review", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/sessions/:id/batch-evaluate — evaluate all unevaluated analysis
+// POST /api/sessions/:id/batch-evaluate - evaluate all unevaluated analysis
 // attempts in this session with a SINGLE Claude call (one JSON array response).
 // Falls back to parallel per-question calls if the batch parse fails.
 // Idempotent: skips already-evaluated or skipped attempts.
@@ -210,11 +227,11 @@ JSON schema:
 }
 
 Reasoning score rubric:
-1 — No reasoning shown, or circular ("I chose this because it seemed right")
-2 — Paraphrased the paragraph but didn't connect it to option logic
-3 — Found the right part of the paragraph but made a reasoning error connecting it to the option
-4 — Sound reasoning but missed a nuance or used imprecise language
-5 — Identified the author's intent, eliminated the trap with a specific reason, arrived at answer through logic
+1 - No reasoning shown, or circular ("I chose this because it seemed right")
+2 - Paraphrased the paragraph but didn't connect it to option logic
+3 - Found the right part of the paragraph but made a reasoning error connecting it to the option
+4 - Sound reasoning but missed a nuance or used imprecise language
+5 - Identified the author's intent, eliminated the trap with a specific reason, arrived at answer through logic
 
 Rules for your response:
 - reasoningFeedback: 2-3 sentences on HOW the student thought, not just whether they were right. Be specific.
@@ -241,11 +258,11 @@ Each element schema:
 }
 
 Reasoning score rubric:
-1 — No reasoning shown, or circular
-2 — Paraphrased paragraph but didn't connect to option logic
-3 — Found right part of paragraph but made a reasoning error
-4 — Sound reasoning but missed a nuance or used imprecise language
-5 — Identified author's intent, eliminated trap with specific reason, arrived at answer through logic
+1 - No reasoning shown, or circular
+2 - Paraphrased paragraph but didn't connect to option logic
+3 - Found right part of paragraph but made a reasoning error
+4 - Sound reasoning but missed a nuance or used imprecise language
+5 - Identified author's intent, eliminated trap with specific reason, arrived at answer through logic
 
 Rules:
 - reasoningFeedback: 2-3 sentences on HOW the student thought, not just whether correct. Be specific.
@@ -265,7 +282,7 @@ function buildUserMessage(q, selectedIndex, reasoningText) {
   const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
   const trapSection =
     q.trapIndex != null
-      ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} — "${q.options[q.trapIndex].text}"
+      ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} - "${q.options[q.trapIndex].text}"
 TRAP TYPE: ${q.trapType}
 TRAP TYPE MEANINGS:
 - too_extreme: ${trapTypeMeanings.too_extreme}
@@ -288,7 +305,7 @@ QUESTION TYPE: ${q.type}
 OPTIONS:
 ${optionLines}
 
-CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
+CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} - "${q.options[q.correctIndex].text}"
 ${trapSection}
 
 STUDENT SELECTED: Option ${LETTERS[selectedIndex]}
@@ -329,12 +346,18 @@ async function saveEvalResult(attemptId, ev) {
   };
 }
 
-async function evaluateOneAttempt(attempt, userId) {
+async function evaluateOneAttempt(attempt, userId, userTier) {
   const q = await questionsRepo.findById(attempt.question_id);
   if (!q) return { attemptId: attempt.id, aiError: true, aiErrorMessage: "Question not found" };
 
+  // Hoisted out of the try so the catch below can log which model was actually
+  // attempted. It previously logged DEFAULT_MODEL there, which misattributed
+  // every failure to the env-default model regardless of the caller's tier.
+  const models = resolveModels(userTier, "drills");
+
   try {
     const response = await callModel({
+      models,
       system: SINGLE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(q, attempt.selected_option_index, attempt.reasoning_text) }],
     });
@@ -343,13 +366,13 @@ async function evaluateOneAttempt(attempt, userId) {
       userId,
       route: "/api/sessions/batch-evaluate",
       provider: "openrouter",
-      model: DEFAULT_MODEL,
+      model: response.model || models[0],
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
       status: "ok",
     });
 
-    const ev = JSON.parse(response.text);
+    const ev = extractJSON(response.text);
     return await saveEvalResult(attempt.id, ev);
   } catch (err) {
     console.error("Claude batch error for attempt", attempt.id, err.message);
@@ -357,7 +380,7 @@ async function evaluateOneAttempt(attempt, userId) {
       userId,
       route: "/api/sessions/batch-evaluate",
       provider: "openrouter",
-      model: DEFAULT_MODEL,
+      model: models[0],
       status: "error",
       errorMessage: describeError(err),
     });
@@ -367,11 +390,15 @@ async function evaluateOneAttempt(attempt, userId) {
 
 // Note: this single request can internally make up to N model calls (one
 // per pending question, capped by session size <= 25) if the primary
-// single-batch-call path fails and it falls back to per-question calls —
+// single-batch-call path fails and it falls back to per-question calls -
 // the rate limiter below only counts it as one hit. Acceptable for now
 // since it's bounded and infrequent (once per session), not the primary
 // abuse surface (that's /evaluate and /coach/*, which fire on every answer).
-router.post("/:id/batch-evaluate", authenticate, aiLimiter, async (req, res, next) => {
+// requireEntitlement("drills") matters here: a timed session's per-question
+// submits are deliberately exempt (they save the attempt without calling the
+// AI), so this route is the ONLY place a deferred session's grading is metered.
+// Without it, choosing a timer bypassed the daily cap entirely.
+router.post("/:id/batch-evaluate", authenticate, attachTier, aiLimiter, requireEntitlement("drills"), async (req, res, next) => {
   try {
   const s = await getOwnedSession(req.params.id, req.userId);
   if (!s) return res.status(404).json({ error: "Session not found" });
@@ -394,11 +421,17 @@ router.post("/:id/batch-evaluate", authenticate, aiLimiter, async (req, res, nex
   const questions = await Promise.all(pending.map((a) => questionsRepo.findById(a.question_id)));
   const missingIdx = questions.findIndex((q) => !q);
   if (missingIdx !== -1) {
-    // A question was deleted — fall through to per-question path which handles nulls gracefully
-    console.warn("batch-evaluate: question not found for attempt", pending[missingIdx].id, "— falling back");
+    // A question was deleted - fall through to per-question path which handles nulls gracefully
+    console.warn("batch-evaluate: question not found for attempt", pending[missingIdx].id, "- falling back");
   } else {
     try {
+      // Tier-aware, like /attempts/evaluate. This route used to hardcode
+      // DEFAULT_MODEL, so timed sessions ignored the caller's plan in both
+      // directions: free users got the expensive default, paying users didn't
+      // get the model they bought.
+      const models = resolveModels(req.userTier, "drills");
       const response = await callModel({
+        models,
         system: BATCH_SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildBatchUserMessage(pending, questions) }],
       });
@@ -407,13 +440,15 @@ router.post("/:id/batch-evaluate", authenticate, aiLimiter, async (req, res, nex
         userId: req.userId,
         route: "/api/sessions/batch-evaluate",
         provider: "openrouter",
-        model: DEFAULT_MODEL,
+        model: response.model || models[0],
         inputTokens: response.usage?.input_tokens,
         outputTokens: response.usage?.output_tokens,
         status: "ok",
+        // One API call, but N reasonings graded. Charge N.
+        units: pending.length,
       });
 
-      const evaluations = JSON.parse(response.text);
+      const evaluations = extractJSON(response.text);
       if (!Array.isArray(evaluations) || evaluations.length !== pending.length) {
         throw new Error(`Expected array of ${pending.length}, got ${Array.isArray(evaluations) ? evaluations.length : typeof evaluations}`);
       }
@@ -426,7 +461,7 @@ router.post("/:id/batch-evaluate", authenticate, aiLimiter, async (req, res, nex
         userId: req.userId,
         route: "/api/sessions/batch-evaluate",
         provider: "openrouter",
-        model: DEFAULT_MODEL,
+        model: resolveModels(req.userTier, "drills")[0],
         status: "error",
         errorMessage: describeError(batchErr),
       });
@@ -435,12 +470,14 @@ router.post("/:id/batch-evaluate", authenticate, aiLimiter, async (req, res, nex
   }
 
   // ── Fallback path: parallel per-question calls ───────────────────────────────
-  const results = await Promise.all(pending.map((a) => evaluateOneAttempt(a, req.userId)));
+  // Each fallback call grades exactly one attempt, so the default units=1 in
+  // logApiCall is already correct here.
+  const results = await Promise.all(pending.map((a) => evaluateOneAttempt(a, req.userId, req.userTier)));
   res.json({ results });
   } catch (e) { next(e); }
 });
 
-// GET /api/sessions/:id/questions — return all pre-selected questions for this session.
+// GET /api/sessions/:id/questions - return all pre-selected questions for this session.
 // Strips server-only fields (correctIndex, trapIndex, sourceLines).
 // Used by Practice.jsx to prefetch all questions for free navigation.
 router.get("/:id/questions", authenticate, async (req, res, next) => {
@@ -450,7 +487,7 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
 
     let questionIds = s.question_ids ? JSON.parse(s.question_ids) : null;
     if (!questionIds || questionIds.length === 0) {
-      // Legacy session without pre-selected IDs — generate on the fly
+      // Legacy session without pre-selected IDs - generate on the fly
       const allQuestions = await questionsRepo.listForUser(req.userId);
       const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
       questionIds = shuffled.slice(0, s.num_questions).map((q) => q.id);
@@ -461,7 +498,7 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
 
     const questions = await Promise.all(questionIds.map((id) => questionsRepo.findById(id)));
     // Filter out any question deleted/deactivated after the session was
-    // created BEFORE numbering index/total — numbering before the filter
+    // created BEFORE numbering index/total - numbering before the filter
     // left gaps (e.g. 1, 3, 4 of "5") whenever one was dropped.
     const found = questions.filter(Boolean);
     const sanitised = found.map((q, i) => ({
@@ -479,7 +516,7 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// DELETE /api/sessions/:id — discard a session and all its attempts ("never
+// DELETE /api/sessions/:id - discard a session and all its attempts ("never
 // happened"). Used when the user chooses "Discard" on leaving a practice session.
 router.delete("/:id", authenticate, async (req, res, next) => {
   try {
@@ -493,7 +530,7 @@ router.delete("/:id", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/sessions/:id/complete — mark a session finished
+// POST /api/sessions/:id/complete - mark a session finished
 router.post("/:id/complete", authenticate, async (req, res, next) => {
   try {
     const s = await getOwnedSession(req.params.id, req.userId);

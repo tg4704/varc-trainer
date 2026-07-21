@@ -18,7 +18,7 @@ function Stat({ label, value, sub }) {
 
 function fmtUsd(n) {
   n = Number(n);
-  if (!Number.isFinite(n)) return "—";
+  if (!Number.isFinite(n)) return "-";
   if (n < 0.01) return `$${n.toFixed(4)}`;
   return `$${n.toFixed(2)}`;
 }

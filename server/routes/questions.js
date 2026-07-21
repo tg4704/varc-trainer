@@ -40,7 +40,7 @@ router.get("/next", authenticate, async (req, res, next) => {
 
     const count = attempted.length;
 
-    // Session quota reached — signal completion
+    // Session quota reached - signal completion
     if (count >= session.num_questions) {
       return res.json({ done: true, answered: count, total: session.num_questions });
     }
@@ -67,7 +67,7 @@ router.get("/next", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/questions/:id/flag — user reports a problem with a question
+// POST /api/questions/:id/flag - user reports a problem with a question
 router.post("/:id/flag", authenticate, async (req, res, next) => {
   try {
     // Kept both the legacy reason codes and the current RC Trainer flag-modal
@@ -80,6 +80,13 @@ router.post("/:id/flag", authenticate, async (req, res, next) => {
     const { reason, note = "" } = req.body || {};
     if (!VALID_REASONS.includes(reason)) {
       return res.status(400).json({ error: "reason must be one of: " + VALID_REASONS.join(", ") });
+    }
+    // The `= ""` default only covers an absent key. A present-but-non-string
+    // note (`{"note": 123}`) reached `.trim()` below and threw an unhandled
+    // 500 - the exact shape-confusion the zod schemas were introduced to stop,
+    // on a route that never got one. Length is enforced by the slice below.
+    if (typeof note !== "string") {
+      return res.status(400).json({ error: "note must be a string" });
     }
 
     // Ownership guard: a user may flag global content or their own question, but not

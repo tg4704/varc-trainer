@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { admin } from "../../api.js";
+import { MISC } from "../../lib/limits.js";
 
 // Paste JSON produced in Claude chat (see content-pipeline/GENERATION_KIT.md) and import it.
 // Everything lands inactive (is_active=0) for review under Admin → Questions (active=0 filter).
@@ -23,6 +24,18 @@ export default function AdminImport() {
     const badItem = items.find((it) => !it || (it.kind !== "passage_set" && it.kind !== "drills"));
     if (!items.length || badItem) {
       setError('Each item must have "kind": "passage_set" or "drills". You can paste a single object or an array of them.');
+      return;
+    }
+    // express.json({ limit: "100kb" }) would reject this with a bare 413 whose
+    // message says nothing about what to do. Batching several passage_sets in
+    // one paste is the normal way to hit it, so name the fix explicitly.
+    const bytes = new TextEncoder().encode(text).length;
+    if (bytes > MISC.JSON_IMPORT_MAX_BYTES) {
+      setError(
+        `Too large to import in one go: ${(bytes / 1024).toFixed(0)}KB, limit is ` +
+        `${MISC.JSON_IMPORT_MAX_BYTES / 1024}KB. Split it into ${Math.ceil(bytes / MISC.JSON_IMPORT_MAX_BYTES)} ` +
+        `smaller pastes (${items.length} items here) and import them one at a time.`
+      );
       return;
     }
     setBusy(true);
@@ -75,6 +88,8 @@ export default function AdminImport() {
         </button>
         <span className="text-xs text-muted-foreground">
           Accepts one <code>passage_set</code> or a <code>drills</code> batch per import.
+          Each <code>drills</code> item requires a <code>difficulty</code> of{" "}
+          <code>easy</code>, <code>medium</code>, or <code>tough</code>.
         </span>
       </div>
 

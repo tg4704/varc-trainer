@@ -5,7 +5,7 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate, requireAdmin } = require("../auth");
-const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
+const { validateQuestionPayload, normalizeOptions, VALID_DIFFICULTIES } = require("../lib/validateQuestion");
 const { DEFAULTS: PROMPT_DEFAULTS, invalidatePromptCache } = require("../ai/prompts");
 
 router.use(authenticate, requireAdmin);
@@ -127,7 +127,7 @@ router.get("/users/:id", async (req, res, next) => {
       [userId]
     );
 
-    // Coach session stats — count sessions and most recent
+    // Coach session stats - count sessions and most recent
     let coachStats = { total: 0, recentSessions: [] };
     try {
       const coachTotal = await db.get(
@@ -147,12 +147,65 @@ router.get("/users/:id", async (req, res, next) => {
       // coach_sessions table may not exist on older DBs
     }
 
-    res.json({ user, totals, recentSessions, apiCost, coachStats });
+    // Recurring subscription (for the force-cancel control).
+    let subscription = null;
+    try {
+      const subs = require("../lib/subscriptions");
+      const sub = await subs.getActiveSubscription(userId);
+      if (sub) {
+        subscription = {
+          id: sub.razorpay_subscription_id,
+          tier: sub.tier,
+          status: sub.status,
+          cancelAtCycleEnd: sub.cancel_at_cycle_end,
+          currentEnd: sub.current_end || null,
+        };
+      }
+    } catch {
+      // subscriptions table may not exist on older DBs
+    }
+
+    // Plan limits + how much of them this user has actually consumed. Mirrors
+    // the maths in GET /api/billing/me exactly (same helpers, same
+    // daily-vs-monthly rule) so what an admin sees on this page and what the
+    // user sees on My Plan can never disagree. `enforced` reports the
+    // ENABLE_TIERS flag, because with it off these numbers are informational
+    // only — nothing is actually being blocked.
+    let entitlement = null;
+    try {
+      const { getTier, ENABLE_TIERS } = require("../config/tiers");
+      const {
+        effectiveTierKey, countTodayDrills, countTodayCoach,
+        countMonthDrills, countMonthCoach,
+      } = require("../lib/entitlements");
+
+      const key = effectiveTierKey(user);
+      const tier = getTier(key);
+      // A tier with no daily cap is metered monthly instead.
+      const meteredMonthly = tier.caps?.drills == null && tier.caps?.coach == null;
+      entitlement = {
+        effectiveTier: key,          // may differ from user.tier if it expired
+        tierName: tier.name,
+        enforced: ENABLE_TIERS,
+        period: meteredMonthly ? "month" : "day",
+        caps: meteredMonthly ? tier.monthlyCaps : tier.caps,
+        used: meteredMonthly
+          ? { drills: await countMonthDrills(user.id), coach: await countMonthCoach(user.id) }
+          : { drills: await countTodayDrills(user.id), coach: await countTodayCoach(user.id) },
+        // Always show today's figures too — the useful number when a user
+        // writes in saying "it says I've hit my limit".
+        today: { drills: await countTodayDrills(user.id), coach: await countTodayCoach(user.id) },
+      };
+    } catch (e) {
+      console.error("[admin] entitlement lookup failed:", e.message);
+    }
+
+    res.json({ user, totals, recentSessions, apiCost, coachStats, subscription, entitlement });
   } catch (e) { next(e); }
 });
 
 // ── PATCH /api/admin/users/:id ─────────────────────────────────────────────
-// Change role or deactivate. Body: { role? } — admin cannot demote themselves.
+// Change role or deactivate. Body: { role? } - admin cannot demote themselves.
 router.patch("/users/:id", async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id, 10);
@@ -202,6 +255,26 @@ router.patch("/users/:id/tier", async (req, res, next) => {
     }
     const updated = await db.get("SELECT tier, tier_expires_at FROM users WHERE id = $1", [userId]);
     res.json({ ok: true, tier: updated.tier, tierName: getTier(updated.tier).name, expiresAt: updated.tier_expires_at });
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/admin/users/:id/force-cancel ─────────────────────────────────
+// Immediately cancel the user's active recurring subscription AND drop them to
+// the free tier right now (no waiting for period end). For abuse / chargebacks /
+// support overrides. Distinct from the user's own cancel, which is period-end.
+router.post("/users/:id/force-cancel", async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (!userId) return res.status(400).json({ error: "invalid user id" });
+    const subs = require("../lib/subscriptions");
+    const { downgradeToFree } = require("../lib/grants");
+
+    const sub = await subs.getActiveSubscription(userId);
+    if (sub) await subs.cancelSubscription(sub, { immediate: true });
+    await downgradeToFree(userId);
+
+    const updated = await db.get("SELECT tier, tier_expires_at FROM users WHERE id = $1", [userId]);
+    res.json({ ok: true, cancelled: Boolean(sub), tier: updated.tier, expiresAt: updated.tier_expires_at });
   } catch (e) { next(e); }
 });
 
@@ -303,16 +376,16 @@ router.post("/questions", async (req, res, next) => {
     const err = validateQuestionPayload(req.body);
     if (err) return res.status(400).json({ error: err });
 
-    const { topic, paragraph, question, type, options, correctIndex, trapIndex, trapType, sourceLines } = req.body;
-    // Generate a new id — 'a' prefix for admin-created, then timestamp+rand
+    const { topic, paragraph, question, type, options, correctIndex, trapIndex, trapType, sourceLines, difficulty } = req.body;
+    // Generate a new id - 'a' prefix for admin-created, then timestamp+rand
     const id = req.body.id || `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
     try {
       await db.run(
         `INSERT INTO questions
            (id, topic, paragraph, question, type, options_json,
-            correct_index, trap_index, trap_type, source_lines, source, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'seed', 1)`,
+            correct_index, trap_index, trap_type, source_lines, source, is_active, difficulty)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'seed', 1, $11)`,
         [
           id, topic, paragraph.trim(), question.trim(), type,
           JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
@@ -320,6 +393,7 @@ router.post("/questions", async (req, res, next) => {
           trapIndex ?? null,
           trapIndex != null ? (trapType || null) : null,
           sourceLines.trim(),
+          difficulty || "medium",
         ]
       );
       res.json({ ok: true, id });
@@ -348,12 +422,13 @@ router.patch("/questions/:id", async (req, res, next) => {
     const err = validateQuestionPayload(req.body);
     if (err) return res.status(400).json({ error: err });
 
-    const { topic, paragraph, question, type, options, correctIndex, trapIndex, trapType, sourceLines } = req.body;
+    const { topic, paragraph, question, type, options, correctIndex, trapIndex, trapType, sourceLines, difficulty } = req.body;
     await db.run(
       `UPDATE questions SET
          topic = $1, paragraph = $2, question = $3, type = $4, options_json = $5,
-         correct_index = $6, trap_index = $7, trap_type = $8, source_lines = $9
-       WHERE id = $10`,
+         correct_index = $6, trap_index = $7, trap_type = $8, source_lines = $9,
+         difficulty = COALESCE($10, difficulty)
+       WHERE id = $11`,
       [
         topic, paragraph.trim(), question.trim(), type,
         JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
@@ -361,6 +436,7 @@ router.patch("/questions/:id", async (req, res, next) => {
         trapIndex ?? null,
         trapIndex != null ? (trapType || null) : null,
         sourceLines.trim(),
+        difficulty || null,
         req.params.id,
       ]
     );
@@ -394,7 +470,7 @@ router.post("/questions/:id/flag", async (req, res, next) => {
 });
 
 // ── GET /api/admin/flags ───────────────────────────────────────────────────
-// Review queue — open flags first, with question snippet for context.
+// Review queue - open flags first, with question snippet for context.
 router.get("/flags", async (req, res, next) => {
   try {
     const status = req.query.status || "open";
@@ -443,7 +519,7 @@ router.patch("/flags/:id", async (req, res, next) => {
 // ── GET /api/admin/passages ────────────────────────────────────────────────
 // List passages (② Coach) with question counts, for review + activation.
 // A passage's questions can be individually activated in Admin → Questions,
-// but the passage itself gates whether it shows up in the Coach picker at all —
+// but the passage itself gates whether it shows up in the Coach picker at all -
 // activate it here once you've reviewed its questions.
 router.get("/passages", async (req, res, next) => {
   try {
@@ -495,10 +571,17 @@ const IMPORT_TRAPS = [
 ];
 
 // Validate one question object; returns an error string or null.
-function validateImportQuestion(q, label) {
+// requireDifficulty: true for ③ Drills items (difficulty is mandatory), false for
+// ② Coach passage_set questions (difficulty is a Drills-only concept).
+function validateImportQuestion(q, label, requireDifficulty = false) {
   if (!q || typeof q !== "object") return `${label}: not an object`;
   if (!q.question || !String(q.question).trim()) return `${label}: missing question`;
   if (!IMPORT_TYPES.includes(q.type)) return `${label}: type "${q.type}" not allowed`;
+  if (requireDifficulty && !VALID_DIFFICULTIES.includes(q.difficulty)) {
+    return `${label}: difficulty is required and must be one of: ${VALID_DIFFICULTIES.join(", ")}`;
+  } else if (q.difficulty != null && !VALID_DIFFICULTIES.includes(q.difficulty)) {
+    return `${label}: difficulty "${q.difficulty}" not allowed (use ${VALID_DIFFICULTIES.join(", ")})`;
+  }
   if (!Array.isArray(q.options) || q.options.length !== 4) return `${label}: needs exactly 4 options`;
   for (let i = 0; i < 4; i++) {
     if (!q.options[i] || !String(q.options[i].text || "").trim()) return `${label}: option ${i} needs text`;
@@ -535,8 +618,8 @@ async function insertImportQuestion(client, q, { topic, paragraph, passageId }) 
   await client.query(
     `INSERT INTO questions
        (id, topic, paragraph, question, type, options_json,
-        correct_index, trap_index, trap_type, source_lines, source, passage_id, is_active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ai_generated',$11,0)`,
+        correct_index, trap_index, trap_type, source_lines, source, passage_id, is_active, difficulty)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'ai_generated',$11,0,$12)`,
     [
       newQuestionId(), topic, paragraph.trim(), String(q.question).trim(), q.type,
       JSON.stringify(buildImportOptions(q)),
@@ -545,8 +628,71 @@ async function insertImportQuestion(client, q, { topic, paragraph, passageId }) 
       q.trapIndex != null ? (q.trapType || null) : null,
       String(q.sourceLines).trim(),
       passageId,
+      q.difficulty || "medium", // Coach passage_set questions have no difficulty → medium
     ]
   );
+}
+
+// ── Passage-shape + reading-key gate ─────────────────────────────────────────
+// These enforce, at import time, the contract GENERATION_KIT.md already asks
+// the model for. Worth being strict here: the 2026-07-20 QA found all 5 seeded
+// passages carrying reading_key_json = '{}', which the Coach grader silently
+// destructures into "Thesis: undefined / Paragraph functions: (empty)" — so
+// every reading-map grade was free-floating commentary rather than a
+// comparison against a canonical reading, with no error anywhere to notice.
+// Those rows were hand-inserted (source='user'), never passed through here,
+// but the old check (`typeof reading_key !== "object"`) would have ACCEPTED
+// them anyway, since `{}` is a truthy object.
+const PASSAGE_MIN_PARAS = 3;   // GENERATION_KIT: "MUST be 3-5 distinct paragraphs"
+const PASSAGE_MAX_PARAS = 5;
+const PASSAGE_MIN_WORDS = 350; // GENERATION_KIT: "PASSAGE (350-500 words)"
+const PASSAGE_MAX_WORDS = 500;
+
+function nonEmptyString(v) {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+// Import errors are prefixed with a batch position ("[2/5]") only when the
+// request actually contained a batch. For a single-payload import itemLabel is
+// "", so joining naively produced messages that began with a stray ": ".
+function labelled(itemLabel, msg) {
+  return itemLabel ? `${itemLabel}: ${msg}` : msg;
+}
+// Same idea for nested labels ("[2/5] Item 3" vs just "Item 3").
+function sublabel(itemLabel, suffix) {
+  return itemLabel ? `${itemLabel} ${suffix}` : suffix;
+}
+
+// Throws on a violation. `paraCount` is the passage's real paragraph count so
+// we can confirm the key actually describes THIS passage.
+function assertReadingKey(readingKey, paraCount, itemLabel) {
+  const k = readingKey;
+  if (!k || typeof k !== "object" || Array.isArray(k)) {
+    throw new Error(labelled(itemLabel, `passage.reading_key required (object)`));
+  }
+  for (const field of ["thesis", "tone", "key_turn"]) {
+    if (!nonEmptyString(k[field])) {
+      throw new Error(labelled(itemLabel, `passage.reading_key.${field} must be a non-empty string`));
+    }
+  }
+  if (!Array.isArray(k.paragraph_functions) || !k.paragraph_functions.length) {
+    throw new Error(labelled(itemLabel, `passage.reading_key.paragraph_functions must be a non-empty array`));
+  }
+  if (!k.paragraph_functions.every(nonEmptyString)) {
+    throw new Error(labelled(itemLabel, `passage.reading_key.paragraph_functions entries must be non-empty strings`));
+  }
+  // One function per paragraph — a mismatch means the key doesn't describe this
+  // passage, which makes the grader's "structure" band meaningless.
+  if (k.paragraph_functions.length !== paraCount) {
+    throw new Error(
+      labelled(itemLabel, `reading_key.paragraph_functions has ${k.paragraph_functions.length} entries but the passage has ${paraCount} paragraphs — one per paragraph is required`)
+    );
+  }
+}
+
+// Splits on blank lines, the same way the client renders paragraphs.
+function countParagraphs(body) {
+  return String(body).trim().split(/\n\s*\n/).filter((s) => s.trim()).length;
 }
 
 // Import one { kind: "passage_set" | "drills", ... } payload. Returns
@@ -558,16 +704,31 @@ async function importOnePayload(payload, itemLabel) {
 
   if (payload.kind === "passage_set") {
     const p = payload.passage;
-    if (!p || !String(p.body || "").trim()) throw new Error(`${itemLabel}: passage.body required`);
-    if (!IMPORT_TOPICS.includes(p.topic)) throw new Error(`${itemLabel}: passage.topic must be one of: ${IMPORT_TOPICS.join(", ")}`);
-    if (!p.reading_key || typeof p.reading_key !== "object") throw new Error(`${itemLabel}: passage.reading_key required`);
+    if (!p || !String(p.body || "").trim()) throw new Error(labelled(itemLabel, `passage.body required`));
+    if (!IMPORT_TOPICS.includes(p.topic)) throw new Error(labelled(itemLabel, `passage.topic must be one of: ${IMPORT_TOPICS.join(", ")}`));
+    // Passage must be genuinely multi-paragraph: Coach's reading map asks for
+    // one crux entry PER PARAGRAPH, so a single unbroken block gives the
+    // student one box and leaves the grader's structure band nothing to score.
+    const paraCount = countParagraphs(p.body);
+    if (paraCount < PASSAGE_MIN_PARAS || paraCount > PASSAGE_MAX_PARAS) {
+      throw new Error(
+        labelled(itemLabel, `passage.body must be ${PASSAGE_MIN_PARAS}-${PASSAGE_MAX_PARAS} paragraphs separated by blank lines (found ${paraCount})`)
+      );
+    }
+    assertReadingKey(p.reading_key, paraCount, itemLabel);
+
     const questions = Array.isArray(payload.questions) ? payload.questions : [];
-    if (!questions.length) throw new Error(`${itemLabel}: questions[] required`);
+    if (!questions.length) throw new Error(labelled(itemLabel, `questions[] required`));
     for (let i = 0; i < questions.length; i++) {
-      const err = validateImportQuestion(questions[i], `${itemLabel} Q${i + 1}`);
-      if (err) throw new Error(err); // whole set is atomic — reject on any bad Q
+      const err = validateImportQuestion(questions[i], sublabel(itemLabel, `Q${i + 1}`));
+      if (err) throw new Error(err); // whole set is atomic - reject on any bad Q
     }
     const wordCount = String(p.body).trim().split(/\s+/).length;
+    // Soft: length drift doesn't corrupt grading the way a missing key does, so
+    // surface it in the import report rather than rejecting usable content.
+    if (wordCount < PASSAGE_MIN_WORDS || wordCount > PASSAGE_MAX_WORDS) {
+      errors.push(labelled(itemLabel, `passage is ${wordCount} words (expected ${PASSAGE_MIN_WORDS}-${PASSAGE_MAX_WORDS}) — imported anyway`));
+    }
     await db.transaction(async (client) => {
       const row = await client.query(
         `INSERT INTO passages (topic, genre, title, body, word_count, reading_key_json, source, is_active)
@@ -583,14 +744,14 @@ async function importOnePayload(payload, itemLabel) {
     });
   } else if (payload.kind === "drills") {
     const items = Array.isArray(payload.items) ? payload.items : [];
-    if (!items.length) throw new Error(`${itemLabel}: items[] required`);
-    // Drills are independent — insert the good ones, collect errors for the rest.
+    if (!items.length) throw new Error(labelled(itemLabel, `items[] required`));
+    // Drills are independent - insert the good ones, collect errors for the rest.
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      const label = `${itemLabel} Item ${i + 1}`;
+      const label = sublabel(itemLabel, `Item ${i + 1}`);
       if (!IMPORT_TOPICS.includes(it.topic)) { errors.push(`${label}: topic "${it.topic}" not allowed`); continue; }
       if (!String(it.paragraph || "").trim()) { errors.push(`${label}: missing paragraph`); continue; }
-      const err = validateImportQuestion(it, label);
+      const err = validateImportQuestion(it, label, true); // Drills → difficulty required
       if (err) { errors.push(err); continue; }
       try {
         await db.transaction(async (client) => {
@@ -600,7 +761,7 @@ async function importOnePayload(payload, itemLabel) {
       } catch (e) { errors.push(`${label}: ${e.message}`); }
     }
   } else {
-    throw new Error(`${itemLabel}: kind must be "passage_set" or "drills"`);
+    throw new Error(labelled(itemLabel, `kind must be "passage_set" or "drills"`));
   }
 
   return { passagesInserted, questionsInserted, errors };
@@ -624,7 +785,7 @@ router.post("/import", async (req, res, next) => {
         questionsInserted += result.questionsInserted;
         errors.push(...result.errors);
       } catch (e) {
-        errors.push(e.message); // hard failure on this array item — skip it, continue the batch
+        errors.push(e.message); // hard failure on this array item - skip it, continue the batch
       }
     }
 
@@ -684,7 +845,7 @@ router.get("/costs", async (req, res, next) => {
 
 // ── GET /api/admin/api-calls ────────────────────────────────────────────────
 // Row-level browser over api_calls for diagnosing a specific failure (e.g.
-// "AI feedback unavailable") — the /costs endpoint above only returns
+// "AI feedback unavailable") - the /costs endpoint above only returns
 // aggregates, this returns individual calls with their persisted error
 // message (see logApiCall in server/ai/apiLog.js), filterable by date range,
 // user, token count, surface (which product the call came from), and status.
@@ -697,7 +858,7 @@ const SURFACE_ROUTE_PATTERNS = {
 function surfaceWhereClause(surface, paramIndex) {
   const patterns = SURFACE_ROUTE_PATTERNS[surface];
   if (!patterns) return null;
-  // Routes are either exact matches (Drills) or prefixes (Coach/My Questions) —
+  // Routes are either exact matches (Drills) or prefixes (Coach/My Questions) -
   // build an OR of `route = $n` / `route LIKE $n` accordingly.
   const clauses = [];
   const values = [];
@@ -728,7 +889,16 @@ router.get("/api-calls", async (req, res, next) => {
 
     if (from) { where.push(`c.created_at >= $${i++}`); params.push(from); }
     if (to) { where.push(`c.created_at < ($${i++}::date + INTERVAL '1 day')`); params.push(to); }
-    if (userId) { where.push(`c.user_id = $${i++}`); params.push(Number(userId)); }
+    if (userId) {
+      const trimmed = String(userId).trim();
+      if (/^\d+$/.test(trimmed)) {
+        where.push(`c.user_id = $${i++}`);
+        params.push(Number(trimmed));
+      } else {
+        where.push(`u.username ILIKE $${i++}`);
+        params.push(`%${trimmed}%`);
+      }
+    }
     if (minTokens) { where.push(`(c.input_tokens + c.output_tokens) >= $${i++}`); params.push(Number(minTokens)); }
     if (maxTokens) { where.push(`(c.input_tokens + c.output_tokens) <= $${i++}`); params.push(Number(maxTokens)); }
     if (status === "ok" || status === "error") { where.push(`c.status = $${i++}`); params.push(status); }
@@ -736,7 +906,7 @@ router.get("/api-calls", async (req, res, next) => {
       const clause = surfaceWhereClause(surface, i);
       if (clause) { where.push(clause.sql); params.push(...clause.values); i += clause.values.length; }
     } else if (surface === "other") {
-      // Not Drills, not Coach, not My Questions — everything else (currently none, but future-proof).
+      // Not Drills, not Coach, not My Questions - everything else (currently none, but future-proof).
       const allPatterns = Object.values(SURFACE_ROUTE_PATTERNS).flat();
       const clauses = allPatterns.map((p) => {
         const c = p.endsWith("/") ? `c.route LIKE $${i}` : `c.route = $${i}`;
@@ -752,7 +922,7 @@ router.get("/api-calls", async (req, res, next) => {
     const offset = (Math.max(1, Number(page) || 1) - 1) * limit;
 
     const totalRow = await db.get(
-      `SELECT COUNT(*) AS total FROM api_calls c ${whereSql}`,
+      `SELECT COUNT(*) AS total FROM api_calls c LEFT JOIN users u ON u.id = c.user_id ${whereSql}`,
       params
     );
 
@@ -826,6 +996,78 @@ router.delete("/prompts/:key", async (req, res, next) => {
     if (!PROMPT_DEFAULTS[key]) return res.status(404).json({ error: "Unknown prompt key" });
     await db.run("DELETE FROM ai_prompts WHERE key = $1", [key]);
     invalidatePromptCache();
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ── Admin: bulletins (the "important updates" box on the logged-in home) ────
+// GET lists every bulletin (active + retired) newest-first, for the admin list view.
+router.get("/bulletins", async (req, res, next) => {
+  try {
+    const rows = await db.all(
+      `SELECT b.id, b.title, b.body, b.is_active, b.created_at, b.updated_at, u.username AS created_by_username
+         FROM bulletins b LEFT JOIN users u ON u.id = b.created_by
+        ORDER BY b.created_at DESC`
+    );
+    res.json({ bulletins: rows });
+  } catch (e) { next(e); }
+});
+
+// Bulletins render verbatim on every logged-in homepage, so an accidental
+// paste of something enormous is a site-wide layout problem, not just a bad
+// row. Keep in sync with MISC in client/src/lib/limits.js.
+const BULLETIN_TITLE_MAX = 200;
+const BULLETIN_BODY_MAX = 4000;
+
+function validateBulletin(req) {
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  if (!title || !body) return { error: "title and body are required" };
+  if (title.length > BULLETIN_TITLE_MAX) {
+    return { error: `title is too long (${title.length} characters, max ${BULLETIN_TITLE_MAX})` };
+  }
+  if (body.length > BULLETIN_BODY_MAX) {
+    return { error: `body is too long (${body.length} characters, max ${BULLETIN_BODY_MAX})` };
+  }
+  return { title, body };
+}
+
+// POST creates a new bulletin (active by default).
+router.post("/bulletins", async (req, res, next) => {
+  try {
+    const { title, body, error } = validateBulletin(req);
+    if (error) return res.status(400).json({ error });
+
+    const row = await db.get(
+      `INSERT INTO bulletins (title, body, created_by) VALUES ($1, $2, $3) RETURNING id`,
+      [title, body, req.userId]
+    );
+    res.json({ ok: true, id: row.id });
+  } catch (e) { next(e); }
+});
+
+// PUT updates a bulletin's title/body/is_active.
+router.put("/bulletins/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { title, body, error } = validateBulletin(req);
+    if (error) return res.status(400).json({ error });
+    const isActive = Boolean(req.body?.isActive);
+
+    const result = await db.run(
+      `UPDATE bulletins SET title = $1, body = $2, is_active = $3, updated_at = NOW() WHERE id = $4`,
+      [title, body, isActive, id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Bulletin not found" });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// DELETE permanently removes a bulletin.
+router.delete("/bulletins/:id", async (req, res, next) => {
+  try {
+    const result = await db.run("DELETE FROM bulletins WHERE id = $1", [req.params.id]);
+    if (!result.rowCount) return res.status(404).json({ error: "Bulletin not found" });
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
