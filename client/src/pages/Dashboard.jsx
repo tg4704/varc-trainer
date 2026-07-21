@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getDashboard, getDashboardTrend, getDashboardHeatmap,
@@ -331,6 +331,15 @@ function ResumeCoachCard({ session, onStartFresh }) {
 }
 
 // ── Accuracy trend line chart ──────────────────────────────
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// "2026-07-12" -> "12 Jul". Split rather than new Date(), which would read the
+// string as UTC midnight and render the day before for anyone behind UTC.
+function shortDay(isoDay) {
+  const [, m, d] = String(isoDay).slice(0, 10).split("-");
+  return `${parseInt(d, 10)} ${MONTHS_SHORT[parseInt(m, 10) - 1]}`;
+}
+
 function AccuracyTrendChart() {
   const [range, setRange] = useState("30d");
   const [trend, setTrend] = useState(null);
@@ -340,27 +349,81 @@ function AccuracyTrendChart() {
   }, [range]);
 
   const days = trend?.days || [];
-  const W = 480, H = 130, padX = 14, padT = 14, padB = 24;
+  const hasChart = days.length >= 2;
+
+  // The card is flex-1 in a column sized by its taller sibling, so its height is
+  // whatever's left over - measure it and draw at real pixel size rather than
+  // stretching a fixed viewBox (which distorts the stroke and the end dot) or
+  // pinning a short SVG to the top (which leaves the rest of the card empty).
+  // Measured on layout + window resize rather than with a ResizeObserver: RO
+  // delivery is tied to the rendering loop, so it silently never fires in a
+  // backgrounded/headless tab and leaves the chart drawn at a stale size. The
+  // card only ever changes size with the viewport, so a resize listener covers it.
+  const plotRef = useRef(null);
+  const svgRef = useRef(null);
+  const [size, setSize] = useState({ w: 480, h: 140 });
+  const [hover, setHover] = useState(null); // index of the nearest point, or null
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = plotRef.current;
+      if (!el) return;
+      const { width, height } = el.getBoundingClientRect();
+      if (width > 0 && height > 0) {
+        setSize((prev) =>
+          Math.abs(prev.w - width) < 0.5 && Math.abs(prev.h - height) < 0.5
+            ? prev // same box - don't re-render (setState with a new object always would)
+            : { w: width, h: height }
+        );
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [hasChart, range, trend]);
+
+  // padL leaves room for the y-axis "%" labels, padB for the date row.
+  const W = size.w, H = size.h, padL = 38, padR = 14, padT = 16, padB = 26;
   let points = "", area = "", dotX = 0, dotY = 0, cur = "-", delta = 0;
+  let yTicks = [], xTicks = [], pts = [];
 
   if (days.length >= 2) {
     const vals = days.map((d) => Math.round(d.accuracy * 100));
-    const min = Math.min(...vals), max = Math.max(...vals);
-    const rng = (max - min) || 1;
-    const xs = (i) => padX + (i * (W - 2 * padX)) / (vals.length - 1);
-    const ys = (v) => H - padB - ((v - min) / rng) * (H - padT - padB);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    // A flat run has zero range - give it a band so the line sits mid-chart
+    // instead of collapsing onto the axis.
+    if (hi === lo) { lo -= 5; hi += 5; }
+    // Round out to 10s so the axis reads in round numbers, and keep it inside
+    // 0-100 since it's a percentage.
+    lo = Math.max(0, Math.floor((lo - 4) / 10) * 10);
+    hi = Math.min(100, Math.ceil((hi + 4) / 10) * 10);
+    if (hi === lo) hi = lo + 10;
+
+    const xs = (i) => padL + (i * (W - padL - padR)) / (vals.length - 1);
+    const ys = (v) => H - padB - ((v - lo) / (hi - lo)) * (H - padT - padB);
+
+    pts = vals.map((v, i) => ({ x: xs(i), y: ys(v), v, date: days[i].date, answered: days[i].answered }));
     points = vals.map((v, i) => `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).join(" ");
     area = `${xs(0).toFixed(1)},${H - padB} ${points} ${xs(vals.length - 1).toFixed(1)},${H - padB}`;
     dotX = xs(vals.length - 1).toFixed(1);
     dotY = ys(vals[vals.length - 1]).toFixed(1);
     cur = `${vals[vals.length - 1]}%`;
     delta = vals[vals.length - 1] - vals[0];
+
+    yTicks = [hi, Math.round((lo + hi) / 2), lo].map((v) => ({ v, y: ys(v) }));
+
+    // First and last day always; the midpoint too when there's width for it
+    // without the labels colliding.
+    const idxs = W > 380 && days.length >= 3
+      ? [0, Math.floor((days.length - 1) / 2), days.length - 1]
+      : [0, days.length - 1];
+    xTicks = [...new Set(idxs)].map((i) => ({ label: shortDay(days[i].date), x: xs(i), i }));
   } else if (days.length === 1) {
     cur = `${Math.round(days[0].accuracy * 100)}%`;
   }
 
   return (
-    <div className="glass flex-1 p-[20px_22px]">
+    <div className="glass flex flex-1 flex-col p-[20px_22px]">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold">Accuracy trend</div>
@@ -384,23 +447,102 @@ function AccuracyTrendChart() {
           ))}
         </div>
       </div>
-      <div className="mt-3">
-        {days.length >= 2 ? (
-          <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="140" preserveAspectRatio="none">
+      <div ref={plotRef} className="relative mt-3 min-h-[140px] flex-1">
+        {hasChart ? (
+          <svg
+            ref={svgRef}
+            width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} className="block"
+            // Snap to the nearest point rather than requiring a hit on the dot
+            // itself - with sparse days the dots are far apart and tiny.
+            // Pointer events (not mouse) so a touch drag reads values too.
+            onPointerMove={(e) => {
+              const box = svgRef.current?.getBoundingClientRect();
+              if (!box || pts.length === 0) return;
+              // The viewBox is 1:1 with the rendered box, so client px == user units.
+              const x = e.clientX - box.left;
+              let best = 0;
+              for (let i = 1; i < pts.length; i++) {
+                if (Math.abs(pts[i].x - x) < Math.abs(pts[best].x - x)) best = i;
+              }
+              setHover(best);
+            }}
+            onPointerLeave={() => setHover(null)}
+          >
             <defs>
               <linearGradient id="gradTrend" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0" stopColor="var(--teal)" stopOpacity="0.35" />
                 <stop offset="1" stopColor="var(--teal)" stopOpacity="0" />
               </linearGradient>
             </defs>
-            <line x1={padX} y1={38} x2={W - padX} y2={38} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-            <line x1={padX} y1={74} x2={W - padX} y2={74} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+            {/* Y axis: a gridline + % label per tick. The gridlines used to be
+                hardcoded at y=38/74, labelling nothing and landing at an
+                arbitrary spot once the chart stopped being 130 tall. */}
+            {yTicks.map(({ v, y }) => (
+              <g key={v}>
+                <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                <text
+                  x={padL - 8} y={y} textAnchor="end" dominantBaseline="middle"
+                  fill="var(--text-2)" fontSize="10" className="mono"
+                >
+                  {v}%
+                </text>
+              </g>
+            ))}
             <polygon points={area} fill="url(#gradTrend)" />
             <polyline points={points} fill="none" stroke="var(--teal)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
             <circle cx={dotX} cy={dotY} r="4.5" fill="var(--bg)" stroke="var(--teal)" strokeWidth="2.5" />
+            {hover != null && pts[hover] && (
+              <g pointerEvents="none">
+                <line
+                  x1={pts[hover].x} y1={padT} x2={pts[hover].x} y2={H - padB}
+                  stroke="rgba(255,255,255,0.18)" strokeWidth="1" strokeDasharray="3 3"
+                />
+                <circle cx={pts[hover].x} cy={pts[hover].y} r="4.5" fill="var(--teal)" />
+              </g>
+            )}
+            {/* X axis: dates. Ends are anchored inward so they can't clip the
+                edges of the plot. */}
+            {xTicks.map(({ label, x, i }) => (
+              <text
+                key={i} x={x} y={H - 8}
+                textAnchor={i === 0 ? "start" : i === days.length - 1 ? "end" : "middle"}
+                fill="var(--text-2)" fontSize="10" className="mono"
+              >
+                {label}
+              </text>
+            ))}
           </svg>
         ) : (
           <p className="py-8 text-center text-sm dim">Not enough data yet. Answer a few more questions.</p>
+        )}
+
+        {/* Tooltip as HTML rather than SVG <text> so it gets the app's glass
+            styling and wraps normally. Clamped to the plot so it can't spill
+            past the card edge at the first/last point. */}
+        {hasChart && hover != null && pts[hover] && (
+          <div
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-[8px] px-2.5 py-1.5"
+            style={{
+              left: Math.min(Math.max(pts[hover].x, 58), W - 58),
+              // Sits above the point, but flips below when the point is high
+              // enough that the tooltip would ride up over the card header.
+              top: pts[hover].y + (pts[hover].y < 52 ? 12 : -12),
+              transform: `translate(-50%, ${pts[hover].y < 52 ? "0" : "-100%"})`,
+              background: "rgba(12,16,20,0.94)",
+              border: "1px solid var(--glass-border-lo)",
+              boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
+            }}
+          >
+            <div className="mono text-[10px]" style={{ color: "var(--text-2)" }}>
+              {shortDay(pts[hover].date)}
+            </div>
+            <div className="text-[12px] font-semibold" style={{ color: "var(--teal)" }}>
+              {pts[hover].v}%
+              <span className="ml-1 font-normal" style={{ color: "var(--text-2)" }}>
+                · {pts[hover].answered} {pts[hover].answered === 1 ? "question" : "questions"}
+              </span>
+            </div>
+          </div>
         )}
       </div>
     </div>

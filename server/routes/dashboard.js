@@ -247,14 +247,20 @@ router.get("/trend", authenticate, async (req, res, next) => {
     const days = TREND_RANGE_DAYS[range];
 
     const rows = await db.all(
-      `SELECT DATE(a.created_at) AS day,
+      // Emit the day as a 'YYYY-MM-DD' STRING, not a DATE. A date column comes
+      // back from pg as a JS Date at local midnight, which serializes to the
+      // previous day in UTC ('2026-07-12' -> '2026-07-11T18:30:00Z' in IST) and
+      // makes any client-side label a day early. Same bug the heatmap endpoint
+      // below already fixed. Bucketing is unchanged - to_char reads the
+      // timestamptz in the server's zone exactly as DATE() did.
+      `SELECT to_char(a.created_at, 'YYYY-MM-DD') AS day,
               COUNT(*) AS answered,
               COALESCE(SUM(a.is_correct), 0) AS correct
        FROM attempts a
        JOIN sessions s ON a.session_id = s.id
        WHERE s.user_id = $1 AND a.skipped = 0
          AND a.created_at >= NOW() - INTERVAL '${days} days'
-       GROUP BY DATE(a.created_at)
+       GROUP BY 1
        ORDER BY day ASC`,
       [req.userId]
     );
