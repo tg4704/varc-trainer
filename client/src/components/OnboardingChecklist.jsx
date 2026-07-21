@@ -1,4 +1,4 @@
-// First-session activation checklist — shown on Home for logged-in users
+// First-session activation checklist - shown on Home for logged-in users
 // until both steps are done or the user dismisses it. Verify-email is
 // deliberately not a step here: login is already blocked for unverified
 // accounts (server/routes/auth.js), so by the time a user can see this at
@@ -31,7 +31,7 @@ export default function OnboardingChecklist() {
   }, [dismissed]);
 
   if (dismissed || !steps) return null;
-  if (steps.drill && steps.coach) return null; // both done — nothing to nag about
+  if (steps.drill && steps.coach) return null; // both done - nothing to nag about
 
   function dismiss() {
     localStorage.setItem(DISMISS_KEY, "1");

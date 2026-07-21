@@ -6,6 +6,7 @@ import {
 } from "../components/AuthShell.jsx";
 import PageMeta from "../components/PageMeta.jsx";
 import { track } from "../analytics.js";
+import { AUTH } from "../lib/limits.js";
 
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
@@ -51,7 +52,7 @@ export default function Register() {
 
   return (
     <AuthShell>
-      <PageMeta title="Sign up — Graspr" description="Create a free Graspr account and start training CAT VARC reading comprehension with AI feedback on every answer." />
+      <PageMeta title="Sign up · Graspr" description="Create a free Graspr account and start training CAT VARC reading comprehension with AI feedback on every answer." />
       <AuthCard
         title="Create your account"
         subtitle="Start training your reasoning today."
@@ -69,8 +70,8 @@ export default function Register() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
-              maxLength={60}
-              placeholder="Tarun Mehta"
+              maxLength={AUTH.NAME_MAX}
+              placeholder="e.g. Jane Doe"
             />
           </div>
           <div>
@@ -82,7 +83,8 @@ export default function Register() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              minLength={3}
+              minLength={AUTH.USERNAME_MIN}
+              maxLength={AUTH.USERNAME_MAX}
               placeholder="yourname"
               required
             />
@@ -96,6 +98,7 @@ export default function Register() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
+              maxLength={AUTH.EMAIL_MAX}
               placeholder="you@email.com"
               required
             />
@@ -119,7 +122,7 @@ export default function Register() {
             </span>
           </label>
 
-          <button type="submit" disabled={busy || !agreed} className="btn btn-primary btn-block fx-sheen mt-1">
+          <button type="submit" disabled={busy} className="btn btn-primary btn-block fx-sheen mt-1">
             {busy ? "Creating…" : <>Create account <span className="arrow inline-block">→</span></>}
           </button>
         </form>

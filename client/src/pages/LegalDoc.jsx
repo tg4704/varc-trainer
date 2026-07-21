@@ -1,4 +1,4 @@
-// Shared layout for /privacy and /terms — plain, readable long-form text,
+// Shared layout for /privacy and /terms - plain, readable long-form text,
 // consistent with the rest of the dark editorial theme but deliberately
 // undecorated (this is a document, not a marketing page).
 export function LegalDoc({ title, updated, children }) {

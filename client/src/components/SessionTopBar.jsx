@@ -1,5 +1,5 @@
 // Minimal in-session bar for Drills practice: Exit / progress / session timer.
-// Replaces the app-level TopNav while a session is active — this is the
+// Replaces the app-level TopNav while a session is active - this is the
 // "in-session minimal top bar" deferred from the v2 redesign pass. The mode
 // pill (Analysis/Intuition) was removed; the timer carries an optional label
 // ("Session") so it's never confused with the per-question donut timer.

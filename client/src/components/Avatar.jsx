@@ -1,5 +1,5 @@
-// Renders a user's chosen profile picture — gradient initial, icon, or emoji
-// — from the encoded avatar_id string. See lib/avatars.js for the format.
+// Renders a user's chosen profile picture - gradient initial, icon, or emoji
+// - from the encoded avatar_id string. See lib/avatars.js for the format.
 import Icon from "./Icon.jsx";
 import { parseAvatar, avatarGradient } from "../lib/avatars.js";
 

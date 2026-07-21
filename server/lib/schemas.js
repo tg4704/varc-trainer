@@ -1,18 +1,18 @@
 // zod schemas for auth + AI routes (the highest-risk surface: auth guards
 // account takeover, AI routes are the ones that cost real money per call).
 // Most of these routes already had decent hand-written length/presence
-// checks — what zod adds on top is STRICT TYPING. A hand check like
+// checks - what zod adds on top is STRICT TYPING. A hand check like
 // `if (!message || !message.trim())` lets a non-string truthy value (e.g.
 // `{}`, `123`, `["x"]`) sail through and then crash on `.trim()` a few
 // lines later (an unhandled 500, and with a malicious/buggy client hammering
 // it, a cheap DoS). zod rejects the wrong shape before any of that code runs.
 //
 // Other route families (question CRUD, admin, sessions config, dashboard,
-// flags) aren't covered here yet — see the backlog note in CLAUDE.md /
+// flags) aren't covered here yet - see the backlog note in CLAUDE.md /
 // the Obsidian vault's Launch & Production Readiness doc for the plan to
 // extend this incrementally.
 const { z } = require("./validate");
-const { VALID_TOPICS, VALID_TYPES } = require("./validateQuestion");
+const { VALID_TOPICS, VALID_TYPES, VALID_DIFFICULTIES } = require("./validateQuestion");
 
 // ── auth.js ──────────────────────────────────────────────────────────────────
 const registerSchema = z.object({
@@ -125,6 +125,7 @@ const generateDraftSchema = z.object({
   paragraph: z.string().trim().min(100).max(9000),
   type: z.enum(VALID_TYPES).optional(),
   topic: z.enum(VALID_TOPICS).optional(),
+  difficulty: z.enum(VALID_DIFFICULTIES).optional(),
 });
 
 module.exports = {

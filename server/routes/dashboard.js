@@ -4,7 +4,7 @@ const db = require("../db");
 const { authenticate } = require("../auth");
 const questionsRepo = require("../questionsRepo");
 
-// GET /api/dashboard — aggregate stats across all of the user's sessions.
+// GET /api/dashboard - aggregate stats across all of the user's sessions.
 // Accuracy, trap-pick rate, and per-type/topic/trap breakdowns are computed over
 // ANSWERED (non-skipped) attempts.
 // Computed fresh on every request: the queries are cheap indexed aggregates and
@@ -192,7 +192,7 @@ async function handle(req, res, next) {
       };
     }));
 
-    // ── Recent sessions (most recent first) — mirror of the copy in index.js ──
+    // ── Recent sessions (most recent first) - mirror of the copy in index.js ──
     const recentSessionRows = await db.all(
       `SELECT s.id, s.created_at, s.completed_at, s.status, s.num_questions,
               COUNT(a.id) FILTER (WHERE a.skipped = 0) AS answered,
@@ -239,7 +239,7 @@ function clearCache() {}
 const TREND_RANGE_DAYS = { "7d": 7, "30d": 30, all: 3650 };
 const TREND_MAX_POINTS = 60; // safeguard for "all" on a long-lived account
 
-// GET /api/dashboard/trend?range=7d|30d|all — daily accuracy over answered
+// GET /api/dashboard/trend?range=7d|30d|all - daily accuracy over answered
 // (non-skipped) attempts, one point per day that has at least one attempt.
 router.get("/trend", authenticate, async (req, res, next) => {
   try {
@@ -271,13 +271,13 @@ router.get("/trend", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/dashboard/heatmap — raw per-day answered counts for the last ~6
+// GET /api/dashboard/heatmap - raw per-day answered counts for the last ~6
 // months (183 days). Client lays them out as a GitHub-style contribution grid.
 router.get("/heatmap", authenticate, async (req, res, next) => {
   try {
     // Drills (attempts) + Coach (coach_attempts), bucketed by UTC date as a
     // 'YYYY-MM-DD' STRING (a real date column comes back as a JS Date whose
-    // String() form never matches the client's ISO keys — the reason the
+    // String() form never matches the client's ISO keys - the reason the
     // heatmap always read 0). See the authoritative copy in server/index.js.
     const rows = await db.all(
       `SELECT day, SUM(cnt) AS count FROM (

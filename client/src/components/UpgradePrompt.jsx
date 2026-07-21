@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import Modal from "./Modal.jsx";
 import { Button } from "./ui/button.jsx";
 
@@ -9,7 +8,6 @@ import { Button } from "./ui/button.jsx";
 // call anywhere gets a consistent upgrade prompt instead of a raw error.
 export default function UpgradePrompt() {
   const [detail, setDetail] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const onLimit = (e) => setDetail(e.detail || {});
@@ -20,9 +18,29 @@ export default function UpgradePrompt() {
   if (!detail) return null;
 
   const isCostCeiling = detail.reason === "cost_ceiling";
-  const title = isCostCeiling ? "Monthly AI limit reached" : "You've hit today's limit";
+  // A locked FEATURE is not a spent quota: it never "resets tomorrow", and
+  // saying so told free users to wait for something that will never happen
+  // (and quietly talked them out of the upgrade that would actually fix it).
+  const isFeatureLocked = detail.reason === "feature_locked";
+  const title = isCostCeiling
+    ? "Monthly AI limit reached"
+    : isFeatureLocked
+      ? "Not included in your plan"
+      : "You've hit today's limit";
   const canUpgrade = Boolean(detail.upgradeTo && detail.upgradeName);
   const close = () => setDetail(null);
+
+  // This prompt only ever fires because an AI call was blocked mid-activity —
+  // a Coach passage or a Drills session in progress. Navigating the SPA to
+  // /pricing threw that away: the user lost their place, and (before the
+  // resume fix) burned a Coach passage they couldn't finish. Opening a new tab
+  // keeps the session live and warm, so after paying they switch back and
+  // carry on exactly where they stopped. Called straight from the click
+  // handler, so popup blockers allow it.
+  const openPricing = () => {
+    window.open("/pricing", "_blank", "noopener,noreferrer");
+    close();
+  };
 
   return (
     <Modal onClose={close} labelledBy="upgrade-title">
@@ -30,14 +48,22 @@ export default function UpgradePrompt() {
         <h2 id="upgrade-title" className="display text-[22px]">{title}</h2>
         <p className="mt-2 text-sm leading-relaxed muted">
           {detail.error || "You've reached a limit on your current plan."}
-          {canUpgrade && !isCostCeiling && (
+          {canUpgrade && isFeatureLocked && (
+            <> Upgrade to <span className="font-semibold text-foreground">{detail.upgradeName}</span> to unlock it.</>
+          )}
+          {canUpgrade && !isCostCeiling && !isFeatureLocked && (
             <> Upgrade to <span className="font-semibold text-foreground">{detail.upgradeName}</span> for a higher daily limit, or come back tomorrow when it resets.</>
           )}
-          {!canUpgrade && !isCostCeiling && <> It resets tomorrow.</>}
+          {!canUpgrade && !isCostCeiling && !isFeatureLocked && <> It resets tomorrow.</>}
         </p>
+        {canUpgrade && (
+          <p className="mt-2 text-xs muted">
+            Plans open in a new tab — this session stays exactly where it is.
+          </p>
+        )}
         <div className="mt-6 flex gap-2.5">
           {canUpgrade && (
-            <Button className="fx-sheen flex-1" onClick={() => { close(); navigate("/pricing"); }}>
+            <Button className="fx-sheen flex-1" onClick={openPricing}>
               See plans
             </Button>
           )}

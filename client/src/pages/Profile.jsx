@@ -3,14 +3,16 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { getDashboard, changeName, checkUsernameAvailable, changeUsername, updateStudentProfile } from "../api.js";
 import Avatar from "../components/Avatar.jsx";
+import Icon from "../components/Icon.jsx";
+import SideDock from "../components/SideDock.jsx";
+import { AUTH, PROFILE } from "../lib/limits.js";
 
 const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
 const TOPIC_LABELS = { economics: "Economics", humanities: "Humanities", philosophy: "Philosophy", science: "Science", social: "Social" };
-const BIO_WORD_LIMIT = 40;
+const BIO_WORD_LIMIT = PROFILE.BIO_WORD_LIMIT;
 
-// Last Sunday of November — CAT is traditionally held that week.
 function catCountdown(year) {
-  const lastNovDay = new Date(Date.UTC(year, 11, 0)); // day 0 of December = Nov 30
+  const lastNovDay = new Date(Date.UTC(year, 11, 0));
   const catDate = new Date(lastNovDay);
   catDate.setUTCDate(lastNovDay.getUTCDate() - lastNovDay.getUTCDay());
   const today = new Date();
@@ -19,30 +21,34 @@ function catCountdown(year) {
   return { date: catDate, days };
 }
 
-// Read-only by default (a page worth looking clean and presentable); "Edit
-// profile" flips a single page-level flag that reveals the same inline
-// row editors this page has always used (Name/Username/Topic/Bio each
-// still manage their own local edit/save state). Danger zone actions
-// (Reset data / Delete account) live only in the TopNav avatar dropdown now —
-// see TopNav.jsx — so this page stays purely about who-you-are, not
-// account destruction.
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const [stats, setStats] = useState(null);
   const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
-    getDashboard()
-      .then(setStats)
-      .catch(() => setStats(null));
+    getDashboard().then(setStats).catch(() => setStats(null));
   }, []);
 
-  const joined = user?.createdAt ? (() => { const d = new Date(user.createdAt); return isNaN(d) ? "—" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); })() : "—";
+  const joined = user?.createdAt
+    ? (() => { const d = new Date(user.createdAt); return isNaN(d) ? "-" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); })()
+    : "-";
   const cat = catCountdown(2026);
   const name = user?.name || user?.username;
+  const accuracy = stats ? Math.round(stats.accuracy * 100) : null;
+
+  // Progress bar: % of year elapsed from Jan 1 toward the CAT date
+  const catBarPct = (() => {
+    const start = new Date(Date.UTC(2026, 0, 1));
+    const today = new Date();
+    const total = cat.date - start;
+    return Math.max(0, Math.min(100, ((today - start) / total) * 100));
+  })();
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-10">
+    <div className="mx-auto max-w-[1080px] px-6 pb-16 pt-14">
+      <SideDock />
+      {/* Header row */}
       <div className="flex items-center justify-between gap-3">
         <h1 className="display text-[34px] leading-none">Profile</h1>
         <button onClick={() => setEditMode((v) => !v)} className="btn btn-glass fx-ring flex-none">
@@ -50,17 +56,39 @@ export default function Profile() {
         </button>
       </div>
 
-      {/* Header card — read-only identity view by default; Edit mode swaps
-          name/username/bio/topic for their inline editors in place. */}
-      <div className="glass mt-6 p-7">
-        <div className="flex items-start gap-5">
-          <div className="relative flex-none">
-            <Avatar avatarId={user?.avatarId} name={name} size={76} />
+      {/* 2-col grid */}
+      <div className="profile-grid mt-8">
+        {/* ── Left: Identity card ── */}
+        <div
+          className="relative overflow-hidden rounded-[20px]"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--glass-border)",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+            padding: "34px 30px",
+            animation: "fadeSlideUp 0.7s ease both",
+          }}
+        >
+          {/* Avatar */}
+          <div className="relative" style={{ width: 104, height: 104 }}>
+            <div
+              className="rounded-full"
+              style={{
+                width: "100%", height: "100%",
+                background: "linear-gradient(140deg, var(--teal), var(--periwinkle))",
+                padding: 4, boxSizing: "border-box",
+                animation: "softPulseTeal 3.4s ease-in-out infinite",
+              }}
+            >
+              <div style={{ width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden" }}>
+                <Avatar avatarId={user?.avatarId} name={name} size={96} radius={96} />
+              </div>
+            </div>
             {editMode && (
               <Link
                 to="/profile/customize"
                 title="Change picture"
-                className="fx-ring absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+                className="fx-ring absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold"
                 style={{ background: "var(--teal)", color: "#07130E", border: "2px solid var(--bg)" }}
               >
                 ✎
@@ -68,67 +96,140 @@ export default function Profile() {
             )}
           </div>
 
-          <div className="min-w-0 flex-1 pt-0.5">
+          {/* Name / username */}
+          {editMode ? (
+            <div className="mt-5">
+              <NameRow name={user?.name} onUpdate={updateUser} />
+              <UsernameRow username={user?.username} onUpdate={updateUser} />
+            </div>
+          ) : (
+            <>
+              <div className="display mt-6 italic leading-none" style={{ fontSize: 38 }}>{name}</div>
+              <div className="mono mt-2" style={{ fontSize: 12.5, color: "var(--text-muted)" }}>@{user?.username}</div>
+            </>
+          )}
+
+          {/* Email + joined */}
+          <div className="mt-1.5 text-[11.5px] dim">
+            {user?.email} · Joined {joined}
+          </div>
+
+          {/* Bio */}
+          <div className="mt-5" style={{ borderTop: "1px solid var(--glass-border-lo)", paddingTop: 20 }}>
             {editMode ? (
-              <div className="-mt-1">
-                <NameRow name={user?.name} onUpdate={updateUser} />
-                <UsernameRow username={user?.username} onUpdate={updateUser} />
+              <BioRow bio={user?.bio} onUpdate={updateUser} />
+            ) : user?.bio ? (
+              <div style={{ borderLeft: "2px solid rgba(139,157,255,0.35)", paddingLeft: 16 }}>
+                <p className="display italic leading-[1.55]" style={{ fontSize: 17, color: "var(--text)" }}>
+                  {user.bio}
+                </p>
               </div>
             ) : (
-              <>
-                <div className="display truncate text-[23px] leading-tight text-foreground">{name}</div>
-                <div className="mt-0.5 text-sm dim">@{user?.username}</div>
-              </>
+              <p className="text-sm dim italic">No bio yet.</p>
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs dim">
-              <span>{user?.email}</span>
-              <span>Joined {joined}</span>
-            </div>
+          </div>
+
+          {/* Favorite topic */}
+          <div className="mt-5">
+            {editMode ? (
+              <FavoriteTopicRow favoriteTopic={user?.favoriteTopic} onUpdate={updateUser} />
+            ) : user?.favoriteTopic ? (
+              <span
+                className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold"
+                style={{ background: "rgba(93,202,165,0.14)", border: "1px solid rgba(93,202,165,0.45)", color: "var(--teal)", display: "inline-block" }}
+              >
+                Favorite Topic - {TOPIC_LABELS[user.favoriteTopic]}
+              </span>
+            ) : null}
           </div>
         </div>
 
-        {editMode ? (
-          <div className="mt-4">
-            <BioRow bio={user?.bio} onUpdate={updateUser} />
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-foreground">
-            {user?.bio || <span className="dim italic">No bio yet.</span>}
-          </p>
-        )}
+        {/* ── Right: Performance + countdown ── */}
+        <div className="flex flex-col gap-5" style={{ animation: "fadeSlideUp 0.7s ease both", animationDelay: "0.12s" }}>
+          {/* Performance card */}
+          <div
+            className="relative overflow-hidden flex flex-col justify-center rounded-[20px]"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-subtle)", padding: "32px" }}
+          >
+            <div className="eyebrow text-center">Performance</div>
 
-        {editMode ? (
-          <div className="mt-1">
-            <FavoriteTopicRow favoriteTopic={user?.favoriteTopic} onUpdate={updateUser} />
+            {stats ? (
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-10">
+                {/* Jumbo accuracy */}
+                <div className="text-center">
+                  <div className="mono font-semibold leading-[0.82]" style={{ fontSize: 100, color: "var(--teal)" }}>
+                    {accuracy}<span style={{ fontSize: 40 }}>%</span>
+                  </div>
+                  <div className="mt-3 text-[12px] uppercase tracking-[0.1em] muted">Accuracy</div>
+                </div>
+
+                {/* Answered + Correct */}
+                <div className="flex flex-col gap-6">
+                  <MetricRow
+                    icon={<Icon name="pencil" size={17} stroke={1.6} />}
+                    color="var(--teal)"
+                    value={stats.answeredCount}
+                    label="Answered"
+                  />
+                  <MetricRow
+                    icon={
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2">
+                        <path d="M5 12.5l4.5 4.5L19 7" />
+                      </svg>
+                    }
+                    color="var(--green)"
+                    value={stats.correctCount}
+                    label="Correct"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-6 text-center text-sm muted">Loading stats…</div>
+            )}
           </div>
-        ) : (
-          user?.favoriteTopic && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span
-                className="rounded-full px-3 py-1 text-xs font-semibold"
-                style={{ background: "rgba(93,202,165,0.14)", border: "1px solid rgba(93,202,165,0.45)", color: "var(--teal)" }}
-              >
-                {TOPIC_LABELS[user.favoriteTopic]} enthusiast
+
+          {/* CAT countdown */}
+          <div
+            className="rounded-[20px]"
+            style={{ background: "var(--surface)", border: "1px solid var(--border-subtle)", padding: "24px 28px" }}
+          >
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm muted">Days till CAT 2026</span>
+              <span>
+                <span className="mono text-[22px] font-semibold">{cat.days >= 0 ? cat.days : 0}</span>
+                <span className="ml-2 text-[12px] dim">
+                  · {cat.date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+                </span>
               </span>
             </div>
-          )
-        )}
-      </div>
-
-      {stats && (
-        <div className="mt-6 grid grid-cols-3 gap-4">
-          <Stat label="Answered" value={stats.answeredCount} />
-          <Stat label="Correct" value={stats.correctCount} />
-          <Stat label="Accuracy" value={`${Math.round(stats.accuracy * 100)}%`} />
+            <div
+              className="relative mt-3.5 h-1 overflow-hidden rounded-full"
+              style={{ background: "rgba(255,255,255,0.08)" }}
+            >
+              <div
+                className="absolute left-0 top-0 h-full rounded-full"
+                style={{ background: "linear-gradient(90deg, var(--teal), var(--periwinkle))", width: `${catBarPct}%` }}
+              />
+            </div>
+          </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
 
-      <div className="glass mt-6 flex items-center justify-between p-6">
-        <span className="text-sm muted">Days till CAT 2026</span>
-        <span className="text-right">
-          <span className="mono text-sm font-semibold text-foreground">{cat.days >= 0 ? cat.days : 0}</span>
-          <span className="ml-1.5 text-xs dim">({cat.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })})</span>
-        </span>
+function MetricRow({ icon, color, value, label }) {
+  return (
+    <div className="flex items-center gap-3.5">
+      <div
+        className="flex h-10 w-10 flex-none items-center justify-center rounded-[11px]"
+        style={{ background: `${color}1e` }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div className="mono font-semibold leading-[0.9]" style={{ fontSize: 38, color }}>{value ?? "-"}</div>
+        <div className="mt-1 text-[11px] uppercase tracking-[0.08em] muted">{label}</div>
       </div>
     </div>
   );
@@ -139,7 +240,7 @@ function FavoriteTopicRow({ favoriteTopic, onUpdate }) {
 
   async function pick(topic) {
     if (saving) return;
-    const next = topic === favoriteTopic ? null : topic; // click again to clear
+    const next = topic === favoriteTopic ? null : topic;
     setSaving(true);
     try {
       const { user } = await updateStudentProfile({ favoriteTopic: next });
@@ -200,6 +301,7 @@ function BioRow({ bio, onUpdate }) {
         onChange={(e) => { setValue(e.target.value); setErr(null); }}
         onBlur={save}
         rows={2}
+        maxLength={PROFILE.BIO_CHAR_MAX}
         className="input"
         style={{ resize: "vertical" }}
         placeholder="A line about how you're prepping, what you're aiming for…"
@@ -248,10 +350,10 @@ function NameRow({ name, onUpdate }) {
         <input
           autoFocus
           value={value}
-          maxLength={60}
+          maxLength={AUTH.NAME_MAX}
           onChange={(e) => { setValue(e.target.value); setErr(null); }}
           onKeyDown={(e) => e.key === "Enter" && save()}
-          placeholder="e.g. Tarun Mehta"
+          placeholder="e.g. Jane Doe"
           className="input flex-1"
           style={{ padding: "8px 12px", fontSize: 13.5 }}
         />
@@ -317,7 +419,8 @@ function UsernameRow({ username, onUpdate }) {
         <input
           autoFocus
           value={value}
-          maxLength={30}
+          minLength={AUTH.USERNAME_MIN}
+          maxLength={AUTH.USERNAME_MAX}
           onChange={(e) => { setValue(e.target.value.trim()); setErr(null); }}
           onKeyDown={(e) => e.key === "Enter" && save()}
           className="input flex-1"
@@ -330,15 +433,6 @@ function UsernameRow({ username, onUpdate }) {
       </div>
       {statusText && <p className="mt-1 text-xs" style={{ color: statusColor }}>{statusText}</p>}
       {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
-    </div>
-  );
-}
-
-function Stat({ label, value }) {
-  return (
-    <div className="glass glasscard p-4 text-center">
-      <div className="mono text-xl leading-none text-foreground">{value}</div>
-      <div className="mt-2 text-xs muted">{label}</div>
     </div>
   );
 }

@@ -11,8 +11,8 @@ const APP    = "Graspr";
 
 async function sendEmail(to, subject, html) {
   if (!resend) {
-    // Dev fallback — log OTP to console so you can test without Resend
-    console.log(`\n[email] ── DEV MODE — email not sent ──`);
+    // Dev fallback - log OTP to console so you can test without Resend
+    console.log(`\n[email] ── DEV MODE - email not sent ──`);
     console.log(`[email] To:      ${to}`);
     console.log(`[email] Subject: ${subject}`);
     console.log(`[email] Body:    ${html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()}\n`);
@@ -58,7 +58,7 @@ async function sendOtpEmail(to, otp, purpose) {
 }
 
 // Sent when someone tries to register with an email that's already an
-// account — instead of the register route telling the *requester* that
+// account - instead of the register route telling the *requester* that
 // directly (a user-enumeration leak, since it reveals whether an email is a
 // Graspr user to anyone who tries), we tell the *actual account owner*
 // instead. The requester just sees the normal "check your email" response.
@@ -73,9 +73,9 @@ async function sendAccountExistsNotice(to) {
         has an account.
       </p>
       <p style="color:#555;font-size:14px">
-        If this was you, you already have an account — try logging in, or use "Forgot password" if
+        If this was you, you already have an account - try logging in, or use "Forgot password" if
         you don't remember your password.<br>
-        If this wasn't you, no action is needed — your account is safe and nothing has changed.
+        If this wasn't you, no action is needed - your account is safe and nothing has changed.
       </p>
     </div>`
   );

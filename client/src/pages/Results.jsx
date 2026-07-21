@@ -4,6 +4,7 @@ import { getSessionReview } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
+import DifficultyBadge from "../components/DifficultyBadge.jsx";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import ShareResultsModal from "../components/ShareResultsModal.jsx";
 import Modal from "../components/Modal.jsx";
@@ -257,6 +258,7 @@ export default function Results() {
                 <span className="text-sm dim w-6 mono">{i + 1}</span>
                 <TypeBadge type={a.type} />
                 <TopicBadge topic={a.topic} />
+                <DifficultyBadge difficulty={a.difficulty} />
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs mono dim">
@@ -354,6 +356,7 @@ function QuestionReviewModal({ attempts, index, onNavigate, onClose }) {
             <span className="mono text-[11px] uppercase tracking-wide dim">Q{index + 1} of {total}</span>
             {a.topic && <TopicBadge topic={a.topic} />}
             {a.type && <span className="mono text-[11px] uppercase tracking-wide dim">{TYPE_LABELS[a.type] || a.type}</span>}
+            <DifficultyBadge difficulty={a.difficulty} />
           </div>
           <button
             type="button"
@@ -375,7 +378,51 @@ function QuestionReviewModal({ attempts, index, onNavigate, onClose }) {
         {a.skipped === 1 ? (
           <p className="text-sm dim italic">This question was skipped.</p>
         ) : (
-          <FeedbackSections attempt={feedbackAttempt} />
+          <>
+            {/* Options for reference */}
+            <div className="mb-5">
+              <div className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "var(--text-muted)" }}>Options</div>
+              <div className="flex flex-col gap-2">
+                {a.options?.map((o, i) => {
+                  const isCorrectOpt = a.correct_option_index === i;
+                  const selectedWrong = a.selected_option_index === i && !isCorrectOpt;
+                  // Correct answer → green; the option the user wrongly picked → red;
+                  // everything else neutral.
+                  const optColor = isCorrectOpt ? "var(--green)" : selectedWrong ? "var(--red)" : null;
+                  return (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 rounded-lg px-3 py-2.5 text-sm"
+                    style={{
+                      background: isCorrectOpt
+                        ? "rgba(74,222,128,0.08)"
+                        : selectedWrong
+                        ? "rgba(248,113,113,0.1)"
+                        : "rgba(255,255,255,0.02)",
+                      border: `1px solid ${
+                        isCorrectOpt
+                          ? "rgba(74,222,128,0.3)"
+                          : selectedWrong
+                          ? "rgba(248,113,113,0.35)"
+                          : "rgba(255,255,255,0.08)"
+                      }`,
+                    }}
+                  >
+                    <span
+                      className="flex h-5 w-5 flex-none items-center justify-center rounded-full font-bold"
+                      style={{ color: optColor || "var(--text-muted)", fontSize: "12px" }}
+                    >
+                      {LETTERS[i]}
+                    </span>
+                    <span className="leading-[1.4] text-foreground">{o.text}</span>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <FeedbackSections attempt={feedbackAttempt} />
+          </>
         )}
 
         <div className="mt-6 flex items-center justify-between gap-3" style={{ borderTop: "1px solid var(--glass-border-lo)", paddingTop: 16 }}>

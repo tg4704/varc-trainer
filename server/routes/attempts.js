@@ -16,7 +16,7 @@ function calcIntuitionPoints({ isCorrect, timeTakenSeconds, eliminatedIndices, c
   if (eliminatedIndices && eliminatedIndices.length > 0) {
     for (const idx of eliminatedIndices) {
       if (idx === correctIndex) {
-        pts -= 5; // eliminated the correct answer — heavy penalty
+        pts -= 5; // eliminated the correct answer - heavy penalty
       } else {
         pts += 2; // correct elimination of a wrong option
       }
@@ -25,7 +25,7 @@ function calcIntuitionPoints({ isCorrect, timeTakenSeconds, eliminatedIndices, c
   return pts;
 }
 
-// POST /api/attempts/basic — record an answer or a skip
+// POST /api/attempts/basic - record an answer or a skip
 router.post("/basic", authenticate, async (req, res, next) => {
   try {
     const {

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { verifyEmail, resendOtp } from "../api.js";
 import { AuthShell, AuthCard, AuthError } from "../components/AuthShell.jsx";
+import { AUTH } from "../lib/limits.js";
 
 export default function VerifyEmail() {
   const [params] = useSearchParams();
@@ -100,7 +101,7 @@ export default function VerifyEmail() {
                 ref={(el) => (inputRefs.current[i] = el)}
                 type="text"
                 inputMode="numeric"
-                maxLength={6}
+                maxLength={AUTH.OTP_LENGTH}
                 value={d}
                 onChange={(e) => handleDigit(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}

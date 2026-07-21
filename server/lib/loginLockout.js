@@ -1,13 +1,13 @@
-// Account lockout — 5 failed attempts / 15 min, keyed by identifier+IP (not
+// Account lockout - 5 failed attempts / 15 min, keyed by identifier+IP (not
 // identifier alone) so a distributed credential-stuffing attempt against one
 // account from many IPs doesn't get to hide behind a single shared lock, and
 // so someone can't lock a victim out just by deliberately failing their
 // login from one IP (per-IP-and-identifier scoping limits that abuse).
-// In-memory — matches rateLimiters.js's note: fine for one Railway instance,
+// In-memory - matches rateLimiters.js's note: fine for one Railway instance,
 // move to Redis (Upstash) if the app ever runs on more than one.
 //
 // The lockout is reported with the SAME generic "Invalid credentials"
-// message the login route already uses for a wrong password — never reveal
+// message the login route already uses for a wrong password - never reveal
 // that an account is specifically locked, which would itself leak that the
 // account exists and is under attack.
 const MAX_ATTEMPTS = 5;
@@ -44,7 +44,7 @@ function clearFailures(identifier, ip) {
 }
 
 // Sweep expired entries periodically so the Map doesn't grow unbounded on a
-// long-running process — attempts stop mattering after WINDOW_MS anyway.
+// long-running process - attempts stop mattering after WINDOW_MS anyway.
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of failures) {

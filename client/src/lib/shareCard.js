@@ -1,5 +1,5 @@
 // Renders a session-results share card to a PNG Blob, drawn entirely on an
-// offscreen canvas — no server round-trip or third-party image service. Used
+// offscreen canvas - no server round-trip or third-party image service. Used
 // by ShareResultsModal for Download / Copy-to-clipboard / native Share sheet.
 const W = 1080;
 const H = 1080;
@@ -40,7 +40,7 @@ async function ensureFontsReady() {
 }
 
 // data: { accuracyPct, correct, total, trapPicked, dateLabel, headline, eyebrow, statLabel, displayName }
-// `trapPicked` is optional — pass null to render a generic second stat (e.g.
+// `trapPicked` is optional - pass null to render a generic second stat (e.g.
 // reasoning score) instead, via `statLabel`/`statValue`. `displayName` is the
 // student's name (falls back to their @username) and renders as a byline
 // under the date, top-right, mirroring the wordmark/eyebrow stack top-left.
@@ -83,7 +83,7 @@ export async function buildResultsShareCard(data) {
   ctx.font = '600 22px "IBM Plex Mono"';
   ctx.fillText(data.eyebrow || "DRILLS SESSION", 72, 144);
 
-  // Byline + date (top-right) — mirrors the wordmark/eyebrow stack on the left.
+  // Byline + date (top-right) - mirrors the wordmark/eyebrow stack on the left.
   ctx.textAlign = "right";
   if (data.displayName) {
     ctx.fillStyle = text;
@@ -123,7 +123,7 @@ export async function buildResultsShareCard(data) {
   ctx.fillStyle = text;
   wrapText(ctx, data.headline, cx, 704, 880, 50);
 
-  // Stat chips — second chip defaults to trap rate (Drills) but callers can
+  // Stat chips - second chip defaults to trap rate (Drills) but callers can
   // override with any [value, label] pair (e.g. Coach passes reasoning score).
   const stats = [
     [`${data.correct}/${data.total}`, "CORRECT"],

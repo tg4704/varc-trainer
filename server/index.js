@@ -8,7 +8,7 @@ const fs = require("fs");
 const logger = require("./logger");
 const { apiLimiter } = require("./lib/rateLimiters");
 
-// ── Sentry (error monitoring) — init before anything else ────────────────────
+// ── Sentry (error monitoring) - init before anything else ────────────────────
 // @sentry/node v8: init() wires automatic instrumentation (uncaught exceptions,
 // unhandled rejections), but errors routes pass to next(err) only reach Sentry
 // once setupExpressErrorHandler(app) is registered below, after all routes.
@@ -22,7 +22,7 @@ if (process.env.SENTRY_DSN) {
       tracesSampleRate: 0.1,
     });
   } catch {
-    console.warn("Sentry init failed — continuing without it");
+    console.warn("Sentry init failed - continuing without it");
     Sentry = null;
   }
 }
@@ -40,18 +40,18 @@ app.use((req, res, next) => {
 
 // contentSecurityPolicy off: the single Railway service also serves the
 // built React app's static HTML/JS, and a default CSP would need real
-// tuning (inline styles, font/analytics origins, etc.) to not break it —
+// tuning (inline styles, font/analytics origins, etc.) to not break it -
 // worth doing as a deliberate follow-up once the app is stable, not bundled
 // into this pass. The other helmet defaults (X-Frame-Options/clickjacking,
 // X-Content-Type-Options, etc.) are safe to turn on immediately.
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// gzip/brotli-negotiated compression on every response — API JSON payloads
+// gzip/brotli-negotiated compression on every response - API JSON payloads
 // (question lists, dashboard) and the static client build both benefit;
 // cuts bandwidth and Railway egress cost for close to zero CPU overhead.
 app.use(compression());
 
-// CORS allowlist — was previously wide open (bare `cors()`), which lets any
+// CORS allowlist - was previously wide open (bare `cors()`), which lets any
 // site's JS make authenticated-looking requests to this API using a
 // visitor's stored token. FRONTEND_URL already exists for the OAuth
 // redirect flow (see routes/auth.js); reused here so there's one source of
@@ -63,14 +63,14 @@ const allowedOrigins = [
 app.use(cors({
   origin(origin, callback) {
     // No Origin header = same-origin request (curl, server-to-server, the
-    // app's own static frontend served from this same process) — allow it.
+    // app's own static frontend served from this same process) - allow it.
     if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
 }));
 
-// Body size cap — without this, an attacker (or a bug) can POST an
+// Body size cap - without this, an attacker (or a bug) can POST an
 // arbitrarily large body; on the AI routes specifically that becomes an
 // expensive prompt, not just a memory/bandwidth problem. 100kb comfortably
 // covers the longest real payload (a full reading-map submission plus
@@ -82,7 +82,7 @@ app.use(express.json({
   verify: (req, res, buf) => { req.rawBody = buf; },
 }));
 
-// Health check — for uptime monitoring (UptimeRobot / Better Stack). Does a
+// Health check - for uptime monitoring (UptimeRobot / Better Stack). Does a
 // real DB round-trip so a healthy HTTP response can't mask a dead database.
 // Registered before the rate limiter so external monitor pings never count
 // against it and never need auth.
@@ -95,7 +95,7 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Global rate limit — see server/lib/rateLimiters.js for the "Balanced"
+// Global rate limit - see server/lib/rateLimiters.js for the "Balanced"
 // profile and the tighter per-route limiters (auth, AI) applied downstream.
 app.use("/api", apiLimiter);
 
@@ -104,7 +104,7 @@ app.use("/api", apiLimiter);
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
-    // Skip static asset noise — only log API routes
+    // Skip static asset noise - only log API routes
     if (!req.path.startsWith("/api")) return;
     const ms = Date.now() - start;
     const level = res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
@@ -256,7 +256,7 @@ app.use((req, res, next) => {
   app.locals.computeDashboard = computeDashboard;
 
   // Defined here for the same deploy-reliability reason as computeDashboard
-  // above — routes/dashboard.js also has its own copies of these two, which
+  // above - routes/dashboard.js also has its own copies of these two, which
   // act as a fallback if this block is ever removed.
   const TREND_RANGE_DAYS = { "7d": 7, "30d": 30, all: 3650 };
   const TREND_MAX_POINTS = 60;
@@ -294,7 +294,7 @@ app.use((req, res, next) => {
       // Combine Drills (attempts) + Coach (coach_attempts) activity, bucketed
       // by UTC date as a 'YYYY-MM-DD' STRING via to_char. Returning a real
       // date column makes pg hand back a JS Date whose String() form ("Tue
-      // Jul 07…") never matches the client's ISO keys — the long-standing
+      // Jul 07…") never matches the client's ISO keys - the long-standing
       // reason the heatmap always read 0. ~6 months for the contribution graph.
       const rows = await db.all(
         `SELECT day, SUM(cnt) AS count FROM (
@@ -341,13 +341,14 @@ app.use("/api/my-questions", require("./routes/myQuestions"));
 app.use("/api/admin", require("./routes/admin"));
 app.use("/api/coach", require("./routes/coach"));
 app.use("/api/billing", require("./routes/billing"));
+app.use("/api/bulletins", require("./routes/bulletins"));
 
 // ── Serve React build in production ──────────────────────────────────────────
 // When Railway runs `npm run build` for the client, the output lands at client/dist/.
 // Express then serves it statically and catches SPA deep links with the wildcard.
 const distPath = path.join(__dirname, "../client/dist");
 if (fs.existsSync(distPath)) {
-  // Hashed assets are immutable — cache them hard. index.html must NOT be
+  // Hashed assets are immutable - cache them hard. index.html must NOT be
   // cached so a new deploy is picked up immediately (prevents stale bundles
   // that reference chunk hashes the server no longer has).
   app.use(
@@ -370,7 +371,7 @@ if (fs.existsSync(distPath)) {
   // ChunkLoadError instead.
   app.get("*", (req, res) => {
     // Unknown API paths and static-asset requests must NOT fall through to
-    // index.html — returning HTML for a missing /api/* or /assets/*.js makes
+    // index.html - returning HTML for a missing /api/* or /assets/*.js makes
     // clients parse HTML as JSON/JS (cryptic crashes). Return a real 404.
     if (req.path.startsWith("/api/") || req.path.startsWith("/assets/") || path.extname(req.path)) {
       return res.status(404).json({ error: "Not found" });
@@ -380,7 +381,7 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-// Forwards errors passed to next(err) to Sentry — must be registered after
+// Forwards errors passed to next(err) to Sentry - must be registered after
 // all routes/middleware and before the final error handler below, or errors
 // thrown inside routes never reach Sentry (only truly uncaught exceptions
 // would, via the automatic instrumentation from Sentry.init() above).
@@ -393,7 +394,7 @@ app.use((err, req, res, next) => {
   console.error(err);
   // Respect a real status the error already carries (e.g. express.json()'s
   // body-size-limit rejection is a genuine 413, not a server fault) instead
-  // of flattening everything to 500 — a 413 response also carries a much
+  // of flattening everything to 500 - a 413 response also carries a much
   // more actionable message for the client than a generic server error.
   const status = err.status || err.statusCode || 500;
   const isProd = process.env.NODE_ENV === "production";
@@ -401,7 +402,7 @@ app.use((err, req, res, next) => {
   if (status === 413) {
     message = "Request body too large.";
   } else if (status < 500 && err.message) {
-    // 4xx from our own code — the message is intentional and safe to show.
+    // 4xx from our own code - the message is intentional and safe to show.
     message = err.message;
   } else {
     // 5xx = unexpected. Never leak internals (DB errors, file paths) to the

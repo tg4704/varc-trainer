@@ -1,6 +1,6 @@
 // Shared loading skeleton for the Dashboard, used by BOTH the App-level
 // Suspense fallback (while the lazy chunk loads) and the Dashboard's own
-// data-loading state — so the two never drift in style, block layout, or
+// data-loading state - so the two never drift in style, block layout, or
 // container width, which previously caused a double flash + width jump.
 // Kept in its own file so App.jsx can render it without importing (and
 // bundling) the heavy Dashboard page.

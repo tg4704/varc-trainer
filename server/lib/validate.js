@@ -1,11 +1,11 @@
 // Shared request-body validation middleware built on zod schemas. Applied
-// per-route (see server/lib/schemas.js for the actual schemas) — rejects
+// per-route (see server/lib/schemas.js for the actual schemas) - rejects
 // malformed/oversized/wrong-typed input before it reaches route logic, DB
 // queries, or (on the AI routes) an expensive model call.
 //
 // Unlike the auth *error*-message hardening (which deliberately stays
 // generic to prevent user enumeration), validation errors here return the
-// specific field + reason — that's normal form-UX, not a security leak; it
+// specific field + reason - that's normal form-UX, not a security leak; it
 // just tells a caller "reasoningText: max 4000 characters", not anything
 // about another user's account.
 const { z } = require("zod");

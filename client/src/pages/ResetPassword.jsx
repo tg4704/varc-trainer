@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { resetPassword, resendOtp } from "../api.js";
 import { AuthShell, AuthCard, AuthError, PasswordField } from "../components/AuthShell.jsx";
+import { AUTH } from "../lib/limits.js";
 
 export default function ResetPassword() {
   const [params] = useSearchParams();
@@ -96,7 +97,7 @@ export default function ResetPassword() {
                   ref={(el) => (inputRefs.current[i] = el)}
                   type="text"
                   inputMode="numeric"
-                  maxLength={6}
+                  maxLength={AUTH.OTP_LENGTH}
                   value={d}
                   onChange={(e) => handleDigit(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}

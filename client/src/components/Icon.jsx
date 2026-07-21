@@ -24,6 +24,8 @@ export default function Icon({ name, size = 18, stroke = 1.6, className, style }
     eye: (<><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="2.6" /></>),
     eyeOff: (<><path d="M3 3l18 18" /><path d="M10.6 6.2A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16 16 0 0 1-3 3.6M6.2 7.4A16 16 0 0 0 2.5 12S6 18 12 18a9.4 9.4 0 0 0 3.1-.5" /><path d="M9.8 9.9a2.6 2.6 0 0 0 3.7 3.7" /></>),
     flag: (<><path d="M5 21V4M5 4h11l-2 4 2 4H5" /></>),
+    megaphone: (<><path d="M3 11v2a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1z" /><path d="M10 6l8-3v18l-8-3" /><path d="M20 9.5a3 3 0 0 1 0 5" /></>),
+    notepad: (<><path d="M6 4h9l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" /><path d="M8 9h7M8 12.5h7M8 16h4" /></>),
     chevD: <path d="M6 9l6 6 6-6" />,
     chevU: <path d="M6 15l6-6 6 6" />,
     chevR: <path d="M9 6l6 6-6 6" />,

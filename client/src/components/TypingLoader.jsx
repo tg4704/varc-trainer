@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
-// Calm, minimal "AI is working" indicator — plain background, clean font,
+// Calm, minimal "AI is working" indicator - plain background, clean font,
 // text reveals like it's being typed (~1s for a short phrase), then just
 // sits with a blinking cursor for however long the actual wait is. No
-// spinner, no gimmicks — matches the same reveal technique already used by
+// spinner, no gimmicks - matches the same reveal technique already used by
 // the Home page's interactive demo card.
 export default function TypingLoader({ text, className = "" }) {
   const [typed, setTyped] = useState("");

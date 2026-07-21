@@ -27,7 +27,7 @@ export default function CookieConsent() {
       >
         <p className="text-[13px] leading-relaxed muted">
           We use analytics cookies to understand how Graspr is used and improve it. Essential
-          sign-in doesn't need your consent — this is only for optional analytics. See our{" "}
+          sign-in doesn't need your consent - this is only for optional analytics. See our{" "}
           <Link to="/privacy" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>
             Privacy Policy
           </Link>.

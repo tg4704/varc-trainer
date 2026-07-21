@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { forgotPassword } from "../api.js";
 import { AuthShell, AuthCard, AuthError } from "../components/AuthShell.jsx";
+import { AUTH } from "../lib/limits.js";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ export default function ForgotPassword() {
     setBusy(true);
     try {
       await forgotPassword({ email: email.trim() });
-      // Always navigate — server doesn't reveal if email exists
+      // Always navigate - server doesn't reveal if email exists
       navigate(`/reset-password?email=${encodeURIComponent(email.trim())}`);
     } catch (err) {
       setError(err.message);
@@ -41,6 +42,7 @@ export default function ForgotPassword() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
+              maxLength={AUTH.EMAIL_MAX}
               placeholder="you@email.com"
               required
             />

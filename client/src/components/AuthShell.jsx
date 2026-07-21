@@ -1,20 +1,45 @@
 import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "./Icon.jsx";
+import { AUTH } from "../lib/limits.js";
 
 // Centered full-height wrapper. The body already carries the ambient glow.
 // The gradient brand mark sits at the top so every auth page stays branded,
 // including the ones still on the legacy card until their own reskin.
 export function AuthShell({ children }) {
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-6 py-16">
-      <Link to="/" className="mb-7 flex items-center gap-2.5">
-        <BrandMark size={30} />
-        <span className="display text-xl tracking-tight text-foreground">
-          graspr<span style={{ color: "var(--teal)" }}>.</span>
-        </span>
-      </Link>
-      {children}
+    <div className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center px-6 py-16">
+      {/* Full-bleed summit backdrop — swap /auth-bg.jpg in to change it (see below). */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0">
+        <img
+          src="/summit.jpg"
+          alt=""
+          className="h-full w-full object-cover"
+          style={{ objectPosition: "center 32%" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(11,13,19,0.66) 0%, rgba(11,13,19,0.72) 45%, rgba(11,13,19,0.9) 100%)",
+          }}
+        />
+        {/* soft center vignette so the card reads cleanly over the peak */}
+        <div
+          className="absolute inset-0"
+          style={{ background: "radial-gradient(60% 55% at 50% 45%, rgba(11,13,19,0.5), transparent 75%)" }}
+        />
+      </div>
+
+      <div className="relative z-[1] flex flex-col items-center">
+        <Link to="/" className="mb-7 flex items-center gap-2.5">
+          <BrandMark size={30} />
+          <span className="display text-xl tracking-tight text-foreground">
+            graspr<span style={{ color: "var(--teal)" }}>.</span>in
+          </span>
+        </Link>
+        {children}
+      </div>
     </div>
   );
 }
@@ -41,7 +66,7 @@ export function BrandMark({ size = 38 }) {
   const inner = Math.round(size * 0.33);
   const outerRadius = Math.round(size * 0.3);
   const innerRadius = Math.max(2, Math.round(size * 0.1));
-  // No drop-shadow — the soft teal glow read as "smudgy" at small nav size.
+  // No drop-shadow - the soft teal glow read as "smudgy" at small nav size.
   return (
     <div
       className="flex items-center justify-center"
@@ -136,6 +161,7 @@ export function PasswordField({ label, value, onChange, hint, autoComplete, plac
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
+          maxLength={AUTH.PASSWORD_MAX}
           style={{ paddingRight: 56 }}
           placeholder={placeholder}
           required

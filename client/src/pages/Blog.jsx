@@ -5,7 +5,7 @@ import PageMeta from "../components/PageMeta.jsx";
 export default function Blog() {
   return (
     <div className="mx-auto flex max-w-[600px] flex-col items-center px-7 py-28 text-center">
-      <PageMeta title="Blog — Graspr" />
+      <PageMeta title="Blog · Graspr" />
       <span
         className="mb-6 flex h-14 w-14 items-center justify-center rounded-[16px]"
         style={{ background: "rgba(139,157,255,0.12)", border: "1px solid rgba(139,157,255,0.3)" }}

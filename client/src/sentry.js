@@ -1,5 +1,5 @@
 // Sentry browser integration (Phase 18 / deployment).
-// Loaded lazily so it never blocks the initial render — and skipped entirely
+// Loaded lazily so it never blocks the initial render - and skipped entirely
 // when VITE_SENTRY_DSN is unset (local dev, preview builds).
 let sentryModule = null;
 
@@ -19,11 +19,11 @@ export function initSentry() {
       sentryModule = mod;
     })
     .catch(() => {
-      // Non-critical — monitoring is nice-to-have; never block the app.
+      // Non-critical - monitoring is nice-to-have; never block the app.
     });
 }
 
-// Safe to call even if Sentry never loaded (dev, missing DSN, still loading) —
+// Safe to call even if Sentry never loaded (dev, missing DSN, still loading) -
 // silently no-ops. Used by ErrorBoundary so render crashes are actually visible.
 export function captureException(error, context) {
   sentryModule?.captureException(error, context ? { extra: context } : undefined);

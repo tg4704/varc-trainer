@@ -20,7 +20,7 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const FRONTEND_URL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 const BACKEND_URL  = (process.env.BACKEND_URL  || "http://localhost:3001").replace(/\/$/, "");
 
-// Stateless CSRF state: timestamp.HMAC — no session/cookie storage needed
+// Stateless CSRF state: timestamp.HMAC - no session/cookie storage needed
 function makeOAuthState() {
   const ts  = Date.now().toString(36);
   const sig = crypto.createHmac("sha256", process.env.JWT_SECRET || "dev-secret")
@@ -101,6 +101,11 @@ async function createOtp(userId, purpose) {
   return otp;
 }
 
+// Shown both when a real account has no outstanding code AND when the email
+// isn't registered at all — the two cases must be indistinguishable from the
+// outside so the OTP routes can't be used to enumerate accounts.
+const NO_ACTIVE_CODE = "No active code found. Please request a new one.";
+
 // Verify an OTP. Returns { ok, error }.
 async function verifyOtp(userId, otp, purpose) {
   const hash  = hashOtp(otp);
@@ -109,7 +114,7 @@ async function verifyOtp(userId, otp, purpose) {
     [userId, purpose]
   );
 
-  if (!token) return { ok: false, error: "No active code found. Please request a new one." };
+  if (!token) return { ok: false, error: NO_ACTIVE_CODE };
   if (new Date(token.expires_at) < new Date()) {
     await db.run("UPDATE otp_tokens SET used = 1 WHERE id = $1", [token.id]);
     return { ok: false, error: "Code has expired. Please request a new one." };
@@ -123,7 +128,7 @@ async function verifyOtp(userId, otp, purpose) {
     return { ok: false, error: `Incorrect code. ${left} attempt${left !== 1 ? "s" : ""} remaining.` };
   }
 
-  // Valid — mark used
+  // Valid - mark used
   await db.run("UPDATE otp_tokens SET used = 1 WHERE id = $1", [token.id]);
   return { ok: true };
 }
@@ -152,7 +157,7 @@ router.post("/register", authLimiter, validateBody(registerSchema), async (req, 
   if (password.length < 6)
     return res.status(400).json({ error: "Password must be at least 6 characters" });
 
-  // Username collisions stay an immediate, specific error — usernames are
+  // Username collisions stay an immediate, specific error - usernames are
   // already intentionally public/checkable live via GET /username-available
   // (used while picking a name, and again on Profile), so there's no new
   // leak in confirming one is taken here.
@@ -166,7 +171,7 @@ router.post("/register", authLimiter, validateBody(registerSchema), async (req, 
   // email list through this endpoint and build a list of real Graspr users
   // (classic account-enumeration attack). Instead of telling the requester,
   // notify the actual account owner and respond exactly like a fresh signup
-  // succeeded — the requester can't tell the difference either way.
+  // succeeded - the requester can't tell the difference either way.
   const emailTaken = await db.get("SELECT id FROM users WHERE email = $1", [email]);
   if (emailTaken) {
     sendAccountExistsNotice(email).catch((e) =>
@@ -177,7 +182,7 @@ router.post("/register", authLimiter, validateBody(registerSchema), async (req, 
 
   const hash   = bcrypt.hashSync(password, 12);
   const result = await db.run(
-    "INSERT INTO users (username, email, password_hash, name, email_verified) VALUES ($1, $2, $3, $4, 0) RETURNING id",
+    "INSERT INTO users (username, email, password_hash, name, email_verified, terms_accepted_at) VALUES ($1, $2, $3, $4, 0, NOW()) RETURNING id",
     [username, email, hash, (name || "").trim() || null]
   );
   const user   = await db.get("SELECT * FROM users WHERE id = $1", [result.lastId]);
@@ -188,7 +193,7 @@ router.post("/register", authLimiter, validateBody(registerSchema), async (req, 
     await sendOtpEmail(email, otp, "email_verification");
   } catch (e) {
     console.error("[auth] Failed to send verification email:", e.message);
-    // Don't fail registration — user can request resend
+    // Don't fail registration - user can request resend
   }
 
   res.json({ requiresVerification: true, email });
@@ -201,7 +206,7 @@ router.post("/login", authLimiter, validateBody(loginSchema), async (req, res, n
     if (!identifier || !password)
       return res.status(400).json({ error: "Username/email and password are required" });
 
-    // Locked out — same generic message as a wrong password below, so this
+    // Locked out - same generic message as a wrong password below, so this
     // never reveals that a lockout (or the account) exists.
     if (loginLockout.isLocked(identifier, req.ip)) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -248,28 +253,40 @@ router.post("/login", authLimiter, validateBody(loginSchema), async (req, res, n
 });
 
 // ── POST /api/auth/verify-email ───────────────────────────────────────────────
-router.post("/verify-email", validateBody(verifyEmailSchema), async (req, res, next) => {
+// authLimiter: this route mints a session token, so it belongs in the same
+// 10/min/IP bucket as login/register. Without it, any weakness here (an OTP
+// brute-force, or the bypass described below) is exploitable at the much
+// looser global 100/min rate.
+router.post("/verify-email", authLimiter, validateBody(verifyEmailSchema), async (req, res, next) => {
   try {
     const { email, otp } = req.body || {};
     if (!email || !otp) return res.status(400).json({ error: "Email and code are required" });
 
     const user = await db.get("SELECT * FROM users WHERE email = $1", [email]);
-    if (!user) return res.status(404).json({ error: "No account found with that email" });
-    if (user.email_verified) {
-      // Already verified — just log them in
-      return res.json({ token: signToken(user.id), user: publicUser(user) });
-    }
+    // An unknown email returns the SAME message an existing account with no
+    // outstanding code gets, so this route can't be used to test whether an
+    // address is registered — matching the anti-enumeration stance /register
+    // and /forgot-password already take. Keep in sync with verifyOtp().
+    if (!user) return res.status(400).json({ error: NO_ACTIVE_CODE });
 
+    // SECURITY: the OTP is verified BEFORE any token is issued, for verified
+    // and unverified accounts alike. A previous version short-circuited here
+    // ("already verified — just log them in") and returned a signed session
+    // token without ever checking the code, which let anyone log into any
+    // verified account knowing only its email address.
     const result = await verifyOtp(user.id, String(otp).trim(), "email_verification");
     if (!result.ok) return res.status(400).json({ error: result.error });
 
+    // Idempotent: a no-op when the account was already verified.
     await db.run("UPDATE users SET email_verified = 1 WHERE id = $1", [user.id]);
     res.json({ token: signToken(user.id), user: publicUser(user) });
   } catch (e) { next(e); }
 });
 
 // ── POST /api/auth/resend-otp ─────────────────────────────────────────────────
-router.post("/resend-otp", validateBody(resendOtpSchema), async (req, res, next) => {
+// authLimiter: this route sends real email on demand, so it's both an
+// enumeration surface and a way to spam a victim's inbox from one IP.
+router.post("/resend-otp", authLimiter, validateBody(resendOtpSchema), async (req, res, next) => {
   try {
     const { email, purpose } = req.body || {};
     if (!email || !purpose) return res.status(400).json({ error: "Email and purpose are required" });
@@ -278,8 +295,10 @@ router.post("/resend-otp", validateBody(resendOtpSchema), async (req, res, next)
 
     const user = await db.get("SELECT * FROM users WHERE email = $1", [email]);
     if (!user) {
-      // Don't reveal whether email exists
-      return res.json({ ok: true, message: "If an account exists, a code has been sent." });
+      // Byte-identical to the success response below. Returning a *different*
+      // shape here (previously an extra `message` field) was itself the tell
+      // that the address is unregistered.
+      return res.json({ ok: true });
     }
 
     const rate = await canResend(user.id, purpose);
@@ -324,7 +343,7 @@ router.post("/forgot-password", authLimiter, validateBody(forgotPasswordSchema),
 });
 
 // ── POST /api/auth/reset-password ────────────────────────────────────────────
-// Rate-limited too — this takes an OTP code, and without a limit here the
+// Rate-limited too - this takes an OTP code, and without a limit here the
 // same rate-limit gap that protects login would otherwise let someone brute
 // force the 6-digit reset code.
 router.post("/reset-password", authLimiter, validateBody(resetPasswordSchema), async (req, res, next) => {
@@ -336,13 +355,22 @@ router.post("/reset-password", authLimiter, validateBody(resetPasswordSchema), a
       return res.status(400).json({ error: "Password must be at least 6 characters" });
 
     const user = await db.get("SELECT * FROM users WHERE email = $1", [email]);
-    if (!user) return res.status(404).json({ error: "No account found with that email" });
+    // Same generic response as "no outstanding code" — see NO_ACTIVE_CODE.
+    // A 404 here previously made this route an email-enumeration oracle,
+    // undoing the hardening applied to /register and /forgot-password.
+    if (!user) return res.status(400).json({ error: NO_ACTIVE_CODE });
 
     const result = await verifyOtp(user.id, String(otp).trim(), "password_reset");
     if (!result.ok) return res.status(400).json({ error: result.error });
 
+    // Completing a password-reset OTP round-trip proves control of the mailbox
+    // just as strongly as the email_verification flow does, so mark the account
+    // verified here too. Without this, resetting your password returned a
+    // working session token while leaving email_verified = 0 — an unverified
+    // account could use the whole app, contradicting the "login is blocked
+    // until verified" invariant the onboarding checklist relies on.
     await db.run(
-      "UPDATE users SET password_hash = $1 WHERE id = $2",
+      "UPDATE users SET password_hash = $1, email_verified = 1 WHERE id = $2",
       [bcrypt.hashSync(newPassword, 12), user.id]
     );
     res.json({ token: signToken(user.id), user: publicUser(user) });
@@ -424,7 +452,7 @@ router.get("/google/callback", async (req, res) => {
           [googleId, user.id]
         );
       } else {
-        // New user — derive a unique username from their Google display name
+        // New user - derive a unique username from their Google display name
         const base = (name || email.split("@")[0])
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "")
@@ -498,9 +526,24 @@ router.patch("/username", authenticate, validateBody(usernamePatchSchema), async
   } catch (e) { next(e); }
 });
 
+// ── POST /api/auth/accept-terms ───────────────────────────────────────────────
+// Records 18+/Terms/Privacy consent for the logged-in user. Email signups capture
+// this at registration; Google OAuth users have no such step, so the post-sign-in
+// ChooseUsername screen calls this before letting a new user into the app. Only
+// stamps the first acceptance so a re-visit can't overwrite the original date.
+router.post("/accept-terms", authenticate, async (req, res, next) => {
+  try {
+    await db.run(
+      "UPDATE users SET terms_accepted_at = NOW() WHERE id = $1 AND terms_accepted_at IS NULL",
+      [req.userId]
+    );
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 // ── PATCH /api/auth/name ────────────────────────────────────────────────────
 // Optional display name (powers "Good evening, {name}" greetings). Unlike
-// username, not unique — trimmed, max 60 chars, empty string clears it to NULL.
+// username, not unique - trimmed, max 60 chars, empty string clears it to NULL.
 router.patch("/name", authenticate, validateBody(namePatchSchema), async (req, res, next) => {
   try {
     const raw = (req.body?.name ?? "").trim();
@@ -526,8 +569,8 @@ router.patch("/avatar", authenticate, validateBody(avatarPatchSchema), async (re
   } catch (e) { next(e); }
 });
 
-// ── PATCH /api/auth/profile — Student Profile card (favorite topic + bio) ──
-// Validated with .optional() (not .default()) on both fields deliberately —
+// ── PATCH /api/auth/profile - Student Profile card (favorite topic + bio) ──
+// Validated with .optional() (not .default()) on both fields deliberately -
 // confirmed via a direct zod test that an omitted key stays absent (not
 // filled in as undefined-then-dropped) in the parsed output, preserving the
 // hasOwnProperty check below that this route's independent-field-save logic
@@ -549,7 +592,7 @@ router.patch("/profile", authenticate, validateBody(profilePatchSchema), async (
       }
     }
 
-    // Only the field(s) actually sent are touched — each Student Profile row
+    // Only the field(s) actually sent are touched - each Student Profile row
     // (favorite topic, bio) saves independently, and a PATCH that omits one
     // must not wipe the other back to null.
     const current = await db.get("SELECT favorite_topic, bio FROM users WHERE id = $1", [req.userId]);

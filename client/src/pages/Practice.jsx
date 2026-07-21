@@ -17,7 +17,9 @@ import VoiceMicButton from "../components/VoiceMicButton.jsx";
 import TypingLoader from "../components/TypingLoader.jsx";
 import { useVoiceInput } from "../hooks/useVoiceInput.js";
 import { cn } from "../lib/utils.js";
-import { buildTextSegments, domOffsetToTextOffset, ANNOTATION_STYLES } from "../lib/textAnnotations.js";
+import { AI, MISC } from "../lib/limits.js";
+import { buildTextSegments, domOffsetToTextOffset, mergedAnnotationStyle } from "../lib/textAnnotations.js";
+import { loadAnnotations, saveAnnotations, clearAnnotations } from "../lib/annotationStore.js";
 import {
   getSessionQuestions,
   submitBasicAttempt,
@@ -49,15 +51,26 @@ function formatTime(totalSeconds) {
   return `${m}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
+// Pulls the curly-quoted spans back out of the reasoning text to send as
+// `quotedLines`. Deriving these at submit time (rather than tracking a parallel
+// array as the student types) means the payload always matches what they
+// actually wrote — editing or deleting a quote in the textarea just works.
+function extractQuotedLines(reasoning) {
+  if (!reasoning) return [];
+  const found = (reasoning.match(/"([^"]+)"/g) || [])
+    .map((m) => m.slice(1, -1).trim())
+    .filter((s) => s.length >= 3);
+  return [...new Set(found)].slice(0, 20); // server caps quotedLines at 20
+}
+
 // Per-question state shape
 function defaultQState() {
   return {
     tentativeSelected: null, // option picked but not yet locked
     locked: false,           // true after "Submit Answer"
     lockedSelected: null,    // the final locked option
-    lockTime: null,          // timestamp (ms) at lock — for timer freeze
+    lockTime: null,          // timestamp (ms) at lock - for timer freeze
     reasoning: "",
-    quotes: [],
     annotations: [],         // highlight/underline/note ranges over the passage
     pausedTimer: false,
     submitting: false,
@@ -97,16 +110,19 @@ export default function Practice() {
   // Selection popover (highlight / underline / note / quote)
   const [selectionPopover, setSelectionPopover] = useState(null);
   const [noteDraft, setNoteDraft] = useState(null); // string while composing a note, else null
+  const [annPopover, setAnnPopover] = useState(null); // { anns, x, y } - manage existing marks
+  const reasoningInputRef = useRef(null);
+  const lastCaretRef = useRef(null); // caret in the reasoning box, for quote insertion
   const paragraphRef = useRef(null);
 
-  // Passage font preferences (typeface / size / line spacing) — persisted
+  // Passage font preferences (typeface / size / line spacing) - persisted
   const [fontPrefs, setFontPrefs] = useState(loadFontPrefs);
   useEffect(() => {
     try { localStorage.setItem(FONT_PREFS_KEY, JSON.stringify(fontPrefs)); } catch {}
   }, [fontPrefs]);
 
   // Per-question active-time bookkeeping. A per-question timer must only count
-  // time actually spent ON that question — it pauses when you navigate away (or
+  // time actually spent ON that question - it pauses when you navigate away (or
   // manually pause) and resumes when you return, and freezes at lock. Per-session
   // timers ignore all of this and run continuously off sessionStartRef.
   //   activeAccumRef[idx] = committed active ms for that question
@@ -149,6 +165,34 @@ export default function Practice() {
 
   const cs = getCS(currentIdx); // current question state
 
+  // Track the caret in the reasoning box so insertQuote knows where to drop the
+  // quote. Bound natively to the textarea (React's onSelect polyfill doesn't
+  // fire reliably here) and only on events that mean the user moved the caret
+  // INSIDE the box. Deliberately not document-level `selectionchange`: selecting
+  // passage text also collapses the textarea's selectionStart to 0, which would
+  // record a bogus caret and drop every quote at the start of the reasoning.
+  useEffect(() => {
+    const el = reasoningInputRef.current;
+    if (!el) return;
+    const capture = () => { lastCaretRef.current = el.selectionStart; };
+    const events = ["keyup", "mouseup", "focus", "input"];
+    events.forEach((ev) => el.addEventListener(ev, capture));
+    return () => events.forEach((ev) => el.removeEventListener(ev, capture));
+  }, [cs.locked, currentIdx]); // the textarea only exists once locked
+
+  // Mirror annotations into localStorage so a refresh mid-session doesn't wipe
+  // every mark the student made while reading. Keyed by question id, since the
+  // session's question list is filtered server-side and indices can shift.
+  useEffect(() => {
+    if (!session || !questions) return;
+    const byQuestionId = {};
+    questions.forEach((q, i) => {
+      const anns = questionStates[i]?.annotations;
+      if (anns && anns.length > 0) byQuestionId[q.id] = anns;
+    });
+    saveAnnotations(session.id, byQuestionId);
+  }, [session, questions, questionStates]);
+
   // Keep reasoningRef in sync for voice callbacks
   useEffect(() => { reasoningRef.current = cs.reasoning; }, [cs.reasoning]);
 
@@ -160,7 +204,7 @@ export default function Practice() {
     const current = reasoningRef.current;
     const sep = current && !current.endsWith(" ") ? " " : "";
     const next = current + sep + text;
-    // Use ref to get current idx — avoids stale closure in this useCallback
+    // Use ref to get current idx - avoids stale closure in this useCallback
     setQuestionStates(prev => {
       const arr = [...prev];
       const idx = currentIdxRef.current;
@@ -168,6 +212,7 @@ export default function Practice() {
       return arr;
     });
     reasoningRef.current = next;
+    lastCaretRef.current = next.length; // dictation lands at the end
     setInterimText("");
   }, []);
 
@@ -199,7 +244,7 @@ export default function Practice() {
 
   // Drive the per-question active clock: start it when a fresh (unresolved,
   // unlocked, unpaused) question becomes current; commit the elapsed time when
-  // we leave it. Deliberately does NOT depend on questionStates — lock/pause
+  // we leave it. Deliberately does NOT depend on questionStates - lock/pause
   // freeze the clock via commitActive() directly, so re-running here on every
   // keystroke would be wrong. Per-session timers don't use this at all.
   useEffect(() => {
@@ -219,8 +264,8 @@ export default function Practice() {
   // ── Text selection: Highlight / Underline / Note / Quote ─────────────────
   // Highlight/underline/note are available any time while reading. Quote is
   // only available after lock (Submit Answer) and before feedback, since it
-  // feeds into the reasoning textarea for AI grading context (Phase 12).
-  function handleParagraphMouseUp() {
+  // inserts the cited line straight into the reasoning textarea (Phase 12).
+  function openSelectionPopover() {
     const sel = window.getSelection();
     const text = sel?.toString().trim();
     if (!text || text.length < 3) { setSelectionPopover(null); return; }
@@ -231,8 +276,18 @@ export default function Practice() {
     const rect = range.getBoundingClientRect();
     const start = domOffsetToTextOffset(paragraphRef.current, range.startContainer, range.startOffset);
     const end = domOffsetToTextOffset(paragraphRef.current, range.endContainer, range.endOffset);
+    setAnnPopover(null);
     setNoteDraft(null);
     setSelectionPopover({ text, x: rect.left + rect.width / 2, y: rect.bottom + 8, start, end });
+  }
+
+  function handleParagraphMouseUp() { openSelectionPopover(); }
+
+  // Touch needs its own path: there is no mouseup, and on touchend the browser
+  // hasn't necessarily settled the selection (or drawn its own handles) yet —
+  // so read it on the next frame rather than synchronously.
+  function handleParagraphTouchEnd() {
+    requestAnimationFrame(() => requestAnimationFrame(openSelectionPopover));
   }
 
   function addAnnotation(type, note) {
@@ -246,23 +301,67 @@ export default function Practice() {
     window.getSelection()?.removeAllRanges();
   }
 
-  function addQuote(text) {
-    patchCS(currentIdx, { quotes: [...cs.quotes.filter(q => q !== text), text] });
+  function removeAnnotation(id) {
+    patchCS(currentIdx, { annotations: cs.annotations.filter((a) => a.id !== id) });
+    setAnnPopover(null);
+  }
+
+  // Clicking existing marked text opens the manage popover (read the note,
+  // remove the mark). Without this the only escape was Clear-all in the font
+  // menu. Ignored while text is actively being selected, so a drag that ends
+  // on top of an existing highlight still opens the *selection* toolbar.
+  function handleAnnotationClick(e, anns) {
+    if (!anns || anns.length === 0) return;
+    if (window.getSelection()?.toString().trim()) return;
+    e.stopPropagation();
+    const rect = e.target.getBoundingClientRect();
+    setSelectionPopover(null);
+    setNoteDraft(null);
+    setAnnPopover({ anns, x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+  }
+
+  // Insert a quoted line into the reasoning textarea at the caret. Quotes are
+  // plain text in the reasoning the student is writing — they can add several,
+  // write around them, and edit or delete them like anything else they typed.
+  // The server's `quotedLines` is derived back out of the text at submit time
+  // (see extractQuotedLines) so it can never drift from what was actually sent.
+  function insertQuote(text) {
+    const current = cs.reasoning || "";
+    const quoted = `"${text}"`;
+    // Insert at the caret the student last had in the textarea, NOT at
+    // `selectionStart` read now: selecting passage text blurs the textarea and
+    // collapses its selection to 0, so reading it at insert time would drop
+    // every quote at the very start of the reasoning. lastCaretRef is captured
+    // while they were actually typing (see the textarea's onSelect).
+    const at = Math.min(lastCaretRef.current ?? current.length, current.length);
+    const before = current.slice(0, at);
+    const after = current.slice(at);
+    const lead = before && !/\s$/.test(before) ? " " : "";
+    const trail = after && !/^\s/.test(after) ? " " : "";
+    const next = before + lead + quoted + trail + after;
+    const caret = (before + lead + quoted).length;
+    lastCaretRef.current = caret;
+    patchCS(currentIdx, { reasoning: next });
+    reasoningRef.current = next;
     setSelectionPopover(null);
     setNoteDraft(null);
     window.getSelection()?.removeAllRanges();
-  }
-
-  function removeQuote(text) {
-    patchCS(currentIdx, { quotes: cs.quotes.filter(q => q !== text) });
+    // Restore focus and drop the caret just past the inserted quote so the
+    // student can keep typing their point without reaching for the mouse.
+    requestAnimationFrame(() => {
+      if (!reasoningInputRef.current) return;
+      reasoningInputRef.current.focus();
+      try { reasoningInputRef.current.setSelectionRange(caret, caret); } catch {}
+    });
   }
 
   useEffect(() => {
-    if (!selectionPopover || noteDraft !== null) return;
-    const dismiss = () => setSelectionPopover(null);
+    if (!selectionPopover && !annPopover) return;
+    if (noteDraft !== null) return;
+    const dismiss = () => { setSelectionPopover(null); setAnnPopover(null); };
     document.addEventListener("mousedown", dismiss);
     return () => document.removeEventListener("mousedown", dismiss);
-  }, [selectionPopover, noteDraft]);
+  }, [selectionPopover, annPopover, noteDraft]);
 
   // ── Session helpers ────────────────────────────────────────────────────────
   function isDeferred(sess) {
@@ -276,6 +375,7 @@ export default function Practice() {
     endedRef.current = true;
     try { await completeSession(sess.id); } catch {}
     clearActiveSession();
+    clearAnnotations(sess.id);
     if (isDeferred(sess)) {
       navigate(`/session-review?sessionId=${sess.id}`, { replace: true });
     } else {
@@ -284,12 +384,12 @@ export default function Practice() {
   }, [navigate]);
 
   // ── Nav guard: intercept nav clicks while a practice session is in progress.
-  // Practice sessions aren't resumable — the user must End (attempted counted,
+  // Practice sessions aren't resumable - the user must End (attempted counted,
   // unattempted skipped) or Discard (deleted, never happened).
   const { registerGuard, clearGuard, attemptNav } = useNavGuard();
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [leaveAction, setLeaveAction] = useState(null); // 'end' | 'discard' — which is in progress
+  const [leaveAction, setLeaveAction] = useState(null); // 'end' | 'discard' - which is in progress
   const leavePendingRef = useRef(null);
   const inProgressRef = useRef(false);
   useEffect(() => {
@@ -308,11 +408,11 @@ export default function Practice() {
     return () => clearGuard();
   }, [registerGuard, clearGuard]);
 
-  // navGuard only intercepts in-app nav (clicks that go through attemptNav) —
+  // navGuard only intercepts in-app nav (clicks that go through attemptNav) -
   // the browser's own Back button or closing/refreshing the tab bypasses it
   // entirely, with no warning. Answers already submitted aren't lost (each
   // is persisted as it happens, and the session itself survives a refresh
-  // via varc_active_session / GET /sessions/active) — but any half-typed,
+  // via varc_active_session / GET /sessions/active) - but any half-typed,
   // unsubmitted reasoning on the *current* question is gone with no notice.
   useEffect(() => {
     function handleBeforeUnload(e) {
@@ -325,7 +425,7 @@ export default function Practice() {
   }, []);
 
   function requestExit() {
-    if (!attemptNav("/dashboard")) return; // guard intercepted — shows LeaveSessionModal
+    if (!attemptNav("/dashboard")) return; // guard intercepted - shows LeaveSessionModal
     navigate("/dashboard");
   }
 
@@ -354,13 +454,14 @@ export default function Practice() {
       endedRef.current = true;
       inProgressRef.current = false;
       clearActiveSession();
+      clearAnnotations(session.id);
       setShowLeaveModal(false);
       leavePendingRef.current = null;
       navigate(to);
     }
   }
 
-  // Discard: delete the session and all its attempts — as if it never happened.
+  // Discard: delete the session and all its attempts - as if it never happened.
   async function discardSessionAndLeave() {
     if (leaving || !session) return;
     setLeaving(true);
@@ -370,6 +471,7 @@ export default function Practice() {
     endedRef.current = true;
     inProgressRef.current = false;
     clearActiveSession();
+    clearAnnotations(session.id);
     setShowLeaveModal(false);
     leavePendingRef.current = null;
     navigate(to);
@@ -387,7 +489,9 @@ export default function Practice() {
     stopVoice();
     setInterimText("");
     setSelectionPopover(null);
+    setAnnPopover(null);
     setNoteDraft(null);
+    lastCaretRef.current = null; // each question has its own reasoning box
     setParagraphOpen(true);
     if (!questionStartTimesRef.current[idx]) {
       questionStartTimesRef.current[idx] = Date.now();
@@ -408,9 +512,9 @@ export default function Practice() {
 
     // Optimistic: a skip has no correctness data to wait on (unlike answer
     // grading, which genuinely needs the server's response since the correct
-    // answer is never sent to the client early) — so mark it skipped and
+    // answer is never sent to the client early) - so mark it skipped and
     // advance immediately instead of blocking on the round-trip. Roll back
-    // only if the request genuinely fails (rare — network/auth).
+    // only if the request genuinely fails (rare - network/auth).
     patchCS(idx, { isSkipping: false, skipped: true });
     setQuestionStates(prev => {
       const nextIdx = findNextUnanswered(prev, idx);
@@ -495,14 +599,14 @@ export default function Practice() {
             sessionId: sess.id, questionId: q.id,
             selectedOptionIndex: s.lockedSelected,
             reasoningText: reasoning, timeTakenSeconds: timeTaken,
-            mode: practiceMode, quotedLines: s.quotes, deferred: false,
+            mode: practiceMode, quotedLines: extractQuotedLines(reasoning), deferred: false,
           });
         } else if (reasoning && isDeferred(sess)) {
           fb = await submitEvaluateAttempt({
             sessionId: sess.id, questionId: q.id,
             selectedOptionIndex: s.lockedSelected,
             reasoningText: reasoning, timeTakenSeconds: timeTaken,
-            mode: practiceMode, quotedLines: s.quotes, deferred: true,
+            mode: practiceMode, quotedLines: extractQuotedLines(reasoning), deferred: true,
           });
         } else {
           fb = await submitBasicAttempt({
@@ -558,7 +662,7 @@ export default function Practice() {
     }
   }
 
-  // Intuition submit (simpler — no lock step)
+  // Intuition submit (simpler - no lock step)
   async function handleIntuitionSubmit() {
     if (cs.tentativeSelected === null || cs.submitting || cs.skipped) return;
     const q = questions[currentIdx];
@@ -603,13 +707,13 @@ export default function Practice() {
     return null;
   }
 
-  // Timer helpers — returns text/tone for display, plus numeric remaining/total
+  // Timer helpers - returns text/tone for display, plus numeric remaining/total
   // for the donut ring. Accounts for a pre-lock pause (elapsed freezes while
   // cs.pausedTimer is true) and the existing freeze-at-lock behavior.
   // ── Timers ──────────────────────────────────────────────────────────────────
   // Two independent timers, shown in two places so they're never confused:
-  //   • Session timer — the whole run — lives in the top bar (labeled "Session").
-  //   • Question timer — only the current question — lives in the passage-panel
+  //   • Session timer - the whole run - lives in the top bar (labeled "Session").
+  //   • Question timer - only the current question - lives in the passage-panel
   //     donut (labeled "Question"), and ONLY exists in per_question scope.
   // Rules:
   //   count_up + per_question  → session counts up; question counts up (active only)
@@ -664,7 +768,7 @@ export default function Practice() {
     return Math.max(0, session.timerSeconds - (tick - start) / 1000);
   }
 
-  // Bootstrap — pulled out of the effect into its own callback so the
+  // Bootstrap - pulled out of the effect into its own callback so the
   // Retry button (below, in the error-state render) can actually re-run it.
   // Previously Retry only reset `error`/`loadingQuestions`, but the fetch
   // effect had already run its once-on-mount course, so nothing re-fired
@@ -691,7 +795,9 @@ export default function Practice() {
       if (bootstrapRunIdRef.current !== runId) return;
       questionStartTimesRef.current = { 0: Date.now() };
       setQuestions(qs);
-      setQuestionStates(qs.map(() => defaultQState()));
+      // Rehydrate annotations made before a refresh (see lib/annotationStore).
+      const storedAnns = loadAnnotations(s.id);
+      setQuestionStates(qs.map((q) => ({ ...defaultQState(), annotations: storedAnns[q.id] || [] })));
       setLoadingQuestions(false);
     } catch (e) {
       if (bootstrapRunIdRef.current !== runId) return;
@@ -769,7 +875,7 @@ export default function Practice() {
   }
 
   // Every question in this session was deleted/deactivated after the
-  // session started (e.g. an admin removed flagged questions) — without
+  // session started (e.g. an admin removed flagged questions) - without
   // this guard the page below renders nothing at all: no error, no Exit
   // button, just a blank screen with no way out except knowing to navigate
   // away manually.
@@ -787,7 +893,7 @@ export default function Practice() {
   const question = questions[currentIdx];
   if (!question) return null;
 
-  // Whether every question has a verdict or was skipped — drives the end-modal copy.
+  // Whether every question has a verdict or was skipped - drives the end-modal copy.
   const allAnswered = questions.every((_, i) => {
     const s = questionStates[i] || defaultQState();
     return s.feedback !== null || s.skipped;
@@ -912,7 +1018,7 @@ export default function Practice() {
   // ── Analysis mode ──────────────────────────────────────────────────────────
   const sTimer = sessionTimerInfo();
   const qTimer = questionTimerInfo();
-  const REASONING_MAX = 500;
+  const REASONING_MAX = AI.DRILL_REASONING_MAX;
   const reasoningLen = cs.reasoning.trim().length;
   const fb = cs.feedback;
 
@@ -953,7 +1059,7 @@ export default function Practice() {
       )}
 
       <div className="flex flex-col md:flex-row gap-10 md:pl-24">
-        {/* Left — passage panel (52%) */}
+        {/* Left - passage panel (52%) */}
         <div className="md:w-[52%] md:border-r md:pr-8" style={{ borderColor: "var(--glass-border-lo)" }}>
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -999,12 +1105,19 @@ export default function Practice() {
             <p
               ref={paragraphRef}
               onMouseUp={handleParagraphMouseUp}
+              onTouchEnd={handleParagraphTouchEnd}
               className="select-text cursor-text muted"
               style={{ fontFamily: currentFont.family, fontSize: fontPrefs.fontSize, lineHeight: currentSpacing, maxWidth: 560 }}
             >
               {segments.map((seg, i) =>
                 seg.ann ? (
-                  <mark key={i} style={{ ...ANNOTATION_STYLES[seg.ann.type], color: "inherit" }} title={seg.ann.type === "note" ? seg.ann.note : undefined}>
+                  <mark
+                    key={i}
+                    style={{ ...mergedAnnotationStyle(seg.anns), color: "inherit", cursor: "pointer" }}
+                    title={seg.anns.find((a) => a.type === "note")?.note || "Click to manage"}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => handleAnnotationClick(e, seg.anns)}
+                  >
                     {seg.text}
                   </mark>
                 ) : (
@@ -1023,7 +1136,7 @@ export default function Practice() {
           </div>
         </div>
 
-        {/* Right — question + options + reasoning + submit */}
+        {/* Right - question + options + reasoning + submit */}
         <div className="md:w-[48%]">
           {fb && <TypeBadge type={question.type} />}
           <h2 className={cn("display", fb ? "mt-2" : "")} style={{ fontSize: "19px", lineHeight: 1.4 }}>
@@ -1047,7 +1160,7 @@ export default function Practice() {
             ))}
           </div>
 
-          {/* Submit Answer button — visible when option selected but not yet locked */}
+          {/* Submit Answer button - visible when option selected but not yet locked */}
           {!cs.locked && !fb && cs.tentativeSelected !== null && (
             <div className="mt-4 animate-slide-up">
               <button className="btn btn-primary fx-sheen w-full" onClick={lockAnswer}>
@@ -1059,7 +1172,7 @@ export default function Practice() {
             </div>
           )}
 
-          {/* Reasoning textarea — appears after lock, before feedback */}
+          {/* Reasoning textarea - appears after lock, before feedback */}
           {cs.locked && !fb && (
             <div className="mt-5 animate-slide-up">
               <div className="flex items-baseline justify-between">
@@ -1070,19 +1183,16 @@ export default function Practice() {
                   <VoiceMicButton isRecording={isVoiceRecording} onClick={toggleVoice} disabled={cs.submitting} />
                 )}
               </div>
-              {cs.quotes.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {cs.quotes.map((q, qi) => (
-                    <span key={qi} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs" style={{ border: "1px solid rgba(93,202,165,0.3)", background: "rgba(93,202,165,0.08)", color: "var(--teal)" }}>
-                      <span className="italic" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block" }}>"{q}"</span>
-                      <button type="button" onClick={() => removeQuote(q)} className="ml-0.5 flex-none opacity-60 hover:opacity-100">×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              <p className="mt-1 text-xs dim">
+                Select any line in the passage and hit <span style={{ color: "var(--teal)" }}>❝ Quote</span> to drop it in here — as many as you need.
+              </p>
               <Textarea
+                ref={reasoningInputRef}
                 value={cs.reasoning}
-                onChange={(e) => patchCS(currentIdx, { reasoning: e.target.value })}
+                onChange={(e) => {
+                  lastCaretRef.current = e.target.selectionStart;
+                  patchCS(currentIdx, { reasoning: e.target.value });
+                }}
                 disabled={cs.submitting}
                 rows={3}
                 className="mt-2 resize-none"
@@ -1103,7 +1213,7 @@ export default function Practice() {
 
           {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
-          {/* Submit reasoning button — only when locked & no feedback yet.
+          {/* Submit reasoning button - only when locked & no feedback yet.
               No skip here: the answer is already locked, so the user must submit. */}
           {cs.locked && !fb && (
             <div className="mt-4">
@@ -1130,7 +1240,7 @@ export default function Practice() {
             </div>
           )}
 
-          {/* Not yet started state — show "Not sure" (skip) only */}
+          {/* Not yet started state - show "Not sure" (skip) only */}
           {!cs.locked && !fb && cs.tentativeSelected === null && (
             <div className="mt-4">
               <button className="btn btn-glass fx-ring w-full" disabled={cs.isSkipping}
@@ -1175,7 +1285,7 @@ export default function Practice() {
       </div>
     </div>
 
-    {/* Selection popover — Highlight / Underline / Note / Quote.
+    {/* Selection popover - Highlight / Underline / Note / Quote.
         Clamp the (centered) x so the toolbar can't clip off either edge when
         text is selected near the screen edge on narrow viewports. HALF covers
         the widest state (~5 labelled buttons). */}
@@ -1208,7 +1318,7 @@ export default function Practice() {
               {cs.locked && !cs.feedback && practiceMode === "analysis" && (
                 <>
                   <span className="mx-0.5 h-4 w-px" style={{ background: "rgba(255,255,255,0.14)" }} />
-                  <SelToolBtn onClick={() => addQuote(selectionPopover.text)}>
+                  <SelToolBtn onClick={() => insertQuote(selectionPopover.text)}>
                     <span style={{ color: "var(--teal)" }}>❝</span> Quote
                   </SelToolBtn>
                 </>
@@ -1221,6 +1331,7 @@ export default function Practice() {
                 value={noteDraft}
                 onChange={(e) => setNoteDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && noteDraft.trim()) addAnnotation("note", noteDraft.trim()); }}
+                maxLength={MISC.PASSAGE_NOTE_MAX}
                 placeholder="Add a note…"
                 className="rounded-[8px] px-2.5 py-1.5 text-[12.5px]"
                 style={{ width: 180, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.14)", color: "var(--text)" }}
@@ -1238,6 +1349,51 @@ export default function Practice() {
           )}
         </div>
       </div>
+      );
+    })()}
+
+    {/* Manage popover for an existing mark - shows any attached note (they were
+        previously write-only, stored but never surfaced) and lets a single
+        annotation be removed instead of only Clear-all from the font menu. */}
+    {annPopover && (() => {
+      const HALF = 140, PAD = 8;
+      const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+      const clampedX = vw > 2 * (HALF + PAD)
+        ? Math.min(Math.max(annPopover.x, HALF + PAD), vw - HALF - PAD)
+        : vw / 2;
+      return (
+        <div style={{ position: "fixed", left: clampedX, top: annPopover.y, transform: "translateX(-50%)", maxWidth: "calc(100vw - 16px)", zIndex: 120 }}>
+          <div
+            className="rounded-[12px] p-2"
+            style={{ width: 2 * HALF, background: "rgba(20,23,31,0.95)", backdropFilter: "blur(18px) saturate(150%)", WebkitBackdropFilter: "blur(18px) saturate(150%)", border: "1px solid rgba(255,255,255,0.14)" }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {annPopover.anns.map((a) => (
+              <div key={a.id} className="flex items-start gap-2 rounded-[8px] px-1.5 py-1.5">
+                <span className="mt-[3px] flex-none">
+                  {a.type === "highlight" && <span className="block h-2 w-2 rounded-full" style={{ background: "var(--teal)" }} />}
+                  {a.type === "underline" && <span className="block h-[2px] w-3 rounded-full" style={{ background: "var(--periwinkle)" }} />}
+                  {a.type === "note" && <Icon name="pencil" size={12} style={{ color: "var(--amber)" }} />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] uppercase tracking-wide dim">{a.type}</div>
+                  {a.type === "note" && a.note && (
+                    <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "var(--text)" }}>{a.note}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAnnotation(a.id)}
+                  title="Remove this mark"
+                  className="flex-none rounded-[6px] px-1.5 py-0.5 text-[12px] opacity-60 hover:opacity-100"
+                  style={{ color: "var(--text-2)" }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       );
     })()}
 
@@ -1367,7 +1523,7 @@ function LeaveSessionModal({ busy, action, onEnd, onDiscard, onStay }) {
   );
 }
 
-// ── Deferred mode — minimal "saved" confirmation, no AI feedback ─────────────
+// ── Deferred mode - minimal "saved" confirmation, no AI feedback ─────────────
 function DeferredSavedCard({ feedback, isLast, onNext, onEnd }) {
   return (
     <div className="mt-6 space-y-3 animate-slide-up">
@@ -1389,7 +1545,7 @@ function DeferredSavedCard({ feedback, isLast, onNext, onEnd }) {
   );
 }
 
-// ── Analysis mode feedback — tabbed AI feedback card ──────────────────────────
+// ── Analysis mode feedback - tabbed AI feedback card ──────────────────────────
 function AnalysisFeedback({ feedback, question, selectedOptionIndex, reasoningText, isLast, onRetryAI, retryingAI, onNext, onEnd }) {
   const attempt = {
     options: question.options,
@@ -1432,7 +1588,7 @@ function AnalysisFeedback({ feedback, question, selectedOptionIndex, reasoningTe
   );
 }
 
-// ── Flag modal — report a problem with a question ──────────────────────────────
+// ── Flag modal - report a problem with a question ──────────────────────────────
 const FLAG_REASONS = [
   { value: "confusing_wording", label: "Confusing wording" },
   { value: "possible_error",    label: "Possible error" },
@@ -1490,7 +1646,7 @@ function FlagModal({ questionId, onClose, onSuccess }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={2}
-              maxLength={300}
+              maxLength={MISC.FLAG_NOTE_MAX}
               className="w-full resize-none rounded-[12px] px-3.5 py-3 text-sm"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.12)", color: "var(--text)" }}
               placeholder="Describe what felt off, in your own words."

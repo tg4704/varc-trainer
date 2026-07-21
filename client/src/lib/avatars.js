@@ -1,7 +1,7 @@
 // Profile-picture presets and encoding. Three kinds, no external images:
-//   grad  — a gradient circle + the user's initial (the original/default look)
-//   icon  — one of the app's line-art icons (Icon.jsx) on a gradient circle
-//   emoji — a single emoji on a neutral circle
+//   grad  - a gradient circle + the user's initial (the original/default look)
+//   icon  - one of the app's line-art icons (Icon.jsx) on a gradient circle
+//   emoji - a single emoji on a neutral circle
 // Encoded as a single string stored in users.avatar_id: "kind:value" or, for
 // icons, "icon:name:bgGradientId". A bare string with no colon is the legacy
 // gradient-only format ("teal") and still parses as kind=grad for old rows.

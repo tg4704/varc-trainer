@@ -10,6 +10,7 @@ import TopicBadge from "../components/TopicBadge.jsx";
 import DashboardSkeleton from "../components/DashboardSkeleton.jsx";
 import { InfoDot } from "../components/Tooltip.jsx";
 import { trapLabel, trapDescription } from "../trapTypes.js";
+import SideDock from "../components/SideDock.jsx";
 
 const TYPE_LABELS = {
   inference: "Inference",
@@ -75,7 +76,7 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
     coachApi.stats().then(setCoachStats).catch(() => {}).finally(() => setCoachLoading(false));
   }, [tab, coachStats]);
 
-  // "Pick up where you left off" — only Coach sessions are resumable (Drills
+  // "Pick up where you left off" - only Coach sessions are resumable (Drills
   // sessions are explicitly End-only, see Practice.jsx), so this only ever
   // surfaces an in-progress Coach passage.
   useEffect(() => {
@@ -108,6 +109,8 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
 
   return (
     <div className="max-w-[1240px] mx-auto px-4 pt-9 pb-14 md:px-11">
+      {/* headerSlot is only set in admin "view as user" mode - skip the dock there */}
+      {!headerSlot && <SideDock />}
       {headerSlot}
       <div>
         <h1 className="display text-[34px] leading-[1.1]">
@@ -116,9 +119,9 @@ export default function Dashboard({ fetcher = getDashboard, headerSlot = null })
         <p className="mt-2 muted text-sm">{today}. Lifetime stats across all your sessions.</p>
       </div>
 
-      {/* Tab switcher — segmented pill */}
+      {/* Tab switcher - segmented pill */}
       <div className="mt-6 inline-flex gap-1 rounded-[11px] p-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--glass-border-lo)" }}>
-        {[["practice", "Practice"], ["coach", "Coach"]].map(([t, label]) => (
+        {[["practice", "Drills"], ["coach", "Coach"]].map(([t, label]) => (
           <button
             key={t}
             type="button"
@@ -204,7 +207,7 @@ function CoachTab({ stats, loading }) {
     </div>
   );
 
-  const accuracyPct = stats.accuracy != null ? `${Math.round(stats.accuracy * 100)}%` : "—";
+  const accuracyPct = stats.accuracy != null ? `${Math.round(stats.accuracy * 100)}%` : "-";
   return (
     <div className="mt-6 space-y-8">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -212,7 +215,7 @@ function CoachTab({ stats, loading }) {
           ["Passages practiced", stats.totalSessions],
           ["Questions answered", stats.totalQuestions],
           ["Accuracy", accuracyPct],
-          ["Avg reasoning", stats.avgReasoningScore != null ? `${stats.avgReasoningScore}/5` : "—"],
+          ["Avg reasoning", stats.avgReasoningScore != null ? `${stats.avgReasoningScore}/5` : "-"],
         ].map(([label, value]) => (
           <div key={label} className="glass glasscard p-4">
             <p className="text-xs muted">{label}</p>
@@ -239,7 +242,7 @@ function CoachTab({ stats, loading }) {
             })}
           </div>
           <p className="mt-3 text-xs dim">
-            Avg reasoning score: {stats.avgReasoningScore != null ? `${stats.avgReasoningScore}/5` : "—"} (higher = stronger first-pass reasoning)
+            Avg reasoning score: {stats.avgReasoningScore != null ? `${stats.avgReasoningScore}/5` : "-"} (higher = stronger first-pass reasoning)
           </p>
         </div>
       )}
@@ -274,8 +277,8 @@ function CoachTab({ stats, loading }) {
 
 // ── KPI row ──────────────────────────────────────────────
 function HeaderStats({ data }) {
-  const avg = data.avgReasoningScore != null ? `${Number(data.avgReasoningScore).toFixed(1)}/5` : "—";
-  // [label, value, valueColor] — accuracy keeps its threshold colour, the rest
+  const avg = data.avgReasoningScore != null ? `${Number(data.avgReasoningScore).toFixed(1)}/5` : "-";
+  // [label, value, valueColor] - accuracy keeps its threshold colour, the rest
   // are neutral. (Status dots removed per the user's request.)
   const cards = [
     ["Questions answered", String(data.answeredCount), "var(--text)"],
@@ -338,7 +341,7 @@ function AccuracyTrendChart() {
 
   const days = trend?.days || [];
   const W = 480, H = 130, padX = 14, padT = 14, padB = 24;
-  let points = "", area = "", dotX = 0, dotY = 0, cur = "—", delta = 0;
+  let points = "", area = "", dotX = 0, dotY = 0, cur = "-", delta = 0;
 
   if (days.length >= 2) {
     const vals = days.map((d) => Math.round(d.accuracy * 100));
@@ -415,11 +418,6 @@ function WeakByTypeList({ byType }) {
     <div className="glass flex flex-col p-[20px_22px]">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold">Where you're losing points</div>
-        {rows[0] && (
-          <Link to={`/setup?type=${encodeURIComponent(rows[0].type)}`} className="fx-underline text-xs" style={{ color: "var(--periwinkle)" }}>
-            Drill →
-          </Link>
-        )}
       </div>
       <p className="mt-1 mb-4 text-xs muted">Lowest accuracy by question type.</p>
       <div className="flex flex-col" style={{ gap: 17 }}>
@@ -524,7 +522,7 @@ function WeeklyHeatmap() {
   return (
     <div className="glass p-[20px_22px]">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <SectionTitle>Practice activity</SectionTitle>
+        <SectionTitle>Drills activity</SectionTitle>
         <span className="text-xs dim">{total} question{total === 1 ? "" : "s"} in the last 6 months</span>
       </div>
 
@@ -663,8 +661,8 @@ function TopicAccuracy({ byTopic }) {
 
 // ── Intuition stats ────────────────────────────────────────
 function IntuitionStats({ stats }) {
-  const elimAcc = stats.eliminationAccuracy != null ? `${Math.round(stats.eliminationAccuracy * 100)}%` : "—";
-  const avgTime = stats.avgTimeSecs != null ? `${Math.round(stats.avgTimeSecs)}s` : "—";
+  const elimAcc = stats.eliminationAccuracy != null ? `${Math.round(stats.eliminationAccuracy * 100)}%` : "-";
+  const avgTime = stats.avgTimeSecs != null ? `${Math.round(stats.avgTimeSecs)}s` : "-";
   return (
     <section className="mt-8">
       <SectionTitle>Intuition mode</SectionTitle>
@@ -687,7 +685,7 @@ function IntuitionStats({ stats }) {
 
 // ── Recent sessions ──────────────────────────────────────────────────────
 // A flat list of the user's most recent sessions. Clicking one opens its
-// Results screen — the same recap shown right after completing a Drills run.
+// Results screen - the same recap shown right after completing a Drills run.
 function relativeDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -739,7 +737,7 @@ function RecentSessionRow({ session, first }) {
       </div>
       <div className="flex-none text-right">
         <div className="mono text-[15px] font-semibold" style={{ color: accuracyColor(acc) }}>
-          {answered ? pct(acc) : "—"}
+          {answered ? pct(acc) : "-"}
         </div>
         <div className="text-[10.5px] dim">{correct}/{answered} correct</div>
       </div>

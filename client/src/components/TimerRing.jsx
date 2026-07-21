@@ -1,7 +1,7 @@
 // Small SVG donut timer for the passage panel header. Shared shape with
 // IntuitionTimer's countdown ring, but compact (default 54px), shows MM:SS
 // text, and optionally supports pause/resume (hover reveals a play/pause
-// overlay) — used for the per-question timer in Analysis mode.
+// overlay) - used for the per-question timer in Analysis mode.
 function formatMMSS(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds));
   const m = Math.floor(s / 60);
@@ -10,7 +10,7 @@ function formatMMSS(totalSeconds) {
 
 export default function TimerRing({ seconds, totalSeconds, paused = false, onTogglePause, size = 54 }) {
   const clamped = Math.max(0, seconds ?? 0);
-  // No fixed total (count-up mode) — show a simple filled ring, not a depleting
+  // No fixed total (count-up mode) - show a simple filled ring, not a depleting
   // fraction, since there's nothing to count down toward.
   const countUp = totalSeconds == null;
   const fraction = countUp ? 1 : totalSeconds > 0 ? clamped / totalSeconds : 0;

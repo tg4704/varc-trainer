@@ -1,5 +1,15 @@
 import { useEffect, useRef } from "react";
 
+// Accepts a ref, a raw element, or a getter function, and returns the element
+// (or null). A getter is the useful form when the target only exists later, or
+// lives inside a wrapper ref - e.g. () => navRef.current?.querySelector("button").
+function resolveFocusTarget(v) {
+  if (!v) return null;
+  if (typeof v === "function") return v() || null;
+  if (typeof v === "object" && "current" in v) return v.current || null;
+  return v;
+}
+
 // Shared modal shell: backdrop fade-in, dialog semantics, focus trap,
 // Esc-to-close, and focus restoration on unmount. Callers provide the panel as
 // children (keep the panel's own onClick={e => e.stopPropagation()} so a click
@@ -16,12 +26,24 @@ export default function Modal({
   labelledBy,
   className = "",
   // "center" (default) centers the panel; "top" top-aligns and lets the whole
-  // overlay scroll — use for panels that can be taller than the viewport.
+  // overlay scroll - use for panels that can be taller than the viewport.
   align = "center",
+  // Optional explicit focus-restore target: a ref, an element, or a function
+  // returning an element. Needed when whatever opened the modal is unmounted
+  // by the very click that opened it - e.g. an item inside a dropdown that
+  // closes on select. In that case the activeElement captured below is already
+  // detached from the document by the time we try to restore, and .focus() on
+  // a detached node silently does nothing, dropping focus to <body>.
+  returnFocusTo,
   children,
 }) {
   const rootRef = useRef(null);
   const prevFocus = useRef(null);
+  // Held in a ref so the unmount cleanup reads the latest value without
+  // needing returnFocusTo in the effect's dependency array (which would
+  // re-run the effect and re-capture prevFocus mid-life).
+  const returnFocusToRef = useRef(returnFocusTo);
+  returnFocusToRef.current = returnFocusTo;
 
   useEffect(() => {
     prevFocus.current = document.activeElement;
@@ -64,10 +86,16 @@ export default function Modal({
     document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("keydown", onKey, true);
-      // Restore focus to whatever opened the modal.
-      if (prevFocus.current && typeof prevFocus.current.focus === "function") {
-        prevFocus.current.focus();
-      }
+
+      // Restore focus to whatever opened the modal. Prefer the caller's
+      // explicit target, fall back to the element that had focus at mount.
+      // Both are checked with isConnected: focusing a node that's been removed
+      // from the DOM is a silent no-op that strands focus on <body>.
+      const explicit = resolveFocusTarget(returnFocusToRef.current);
+      const target =
+        (explicit?.isConnected ? explicit : null) ||
+        (prevFocus.current?.isConnected ? prevFocus.current : null);
+      if (typeof target?.focus === "function") target.focus();
     };
   }, [onClose]);
 

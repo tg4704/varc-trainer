@@ -105,7 +105,7 @@ export default function FeedbackSections({ attempt }) {
         )}
       </div>
 
-      {/* Reasoning echo — the student's own words, when we have them */}
+      {/* Reasoning echo - the student's own words, when we have them */}
       {reasoningText && (
         <div
           className="flex items-start gap-2.5 rounded-[13px] px-4 py-[13px]"

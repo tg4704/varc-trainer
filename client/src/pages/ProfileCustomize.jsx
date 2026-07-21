@@ -1,4 +1,4 @@
-// Dedicated profile-picture picker — split out of the main Profile page so
+// Dedicated profile-picture picker - split out of the main Profile page so
 // Profile itself reads as account info + Student Profile, not a grid of
 // swatches. Three kinds: solid color (gradient + initial), icon, emoji.
 import { useState } from "react";

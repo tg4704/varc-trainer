@@ -1,11 +1,11 @@
 // Floating question stepper, dockable to any edge of the viewport (desktop
-// only — see Practice.jsx's mobile fallback). Shows previous/current/next
+// only - see Practice.jsx's mobile fallback). Shows previous/current/next
 // question buttons; hovering the current one reveals a popover with every
 // question in a grid, plus a colour legend. A "move" handle cycles the dock
 // between left → top → right → bottom so it never has to sit on top of the
-// reading text — the chosen edge is remembered in localStorage across
+// reading text - the chosen edge is remembered in localStorage across
 // sessions. All per-question status (correct/incorrect/seen/unseen) already
-// lives in the caller's questionStates[] — this is a pure presentation layer.
+// lives in the caller's questionStates[] - this is a pure presentation layer.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Icon from "./Icon.jsx";

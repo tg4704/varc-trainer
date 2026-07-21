@@ -1,4 +1,4 @@
-// Shared "danger zone" modals — used from both the TopNav avatar dropdown
+// Shared "danger zone" modals - used from both the TopNav avatar dropdown
 // and the Profile page's Danger zone section, so the two entry points stay
 // in sync instead of drifting into two copies.
 import { useState } from "react";
@@ -6,7 +6,7 @@ import Modal from "./Modal.jsx";
 import { resetAccount, deleteAccount } from "../api.js";
 import { clearActiveSession } from "../session.js";
 
-export function ResetDataModal({ onClose, onDone }) {
+export function ResetDataModal({ onClose, onDone, returnFocusTo }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -24,7 +24,7 @@ export function ResetDataModal({ onClose, onDone }) {
   }
 
   return (
-    <Modal onClose={busy ? undefined : onClose} labelledBy="reset-data-title">
+    <Modal onClose={busy ? undefined : onClose} labelledBy="reset-data-title" returnFocusTo={returnFocusTo}>
       <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <h2 id="reset-data-title" className="text-lg font-bold text-foreground">Reset all practice data?</h2>
         <p className="mt-2 text-sm muted">
@@ -50,10 +50,10 @@ export function ResetDataModal({ onClose, onDone }) {
   );
 }
 
-// Permanently deletes the account — distinct from Reset (which keeps the
+// Permanently deletes the account - distinct from Reset (which keeps the
 // account, just wipes data). Requires typing DELETE to reduce misclicks on
 // something irreversible.
-export function DeleteAccountModal({ onClose, onDeleted }) {
+export function DeleteAccountModal({ onClose, onDeleted, returnFocusTo }) {
   const [confirmText, setConfirmText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -74,7 +74,7 @@ export function DeleteAccountModal({ onClose, onDeleted }) {
   }
 
   return (
-    <Modal onClose={busy ? undefined : onClose} labelledBy="delete-account-title">
+    <Modal onClose={busy ? undefined : onClose} labelledBy="delete-account-title" returnFocusTo={returnFocusTo}>
       <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <h2 id="delete-account-title" className="text-lg font-bold" style={{ color: "var(--red)" }}>Delete your account?</h2>
         <p className="mt-2 text-sm muted">

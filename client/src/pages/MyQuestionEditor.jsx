@@ -4,6 +4,7 @@ import { myQuestions } from "../api.js";
 import { Textarea } from "../components/ui/input.jsx";
 import { Badge } from "../components/ui/badge.jsx";
 import { Sparkles } from "lucide-react";
+import { AI, QUESTION } from "../lib/limits.js";
 
 const TYPES = ["inference", "tone", "title", "detail", "application"];
 const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
@@ -33,6 +34,13 @@ function DraftEntry({ onDraft }) {
   const [error, setError] = useState(null);
 
   const wordCount = passage.trim().split(/\s+/).filter(Boolean).length;
+  // The server gate is on characters (generateDraftSchema.paragraph), not
+  // words, so check the same unit the server does - a 50-word paste of very
+  // long words can clear the word floor and still be rejected, and a long
+  // article can clear both floors and blow the ceiling.
+  const charCount = passage.trim().length;
+  const tooShort = charCount < AI.DRAFT_PARAGRAPH_MIN;
+  const tooLong = charCount > AI.DRAFT_PARAGRAPH_MAX;
 
   async function generate() {
     setLoading(true);
@@ -68,8 +76,13 @@ function DraftEntry({ onDraft }) {
           placeholder="Paste any dense, argument-driven paragraph (90-500 words)…"
           className="resize-none"
         />
-        <div className="mt-1 text-right text-xs" style={{ color: wordCount >= 50 ? "var(--green)" : "var(--text-2)" }}>
-          {wordCount} words {wordCount < 50 && "(need at least 50)"}
+        <div
+          className="mt-1 text-right text-xs"
+          style={{ color: tooLong ? "var(--red)" : wordCount >= 50 && !tooShort ? "var(--green)" : "var(--text-2)" }}
+        >
+          {wordCount} words
+          {tooShort && " (need at least 100 characters)"}
+          {tooLong && ` (too long — ${charCount.toLocaleString()}/${AI.DRAFT_PARAGRAPH_MAX.toLocaleString()} characters, trim it down)`}
         </div>
       </label>
 
@@ -91,7 +104,7 @@ function DraftEntry({ onDraft }) {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex gap-3">
-        <button disabled={wordCount < 50 || loading} onClick={generate} className="btn btn-primary fx-sheen">
+        <button disabled={wordCount < 50 || tooShort || tooLong || loading} onClick={generate} className="btn btn-primary fx-sheen">
           {loading ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: "#07130E", borderTopColor: "transparent" }} />
@@ -162,6 +175,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
         <span className="field-label">Passage</span>
         <Textarea rows={6} value={form.paragraph}
           onChange={e => setField("paragraph", e.target.value)}
+          maxLength={QUESTION.PARAGRAPH_MAX}
           placeholder="The passage text (90-500 words)…" className="resize-none" />
       </label>
 
@@ -169,6 +183,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
         <span className="field-label">Question</span>
         <Textarea rows={2} value={form.question}
           onChange={e => setField("question", e.target.value)}
+          maxLength={QUESTION.QUESTION_MAX}
           placeholder="Which of the following…?" className="resize-none" />
       </label>
 
@@ -225,6 +240,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
                 </div>
                 <Textarea rows={2} value={o.text}
                   onChange={e => setOptionText(i, e.target.value)}
+                  maxLength={QUESTION.OPTION_MAX}
                   placeholder={`Option ${LETTERS[i]}…`} className="resize-none text-sm" />
               </div>
             );
@@ -232,7 +248,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
         </div>
       </div>
 
-      {/* Trap type — only visible when showing answer */}
+      {/* Trap type - only visible when showing answer */}
       {showAnswer && form.trapIndex != null && (
         <label className="block">
           <span className="field-label">Trap type</span>
@@ -242,7 +258,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
         </label>
       )}
 
-      {/* Source lines — only visible when showing answer */}
+      {/* Source lines - only visible when showing answer */}
       {showAnswer && (
         <label className="block">
           <span className="field-label">
@@ -253,6 +269,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
           </span>
           <Textarea rows={3} value={form.sourceLines}
             onChange={e => setField("sourceLines", e.target.value)}
+            maxLength={QUESTION.SOURCE_LINES_MAX}
             placeholder="The exact sentences from the passage that justify the correct answer…"
             className="resize-none" />
         </label>
@@ -354,7 +371,7 @@ export default function MyQuestionEditor() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* Method picker — only for new questions */}
+      {/* Method picker - only for new questions */}
       {mode === "pick" && (
         <div className="grid sm:grid-cols-2 gap-4">
           <button

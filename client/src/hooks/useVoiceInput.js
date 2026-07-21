@@ -1,6 +1,6 @@
 // Phase 11: Web Speech API wrapper for voice reasoning input.
 // Works in Chrome/Edge. Uses en-US with continuous:false (short per-phrase
-// requests) — far more reliable than a long-lived stream, avoids "network" errors.
+// requests) - far more reliable than a long-lived stream, avoids "network" errors.
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SpeechRecognition =
@@ -8,8 +8,8 @@ const SpeechRecognition =
     ? window.SpeechRecognition || window.webkitSpeechRecognition
     : null;
 
-// onFinalTranscript(text)   — called when the recognizer commits a phrase
-// onInterimTranscript(text) — called with live in-progress text (empty string to clear)
+// onFinalTranscript(text)   - called when the recognizer commits a phrase
+// onInterimTranscript(text) - called with live in-progress text (empty string to clear)
 export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState(null);
@@ -26,7 +26,7 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
 
   // Spawn one recognition instance and wire up its handlers.
   // Uses continuous:false so each phrase is a short, independent request to
-  // Google — much less prone to "network" errors than a persistent stream.
+  // Google - much less prone to "network" errors than a persistent stream.
   const spawnInstance = useCallback(() => {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
@@ -86,7 +86,7 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
         onInterimRef.current("");
         return;
       }
-      // Phrase finished cleanly — reset retry counter, restart to keep listening.
+      // Phrase finished cleanly - reset retry counter, restart to keep listening.
       retryCount.current = 0;
       try {
         const next = spawnInstance();
@@ -98,7 +98,7 @@ export function useVoiceInput({ onFinalTranscript, onInterimTranscript }) {
     };
 
     return recognition;
-  }, []); // no deps — uses stable refs for callbacks
+  }, []); // no deps - uses stable refs for callbacks
 
   const stop = useCallback(() => {
     stoppedIntentionally.current = true;

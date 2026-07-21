@@ -1,4 +1,4 @@
-// PostHog analytics — loaded lazily and ONLY after the user has explicitly
+// PostHog analytics - loaded lazily and ONLY after the user has explicitly
 // accepted the cookie/analytics consent banner (CookieConsent.jsx). Nothing
 // analytics-related ever fires before that, and nothing fires at all if
 // VITE_POSTHOG_KEY is unset (local dev without a key configured).
@@ -29,12 +29,12 @@ export function initAnalytics() {
       posthogInstance = posthog;
     })
     .catch(() => {
-      // Non-critical — analytics is nice-to-have; never block the app.
+      // Non-critical - analytics is nice-to-have; never block the app.
     });
 }
 
 // Fires a named funnel event (signup, session_start, question_answered,
-// coach_used). No-op before consent/init — same silent-fail posture as the
+// coach_used). No-op before consent/init - same silent-fail posture as the
 // rest of this module.
 export function track(event, props) {
   posthogInstance?.capture(event, props);
@@ -54,7 +54,7 @@ export function denyAnalyticsConsent() {
   shutdownAnalytics();
 }
 
-// Clears the stored decision so the consent banner reappears — used by the
+// Clears the stored decision so the consent banner reappears - used by the
 // "Manage cookie preferences" link on the Privacy Policy page.
 export function resetAnalyticsConsent() {
   localStorage.removeItem(CONSENT_KEY);

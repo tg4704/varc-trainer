@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   // A 401 on an authenticated request (api.js's request()) means the token
-  // died mid-session — expired, or the account was deleted/reset elsewhere.
+  // died mid-session - expired, or the account was deleted/reset elsewhere.
   // Deliberately doesn't touch varc_active_session: unlike logout(), this
   // isn't the user choosing to leave, so an in-progress Drills/Coach session
   // should still be there to resume once they log back in.
@@ -71,6 +71,12 @@ export function AuthProvider({ children }) {
   function logout() {
     api.setToken(null);
     localStorage.removeItem("varc_active_session");
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("graspr:last-home-bento-autoscroll:")) {
+        localStorage.removeItem(key);
+      }
+    }
     setUser(null);
   }
 

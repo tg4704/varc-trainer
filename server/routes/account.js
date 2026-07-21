@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
 
-// GET /api/account/export — DPDP data-portability right. Returns every row
+// GET /api/account/export - DPDP data-portability right. Returns every row
 // tied to the logged-in user as one JSON document (profile, sessions,
 // attempts, coach sessions/attempts, SR cards). Excludes password_hash.
 router.get("/export", authenticate, async (req, res, next) => {
@@ -49,7 +49,7 @@ router.get("/export", authenticate, async (req, res, next) => {
 
 // DELETE /api/account/reset
 // Deletes all attempts and sessions for the authenticated user.
-// The user account itself is preserved — they stay logged in.
+// The user account itself is preserved - they stay logged in.
 router.delete("/reset", authenticate, async (req, res, next) => {
   try {
     const userId = req.userId;
@@ -70,7 +70,7 @@ router.delete("/reset", authenticate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// DELETE /api/account — permanently deletes the account and everything tied
+// DELETE /api/account - permanently deletes the account and everything tied
 // to it. Unlike /reset, the user row itself is removed and the token becomes
 // invalid. Rows other users might rely on (question_flags, api_calls, any
 // questions/passages this user authored) are anonymised (user_id -> NULL)

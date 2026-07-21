@@ -14,7 +14,7 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-// Routes where a 401 means something other than "your session expired" —
+// Routes where a 401 means something other than "your session expired" -
 // login/register reject bad credentials with 401 before any token exists,
 // and changing your password rejects a wrong *current* password with 401
 // even though the request itself is properly authenticated. Excluded so a
@@ -46,7 +46,7 @@ async function request(path, options = {}) {
       window.dispatchEvent(new CustomEvent("graspr:limit-reached", { detail: body }));
     }
     // A 401 on an authenticated request (we had a token, this wasn't one of
-    // the exempt routes above) means the token is dead — expired, or the
+    // the exempt routes above) means the token is dead - expired, or the
     // user was deleted/reset elsewhere. Surface it app-wide instead of
     // leaving a raw "jwt expired" error stuck on whatever screen the user
     // happened to be on mid-session.
@@ -78,6 +78,9 @@ export function checkUsernameAvailable(username) {
 }
 export function changeUsername(username) {
   return request("/api/auth/username", { method: "PATCH", body: JSON.stringify({ username }) });
+}
+export function acceptTerms() {
+  return request("/api/auth/accept-terms", { method: "POST" });
 }
 export function changeName(name) {
   return request("/api/auth/name", { method: "PATCH", body: JSON.stringify({ name }) });
@@ -201,7 +204,7 @@ export const myQuestions = {
     }),
 };
 
-// ── Coach (② — restructure) ────────────────────────────
+// ── Coach (② - restructure) ────────────────────────────
 export const coach = {
   listPassages: (topic = "") =>
     request(`/api/coach/passages${topic ? `?topic=${encodeURIComponent(topic)}` : ""}`),
@@ -237,6 +240,9 @@ export const admin = {
     request(`/api/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   setUserTier: (id, tier, months = 1) =>
     request(`/api/admin/users/${id}/tier`, { method: "PATCH", body: JSON.stringify({ tier, months }) }),
+  // Immediately cancel the user's recurring subscription + drop to free now.
+  forceCancelSubscription: (id) =>
+    request(`/api/admin/users/${id}/force-cancel`, { method: "POST" }),
   resetUserData: (id) => request(`/api/admin/users/${id}/data`, { method: "DELETE" }),
 
   listQuestions: (filters = {}) => {
@@ -285,6 +291,19 @@ export const admin = {
     request(`/api/admin/passages${active !== "" ? `?active=${active}` : ""}`),
   setPassageActive: (id, isActive) =>
     request(`/api/admin/passages/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+
+  listBulletins: () => request("/api/admin/bulletins"),
+  createBulletin: (title, body) =>
+    request("/api/admin/bulletins", { method: "POST", body: JSON.stringify({ title, body }) }),
+  saveBulletin: (id, title, body, isActive) =>
+    request(`/api/admin/bulletins/${id}`, { method: "PUT", body: JSON.stringify({ title, body, isActive }) }),
+  deleteBulletin: (id) =>
+    request(`/api/admin/bulletins/${id}`, { method: "DELETE" }),
+};
+
+// ── Bulletins (public, active-only - for the logged-in homepage) ─────────────
+export const bulletins = {
+  list: () => request("/api/bulletins"),
 };
 
 
@@ -292,15 +311,35 @@ export const admin = {
 export const billing = {
   // Public tier list for the pricing page.
   plans: () => request("/api/billing/plans"),
-  // The signed-in user's current plan + expiry.
+  // The signed-in user's current plan + expiry + today's usage.
   me: () => request("/api/billing/me"),
+  // Captured purchase history, for the My Plan page's receipts list.
+  payments: () => request("/api/billing/payments"),
+  // Priced summary (amount, months, end date) for the pre-checkout review screen.
+  // seasonYear only applies to period "cat" — picks which CAT season to buy
+  // (e.g. 2026 or 2027). Omitted → the server's default (nearest on sale).
+  quote: (tier, period = "monthly", seasonYear = null) =>
+    request(
+      `/api/billing/quote?tier=${encodeURIComponent(tier)}&period=${encodeURIComponent(period)}` +
+      (seasonYear ? `&seasonYear=${encodeURIComponent(seasonYear)}` : "")
+    ),
   // Start a purchase → returns Razorpay order details (or devMode order).
-  createOrder: (tier, months = 1) =>
-    request("/api/billing/create-order", { method: "POST", body: JSON.stringify({ tier, months }) }),
+  // period: "monthly" | "cat" (one-time, till the season's end date).
+  createOrder: (tier, period = "monthly", seasonYear = null) =>
+    request("/api/billing/create-order", { method: "POST", body: JSON.stringify({ tier, period, seasonYear }) }),
   // Confirm a completed Checkout (order/payment/signature from Razorpay's handler).
   verify: (payload) =>
     request("/api/billing/verify", { method: "POST", body: JSON.stringify(payload) }),
+  // Start a recurring monthly autopay subscription → Razorpay subscription_id.
+  createSubscription: (tier) =>
+    request("/api/billing/create-subscription", { method: "POST", body: JSON.stringify({ tier }) }),
+  // Confirm the mandate (payment_id/subscription_id/signature from the handler).
+  verifySubscription: (payload) =>
+    request("/api/billing/verify-subscription", { method: "POST", body: JSON.stringify(payload) }),
+  // Cancel the caller's active subscription at period end (no refund).
+  cancelSubscription: () =>
+    request("/api/billing/cancel-subscription", { method: "POST" }),
   // Dev-only: grant a tier without paying (disabled in production).
-  devActivate: (tier, months = 1) =>
-    request("/api/billing/dev-activate", { method: "POST", body: JSON.stringify({ tier, months }) }),
+  devActivate: (tier, period = "monthly", seasonYear = null) =>
+    request("/api/billing/dev-activate", { method: "POST", body: JSON.stringify({ tier, period, seasonYear }) }),
 };

@@ -1,4 +1,4 @@
-// Small shared hover tooltip — used to move option/setting descriptions out
+// Small shared hover tooltip - used to move option/setting descriptions out
 // of always-visible body copy (information fatigue) and into an on-demand
 // reveal. Wrap any trigger element; the label shows on hover/focus, and on
 // touch via press-and-hold (group-active). max-w keeps it from overflowing
@@ -31,7 +31,7 @@ export default function Tooltip({ label, children, side = "bottom", wrapperClass
   );
 }
 
-// Small circular (i) affordance — use next to a label/heading when there's
+// Small circular (i) affordance - use next to a label/heading when there's
 // no natural button to hang the tooltip off of.
 export function InfoDot({ label, size = 16 }) {
   return (

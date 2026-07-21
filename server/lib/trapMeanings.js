@@ -1,5 +1,5 @@
 // Shared distractor-archetype meanings for AI prompts (evaluate.js, coach.js).
-// Covers the full taxonomy from content-pipeline/PIPELINE.md — the old 4-type dict
+// Covers the full taxonomy from content-pipeline/PIPELINE.md - the old 4-type dict
 // in evaluate.js was stale once ai_generated questions (7 more archetypes) went live.
 const TRAP_MEANINGS = {
   too_extreme: "uses absolute language (always/never/only/completely) that the text doesn't support",

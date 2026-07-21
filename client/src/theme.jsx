@@ -14,7 +14,7 @@ function getSystemTheme() {
 function applyTheme(theme) {
   const root = document.documentElement;
   const resolved = theme === "system" ? getSystemTheme() : theme;
-  // Graspr is a dark-only editorial design — always render the dark palette
+  // Graspr is a dark-only editorial design - always render the dark palette
   // regardless of the requested/system theme. (The toggle is kept for a
   // possible future light mode but currently has no visual effect.)
   void resolved;

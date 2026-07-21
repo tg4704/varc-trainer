@@ -5,6 +5,7 @@ import {
   AuthShell, AuthCard, AuthTabs, AuthDivider, AuthError, GoogleButton, PasswordField,
 } from "../components/AuthShell.jsx";
 import PageMeta from "../components/PageMeta.jsx";
+import { AUTH } from "../lib/limits.js";
 
 const GOOGLE_AUTH_URL = `${import.meta.env.VITE_API_URL || ""}/api/auth/google`;
 
@@ -21,7 +22,7 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   // Set by api.js when a 401 mid-session means the token died (expired, or
-  // the account changed elsewhere) — distinct from a normal logout, so the
+  // the account changed elsewhere) - distinct from a normal logout, so the
   // message reassures the user their in-progress session is still there.
   // Read in an effect, not a useState lazy initializer: the initializer runs
   // twice under React 18 StrictMode in dev, and its sessionStorage.removeItem
@@ -54,11 +55,22 @@ export default function Login() {
 
   return (
     <AuthShell>
-      <PageMeta title="Log in — Graspr" description="Sign in to Graspr to keep training CAT VARC reading comprehension." />
+      <PageMeta title="Log in · Graspr" description="Sign in to Graspr to keep training CAT VARC reading comprehension." />
+      {/* Terms/Privacy in the footer below were plain <span>s, so the two most
+          load-bearing legal links in the signup flow were unclickable. They now
+          match the working pattern already used on Register and ChooseUsername
+          (new tab, so a half-filled login form isn't lost). */}
       <AuthCard
         title="Welcome back"
         subtitle="Sign in to pick up where you left off."
-        footer={<>By continuing you agree to our <span className="muted">Terms</span> and <span className="muted">Privacy Policy</span>.</>}
+        footer={
+          <>
+            By continuing you agree to our{" "}
+            <Link to="/terms" target="_blank" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>Terms</Link>
+            {" "}and{" "}
+            <Link to="/privacy" target="_blank" className="fx-underline font-semibold" style={{ color: "var(--teal)" }}>Privacy Policy</Link>.
+          </>
+        }
       >
         <AuthTabs active="login" />
         {sessionExpired && !error && (
@@ -81,6 +93,7 @@ export default function Login() {
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               autoComplete="username"
+              maxLength={AUTH.EMAIL_MAX}
               placeholder="you@email.com"
               required
             />

@@ -1,4 +1,4 @@
-// Phase 13 — Session Review page.
+// Phase 13 - Session Review page.
 // After a timed (or "after session") practice run, this page batch-evaluates
 // all saved reasonings in parallel then displays the full 5-section feedback
 // for every question in order.
@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import FeedbackSections from "../components/FeedbackSections.jsx";
 import TopicBadge from "../components/TopicBadge.jsx";
 import TypeBadge from "../components/TypeBadge.jsx";
+import DifficultyBadge from "../components/DifficultyBadge.jsx";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 import { getSessionReview, batchEvaluateSession } from "../api.js";
@@ -199,6 +200,7 @@ function AttemptReviewCard({ attempt: a, index, total }) {
             </span>
             {a.topic && <TopicBadge topic={a.topic} />}
             {a.type && <TypeBadge type={a.type} />}
+            <DifficultyBadge difficulty={a.difficulty} />
             {isSkipped && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 Skipped

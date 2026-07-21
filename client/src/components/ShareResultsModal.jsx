@@ -3,7 +3,7 @@
 // desktop browsers). There's no direct "post to X/Instagram" button: none of
 // the major platforms allow a plain web app to post images to a user's
 // account without an approved developer app + per-user OAuth, so instead we
-// generate the image and hand off to the OS share sheet — the same pattern
+// generate the image and hand off to the OS share sheet - the same pattern
 // Duolingo/Spotify Wrapped-style share cards use. The share sheet already
 // lists Instagram, X, WhatsApp, etc. on any device that has them installed.
 import { useEffect, useRef, useState } from "react";
@@ -66,7 +66,7 @@ export default function ShareResultsModal({ data, onClose }) {
         });
       }
     } catch {
-      // user cancelled the share sheet — not an error
+      // user cancelled the share sheet - not an error
     }
   }
 
