@@ -135,7 +135,9 @@ export default function MyPlan() {
         <div
           style={{
             position: "absolute", top: -20, left: "50%", transform: "translateX(-50%)",
-            width: 520, height: 260, borderRadius: "50%",
+            // Capped to the container: a fixed 520px is wider than a phone
+            // viewport and pushed the page's scrollWidth out past the screen.
+            width: "min(520px, 100%)", height: 260, borderRadius: "50%",
             background: "radial-gradient(ellipse, rgba(93,202,165,0.10), transparent 70%)",
             pointerEvents: "none",
           }}
@@ -174,10 +176,15 @@ export default function MyPlan() {
                   opacity: 0.07, mixBlendMode: "luminosity",
                 }}
               />
+              {/* Corner glows. These sit flush inside the card with the gradient
+                  centred on the corner, rather than overhanging on negative
+                  offsets - the overhang read the same but widened the page's
+                  scrollWidth, letting the whole page scroll sideways on a phone
+                  (the card's own overflow-hidden doesn't contain that). */}
               {/* Teal glow - top right */}
-              <div style={{ position: "absolute", top: -100, right: -100, width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(93,202,165,0.28), transparent 65%)", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", top: 0, right: 0, width: 200, height: 200, background: "radial-gradient(circle at 100% 0%, rgba(93,202,165,0.28), transparent 65%)", pointerEvents: "none" }} />
               {/* Periwinkle glow - bottom left */}
-              <div style={{ position: "absolute", bottom: -80, left: -80, width: 260, height: 260, borderRadius: "50%", background: "radial-gradient(circle, rgba(139,157,255,0.2), transparent 65%)", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", bottom: 0, left: 0, width: 180, height: 180, background: "radial-gradient(circle at 0% 100%, rgba(139,157,255,0.2), transparent 65%)", pointerEvents: "none" }} />
               {/* Shine stripe */}
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(115deg, rgba(255,255,255,0.06) 0%, transparent 40%)", pointerEvents: "none" }} />
 

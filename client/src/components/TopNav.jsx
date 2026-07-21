@@ -115,7 +115,7 @@ export default function TopNav() {
       }}
     >
       <nav
-        className="mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 py-2.5 pl-4 pr-2.5 md:pl-[22px] md:pr-[14px]"
+        className="mx-auto grid grid-cols-[1fr_auto] items-center gap-3 py-2.5 pl-4 pr-2.5 md:grid-cols-[1fr_auto_1fr] md:pl-[22px] md:pr-[14px]"
         style={{
           width: "100%",
           maxWidth: scrolled ? 1180 : "100%",

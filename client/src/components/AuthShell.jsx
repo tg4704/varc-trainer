@@ -31,7 +31,7 @@ export function AuthShell({ children }) {
         />
       </div>
 
-      <div className="relative z-[1] flex flex-col items-center">
+      <div className="relative z-[1] flex w-full max-w-[424px] flex-col items-center">
         <Link to="/" className="mb-7 flex items-center gap-2.5">
           <BrandMark size={30} />
           <span className="display text-xl tracking-tight text-foreground">
@@ -48,7 +48,7 @@ export function AuthShell({ children }) {
 export function AuthCard({ title, subtitle, children, footer }) {
   return (
     <>
-      <div className="glass-floating w-[424px] max-w-full rounded-[20px] p-9">
+      <div className="glass-floating w-full rounded-[20px] p-7 sm:p-9">
         <div className="mb-6 flex flex-col items-center gap-1.5 text-center">
           <div className="text-[20px] font-semibold tracking-tight text-foreground">{title}</div>
           {subtitle && <div className="text-[13px] muted">{subtitle}</div>}
