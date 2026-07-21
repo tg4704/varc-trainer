@@ -31,6 +31,10 @@ Thumbs.db
 # Claude Code internal config
 .claude/
 
+# Playwright run artifacts
+test-results/
+playwright-report/
+
 # Design handoff archive — kept locally, contents already built into client/src
 UI redesign project.zip
 
