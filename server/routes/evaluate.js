@@ -5,13 +5,14 @@ const questionsRepo = require("../questionsRepo");
 const { authenticate } = require("../auth");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, resolveModels, DEFAULT_MODEL, describeError } = require("../ai/provider");
-const { requireEntitlement } = require("../lib/entitlements");
+const { requireEntitlement, attachTier } = require("../lib/entitlements");
 const { clearCache: clearDashCache } = require("./dashboard");
 const { buildTrapMeaningsBlock } = require("../lib/trapMeanings");
 const { aiLimiter } = require("../lib/rateLimiters");
 const { validateBody } = require("../lib/validate");
 const { evaluateSchema } = require("../lib/schemas");
 const { getPrompt } = require("../ai/prompts");
+const { extractJSON } = require("../lib/extractJSON");
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -19,12 +20,12 @@ function buildUserMessage(q, selectedIndex, reasoningText, quotedLines) {
   const optionLines = q.options.map((o, i) => `${LETTERS[i]}) ${o.text}`).join("\n");
 
   // Reference meanings for every archetype present among this question's options,
-  // not just the primary trap — imported AI questions tag every wrong option.
+  // not just the primary trap - imported AI questions tag every wrong option.
   const presentTrapTypes = [...new Set(q.options.map((o) => o.trapType).filter(Boolean))];
 
   const trapSection =
     q.trapIndex != null
-      ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} — "${q.options[q.trapIndex].text}"
+      ? `TRAP OPTION: Option ${LETTERS[q.trapIndex]} - "${q.options[q.trapIndex].text}"
 TRAP TYPE: ${q.trapType}
 TRAP TYPE MEANINGS:
 ${buildTrapMeaningsBlock(presentTrapTypes)}`
@@ -49,7 +50,7 @@ QUESTION TYPE: ${q.type}
 OPTIONS:
 ${optionLines}
 
-CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} — "${q.options[q.correctIndex].text}"
+CORRECT ANSWER: Option ${LETTERS[q.correctIndex]} - "${q.options[q.correctIndex].text}"
 ${trapSection}
 
 STUDENT SELECTED: Option ${LETTERS[selectedIndex]}${quotedSection}
@@ -57,9 +58,9 @@ STUDENT'S REASONING:
 ${reasoningText}`;
 }
 
-// POST /api/attempts/evaluate — analysis mode with AI reasoning evaluation.
+// POST /api/attempts/evaluate - analysis mode with AI reasoning evaluation.
 // Pass deferred:true to save the attempt without calling Claude (for timed sessions).
-router.post("/evaluate", authenticate, aiLimiter, requireEntitlement("drills"), validateBody(evaluateSchema), async (req, res) => {
+router.post("/evaluate", authenticate, attachTier, aiLimiter, requireEntitlement("drills"), validateBody(evaluateSchema), async (req, res) => {
   const {
     sessionId,
     questionId,
@@ -97,7 +98,7 @@ router.post("/evaluate", authenticate, aiLimiter, requireEntitlement("drills"), 
   const isCorrect = selectedOptionIndex === q.correctIndex ? 1 : 0;
   const selectedTrap = q.trapIndex != null && selectedOptionIndex === q.trapIndex ? 1 : 0;
 
-  // Save attempt BEFORE calling Claude — never lose the attempt if the API fails
+  // Save attempt BEFORE calling Claude - never lose the attempt if the API fails
   const result = await db.run(
     `INSERT INTO attempts
        (session_id, question_id, question_type, topic,
@@ -142,7 +143,7 @@ router.post("/evaluate", authenticate, aiLimiter, requireEntitlement("drills"), 
 
 // Runs the Claude evaluation for an already-saved attempt and writes the AI
 // fields back to it. Shared by POST /evaluate and POST /:attemptId/retry-evaluation.
-// Never throws — on AI failure it logs and returns { aiError: true, ... } so the
+// Never throws - on AI failure it logs and returns { aiError: true, ... } so the
 // attempt itself is never lost.
 async function runEvaluation({ userId, tierKey, attemptId, q, selectedOptionIndex, reasoningText, quotedLines }) {
   const models = resolveModels(tierKey, "drills");
@@ -153,7 +154,7 @@ async function runEvaluation({ userId, tierKey, attemptId, q, selectedOptionInde
       messages: [{ role: "user", content: buildUserMessage(q, selectedOptionIndex, reasoningText, quotedLines) }],
     });
 
-    // Log API call for admin cost tracking (Phase 9) — log the model that
+    // Log API call for admin cost tracking (Phase 9) - log the model that
     // actually answered (may be a fallback), so cost tracking stays accurate.
     await logApiCall({
       userId,
@@ -165,7 +166,7 @@ async function runEvaluation({ userId, tierKey, attemptId, q, selectedOptionInde
       status: "ok",
     });
 
-    const evaluation = JSON.parse(response.text);
+    const evaluation = extractJSON(response.text);
 
     await db.run(
       `UPDATE attempts SET
@@ -212,7 +213,7 @@ async function runEvaluation({ userId, tierKey, attemptId, q, selectedOptionInde
 
 // Retry a failed AI evaluation for an attempt the user already submitted, using
 // the reasoning text saved on that attempt. Verifies ownership via the session.
-router.post("/:attemptId/retry-evaluation", authenticate, aiLimiter, requireEntitlement("drills"), async (req, res) => {
+router.post("/:attemptId/retry-evaluation", authenticate, attachTier, aiLimiter, requireEntitlement("drills"), async (req, res) => {
   const attemptId = parseInt(req.params.attemptId, 10);
   if (!Number.isInteger(attemptId)) {
     return res.status(400).json({ error: "Invalid attempt id" });
@@ -246,7 +247,11 @@ router.post("/:attemptId/retry-evaluation", authenticate, aiLimiter, requireEnti
   };
 
   const evalResult = await runEvaluation({
-    userId: req.userId, tierKey: req.userTier, attemptId,
+    // `q` is required — runEvaluation passes it straight into
+    // buildUserMessage(q, ...). Omitting it threw on q.options inside the try
+    // block, which the catch turned into { aiError: true }, so every retry
+    // silently "failed" even when the model was perfectly healthy.
+    userId: req.userId, tierKey: req.userTier, attemptId, q,
     selectedOptionIndex: attempt.selected_option_index,
     reasoningText: attempt.reasoning_text.trim(),
     quotedLines: null,

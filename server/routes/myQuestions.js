@@ -10,7 +10,9 @@ const { authenticate } = require("../auth");
 const { validateQuestionPayload, normalizeOptions } = require("../lib/validateQuestion");
 const { logApiCall } = require("../ai/apiLog");
 const { callModel, DEFAULT_MODEL, describeError } = require("../ai/provider");
+const { extractJSON } = require("../lib/extractJSON");
 const { aiLimiter } = require("../lib/rateLimiters");
+const { attachTier } = require("../lib/entitlements");
 const { validateBody } = require("../lib/validate");
 const { generateDraftSchema } = require("../lib/schemas");
 const { getPrompt, renderPrompt } = require("../ai/prompts");
@@ -49,7 +51,7 @@ router.post("/", async (req, res, next) => {
 
     const {
       topic, paragraph, question, type,
-      options, correctIndex, trapIndex, trapType, sourceLines,
+      options, correctIndex, trapIndex, trapType, sourceLines, difficulty,
     } = req.body;
 
     const id = makeId(req.userId);
@@ -59,8 +61,8 @@ router.post("/", async (req, res, next) => {
         `INSERT INTO questions
            (id, topic, paragraph, question, type, options_json,
             correct_index, trap_index, trap_type, source_lines,
-            source, author_user_id, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'user', $11, 1)`,
+            source, author_user_id, is_active, difficulty)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'user', $11, 1, $12)`,
         [
           id, topic, paragraph.trim(), question.trim(), type,
           JSON.stringify(normalizeOptions(options, correctIndex, trapIndex ?? null, trapType)),
@@ -69,6 +71,7 @@ router.post("/", async (req, res, next) => {
           trapIndex != null ? (trapType || null) : null,
           sourceLines.trim(),
           req.userId,
+          difficulty || "medium",
         ]
       );
       res.json({ ok: true, id });
@@ -155,7 +158,7 @@ router.patch("/:id", async (req, res, next) => {
 });
 
 // ── DELETE /api/my-questions/:id ───────────────────────────────────────────
-// Hard delete — user questions are personal data; no reason to keep them soft.
+// Hard delete - user questions are personal data; no reason to keep them soft.
 router.delete("/:id", async (req, res, next) => {
   try {
     const info = await db.run(
@@ -172,12 +175,12 @@ router.delete("/:id", async (req, res, next) => {
 // Claude generates a full question + 4 options. Returns a draft object the
 // frontend pre-populates the editor with. The user reviews and edits before saving.
 // Feature-flagged: ENABLE_AI_AUTHORING env var (defaults true).
-router.post("/generate-draft", aiLimiter, validateBody(generateDraftSchema), async (req, res) => {
+router.post("/generate-draft", attachTier, aiLimiter, validateBody(generateDraftSchema), async (req, res) => {
   if (!AI_ENABLED) {
     return res.status(403).json({ error: "AI question generation is not enabled on this server." });
   }
 
-  const { paragraph, type, topic } = req.body || {};
+  const { paragraph, type, topic, difficulty } = req.body || {};
   if (!paragraph || paragraph.trim().length < 100) {
     return res.status(400).json({ error: "Passage must be at least 100 characters." });
   }
@@ -187,10 +190,11 @@ router.post("/generate-draft", aiLimiter, validateBody(generateDraftSchema), asy
 
   const questionType = type || "inference";
   const questionTopic = topic || "humanities";
+  const questionDifficulty = difficulty || "medium";
 
-  const SYSTEM = renderPrompt(await getPrompt("my_questions_generate"), { questionType });
+  const SYSTEM = renderPrompt(await getPrompt("my_questions_generate"), { questionType, difficulty: questionDifficulty });
 
-  const userMsg = `PASSAGE:\n${paragraph.trim()}\n\nQUESTION TYPE: ${questionType}\n\nGenerate one CAT-style ${questionType} question on this passage.`;
+  const userMsg = `PASSAGE:\n${paragraph.trim()}\n\nQUESTION TYPE: ${questionType}\nDIFFICULTY: ${questionDifficulty}\n\nGenerate one CAT-style ${questionType} question on this passage at ${questionDifficulty} difficulty.`;
 
   async function callAI() {
     const response = await callModel({
@@ -206,7 +210,7 @@ router.post("/generate-draft", aiLimiter, validateBody(generateDraftSchema), asy
       outputTokens: response.usage.output_tokens,
       status: "ok",
     });
-    return JSON.parse(response.text);
+    return extractJSON(response.text);
   }
 
   try {
@@ -224,6 +228,7 @@ router.post("/generate-draft", aiLimiter, validateBody(generateDraftSchema), asy
       paragraph: paragraph.trim(),
       question: draft.question,
       type: questionType,
+      difficulty: questionDifficulty,
       options: draft.options,
       correctIndex: draft.correctIndex,
       trapIndex: draft.trapIndex,
