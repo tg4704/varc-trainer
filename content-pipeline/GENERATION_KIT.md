@@ -1,7 +1,8 @@
 # Generation Kit — run these in Claude chat (Opus 4.8)
 
-> **Using a Claude Project?** Use [`PROJECT_INSTRUCTIONS.md`](PROJECT_INSTRUCTIONS.md) instead —
-> it's this kit condensed into always-on custom instructions, so each chat is a one-liner and the
+> **Using a Claude Project?** There are now TWO — use [`PROJECT_INSTRUCTIONS_COACH.md`](PROJECT_INSTRUCTIONS_COACH.md)
+> for full passages and [`PROJECT_INSTRUCTIONS_DRILLS.md`](PROJECT_INSTRUCTIONS_DRILLS.md) for drills.
+> They're this kit condensed into always-on custom instructions, so each chat is a one-liner and the
 > PYQ corpus is wired in. This file is the **standalone / reference** version: self-contained
 > prompts for a plain chat (no Project), and the fuller explanation of what each prompt does.
 
