@@ -12,43 +12,41 @@ const TYPES = [
   "concept_set", "vocab_in_context", "weaken_strengthen", "title",
 ];
 const TOPICS = ["", "economics", "humanities", "philosophy", "science", "social"];
-// passage_id NULL = ③ Drills, set = ② Coach - see questionsRepo.js.
-const PRODUCTS = [
-  { value: "", label: "All products" },
-  { value: "drills", label: "Drills only" },
-  { value: "coach", label: "Coach only" },
-];
+const DIFFICULTIES = ["", "easy", "medium", "tough"];
 
+const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
+
+// Drills = standalone questions (passage_id IS NULL). Coach passage-linked
+// questions are managed from Admin → Coach → the passage's detail page instead.
 export default function AdminQuestions() {
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
   const [topic, setTopic] = useState("");
+  const [difficulty, setDifficulty] = useState("");
   const [active, setActive] = useState("1");
-  const [product, setProduct] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState([]);
 
   const reload = () => {
-    const filters = {};
+    const filters = { product: "drills" };
     if (q) filters.q = q;
     if (type) filters.type = type;
     if (topic) filters.topic = topic;
     if (active) filters.active = active;
-    if (product) filters.product = product;
     admin.listQuestions(filters).then(setData).catch((e) => setError(e.message));
   };
 
-  // Filters changing swaps out which rows are on screen, so any prior selection
-  // would be invisible-but-live - drop it rather than act on rows nobody can see.
   useEffect(() => {
     setSelected([]);
     const t = setTimeout(reload, q ? 200 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, type, topic, active, product]);
+  }, [q, type, topic, active]);
 
-  const rows = data?.questions ?? [];
+  // difficulty has no server filter param yet; filter client-side.
+  const allRows = data?.questions ?? [];
+  const rows = difficulty ? allRows.filter((r) => r.difficulty === difficulty) : allRows;
   const allSelected = rows.length > 0 && selected.length === rows.length;
 
   const toggleRow = (id, on) =>
@@ -58,13 +56,13 @@ export default function AdminQuestions() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Questions</h1>
+          <h1 className="text-2xl font-bold text-foreground">Drills</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data ? `${data.total} matching` : "-"}
+            Standalone trap-spotting questions. {data ? `${rows.length} shown` : "-"}
           </p>
         </div>
         <Button asChild>
-          <Link to="/admin/questions/new">+ New question</Link>
+          <Link to="/admin/questions/new">+ New drill</Link>
         </Button>
       </div>
 
@@ -89,10 +87,10 @@ export default function AdminQuestions() {
           {TOPICS.map(t => <option key={t} value={t}>{t || "All topics"}</option>)}
         </select>
         <select
-          value={product} onChange={(e) => setProduct(e.target.value)}
+          value={difficulty} onChange={(e) => setDifficulty(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          {PRODUCTS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+          {DIFFICULTIES.map(d => <option key={d} value={d}>{d ? d[0].toUpperCase() + d.slice(1) : "All difficulty"}</option>)}
         </select>
         <select
           value={active} onChange={(e) => setActive(e.target.value)}
@@ -107,7 +105,7 @@ export default function AdminQuestions() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <BulkActionBar
-        noun="question"
+        noun="drill"
         selected={selected}
         onClear={() => setSelected([])}
         onRun={async (action) => {
@@ -118,12 +116,12 @@ export default function AdminQuestions() {
       />
 
       <Card className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[800px]">
+        <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="px-3 py-2 w-8">
                 <RowCheckbox
-                  label="Select all questions"
+                  label="Select all drills"
                   checked={allSelected}
                   indeterminate={selected.length > 0 && !allSelected}
                   onChange={(on) => setSelected(on ? rows.map((r) => r.id) : [])}
@@ -132,9 +130,9 @@ export default function AdminQuestions() {
               <th className="text-left font-medium px-3 py-2">ID</th>
               <th className="text-left font-medium px-3 py-2">Type</th>
               <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Topic</th>
-              <th className="text-left font-medium px-3 py-2">Product</th>
+              <th className="text-left font-medium px-3 py-2">Difficulty</th>
               <th className="text-left font-medium px-3 py-2">Question</th>
-              <th className="text-left font-medium px-3 py-2 hidden lg:table-cell">Source</th>
+              <th className="text-left font-medium px-3 py-2 hidden lg:table-cell">Added</th>
               <th className="text-right font-medium px-3 py-2 hidden lg:table-cell">Attempts</th>
               <th className="text-right font-medium px-3 py-2 hidden md:table-cell">Flags</th>
               <th className="text-left font-medium px-3 py-2">Status</th>
@@ -143,13 +141,13 @@ export default function AdminQuestions() {
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={11} className="text-center text-muted-foreground py-6">No questions match</td></tr>
+              <tr><td colSpan={11} className="text-center text-muted-foreground py-6">No drills match</td></tr>
             )}
             {rows.map((q) => (
               <tr key={q.id} className="border-t border-border">
                 <td className="px-3 py-2">
                   <RowCheckbox
-                    label={`Select question ${q.id}`}
+                    label={`Select drill ${q.id}`}
                     checked={selected.includes(q.id)}
                     onChange={(on) => toggleRow(q.id, on)}
                   />
@@ -157,17 +155,9 @@ export default function AdminQuestions() {
                 <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{q.id}</td>
                 <td className="px-3 py-2"><Badge variant={q.type}>{q.type}</Badge></td>
                 <td className="px-3 py-2 hidden md:table-cell capitalize text-muted-foreground">{q.topic}</td>
-                <td className="px-3 py-2">
-                  {q.passageId ? (
-                    <span title={q.passageTitle ? `Passage: ${q.passageTitle}` : `Passage #${q.passageId}`}>
-                      <Badge variant="secondary">Coach</Badge>
-                    </span>
-                  ) : (
-                    <Badge variant="outline">Drills</Badge>
-                  )}
-                </td>
+                <td className="px-3 py-2 capitalize text-muted-foreground">{q.difficulty || "-"}</td>
                 <td className="px-3 py-2 max-w-md truncate text-foreground">{q.question_snippet}</td>
-                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{q.source}</td>
+                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground whitespace-nowrap">{fmtDate(q.created_at)}</td>
                 <td className="px-3 py-2 text-right tabular-nums hidden lg:table-cell">{q.attempts}</td>
                 <td className="px-3 py-2 text-right tabular-nums hidden md:table-cell">
                   {q.openFlags > 0 ? <Badge variant="warning">{q.openFlags}</Badge> : <span className="text-muted-foreground">0</span>}

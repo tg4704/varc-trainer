@@ -332,10 +332,12 @@ router.get("/questions", async (req, res, next) => {
     // Product boundary: passage_id NULL = ③ Drills, set = ② Coach (see questionsRepo.js).
     if (product === "drills") where.push("passage_id IS NULL");
     else if (product === "coach") where.push("passage_id IS NOT NULL");
+    // Trashed rows live in Admin → Deleted, not here.
+    where.push("deleted_at IS NULL");
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const rows = await db.all(
-      `SELECT id, topic, type, source, is_active, created_at, passage_id AS "passageId",
+      `SELECT id, topic, type, source, is_active, created_at, difficulty, passage_id AS "passageId",
               (SELECT title FROM passages WHERE id = questions.passage_id) AS "passageTitle",
               substr(question, 1, 100) AS question_snippet,
               (SELECT COUNT(*) FROM attempts WHERE question_id = questions.id) AS attempts,
@@ -444,10 +446,15 @@ router.patch("/questions/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── DELETE /api/admin/questions/:id (soft delete) ──────────────────────────
+// ── DELETE /api/admin/questions/:id (move to trash) ────────────────────────
+// Sets deleted_at (+ is_active=0) so the row lands in Admin → Deleted, is
+// restorable, and is hard-purged after TRASH_TTL_DAYS (server/lib/trash.js).
 router.delete("/questions/:id", async (req, res, next) => {
   try {
-    const info = await db.run("UPDATE questions SET is_active = 0 WHERE id = $1", [req.params.id]);
+    const info = await db.run(
+      "UPDATE questions SET is_active = 0, deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
+      [req.params.id]
+    );
     if (info.rowCount === 0) return res.status(404).json({ error: "not found" });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -455,11 +462,10 @@ router.delete("/questions/:id", async (req, res, next) => {
 
 // ── POST /api/admin/questions/bulk ─────────────────────────────────────────
 // Body: { ids: string[], action: 'activate' | 'deactivate' | 'delete' }
-// 'delete' here is a HARD delete (unlike DELETE /questions/:id, which soft-deletes
-// by clearing is_active) - the bulk UI offers activate/deactivate separately, so a
-// bulk "delete" that only deactivated would be an indistinguishable duplicate.
-// attempts.question_id is a plain TEXT column with no FK, so past attempt history
-// survives the row going away.
+// 'delete' here moves rows to the trash (deleted_at + is_active=0), matching the
+// single DELETE /questions/:id - they show up in Admin → Deleted and are hard-
+// purged after TRASH_TTL_DAYS. attempts.question_id is a plain TEXT column with
+// no FK, so attempt history survives the eventual hard delete.
 router.post("/questions/bulk", async (req, res, next) => {
   try {
     const { ids, action } = req.body || {};
@@ -472,7 +478,7 @@ router.post("/questions/bulk", async (req, res, next) => {
     if (ids.length > 500) return res.status(400).json({ error: "at most 500 ids per request" });
 
     const info = action === "delete"
-      ? await db.run("DELETE FROM questions WHERE id = ANY($1)", [ids])
+      ? await db.run("UPDATE questions SET is_active = 0, deleted_at = NOW() WHERE id = ANY($1) AND deleted_at IS NULL", [ids])
       : await db.run("UPDATE questions SET is_active = $1 WHERE id = ANY($2)", [action === "activate" ? 1 : 0, ids]);
 
     res.json({ ok: true, affected: info.rowCount });
@@ -550,7 +556,7 @@ router.patch("/flags/:id", async (req, res, next) => {
 router.get("/passages", async (req, res, next) => {
   try {
     const active = req.query.active;
-    const where = [];
+    const where = ["p.deleted_at IS NULL"]; // trashed passages live in Admin → Deleted
     if (active === "1") where.push("p.is_active = 1");
     else if (active === "0") where.push("p.is_active = 0");
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -558,8 +564,8 @@ router.get("/passages", async (req, res, next) => {
     const rows = await db.all(
       `SELECT p.id, p.topic, p.genre, p.title, p.word_count AS "wordCount",
               p.source, p.is_active, p.created_at,
-              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id) AS "questionCount",
-              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id AND is_active = 1) AS "activeQuestionCount"
+              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id AND deleted_at IS NULL) AS "questionCount",
+              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id AND deleted_at IS NULL AND is_active = 1) AS "activeQuestionCount"
        FROM passages p
        ${whereSql}
        ORDER BY p.id DESC`
@@ -568,26 +574,93 @@ router.get("/passages", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── GET /api/admin/passages/:id ────────────────────────────────────────────
+// Full passage (for the Coach detail page) + its non-trashed questions.
+router.get("/passages/:id", async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "invalid passage id" });
+    const passage = await db.get(
+      `SELECT id, topic, genre, title, body, word_count AS "wordCount",
+              reading_key_json, source, is_active, created_at
+       FROM passages WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    if (!passage) return res.status(404).json({ error: "passage not found" });
+    const questions = await db.all(
+      `SELECT id, type, topic, difficulty, is_active, created_at,
+              substr(question, 1, 120) AS question_snippet,
+              (SELECT COUNT(*) FROM attempts WHERE question_id = questions.id) AS attempts
+       FROM questions
+       WHERE passage_id = $1 AND deleted_at IS NULL
+       ORDER BY id ASC`,
+      [id]
+    );
+    res.json({ passage, questions });
+  } catch (e) { next(e); }
+});
+
+// ── PUT /api/admin/passages/:id ────────────────────────────────────────────
+// Edit passage fields. Body: { topic, genre, title, body }. Recomputes word_count.
+router.put("/passages/:id", async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "invalid passage id" });
+    const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
+    const genre = typeof req.body?.genre === "string" ? req.body.genre.trim() : null;
+    if (!body) return res.status(400).json({ error: "body is required" });
+    if (!topic) return res.status(400).json({ error: "topic is required" });
+    const wordCount = body.split(/\s+/).filter(Boolean).length;
+    const info = await db.run(
+      `UPDATE passages SET topic = $1, genre = $2, title = $3, body = $4, word_count = $5
+       WHERE id = $6 AND deleted_at IS NULL`,
+      [topic, genre, title || null, body, wordCount, id]
+    );
+    if (info.rowCount === 0) return res.status(404).json({ error: "not found" });
+    res.json({ ok: true, wordCount });
+  } catch (e) { next(e); }
+});
+
 // ── PATCH /api/admin/passages/:id ──────────────────────────────────────────
-// Toggle a passage's is_active. Body: { isActive: boolean }
+// Toggle a passage's is_active. Body: { isActive: boolean }.
+// Activation cascades to the passage's questions in BOTH directions: activating
+// a passage activates all its (non-trashed) questions, deactivating deactivates
+// them - so a Coach passage and its question set are never half-live.
 router.patch("/passages/:id", async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id || typeof req.body?.isActive !== "boolean") {
       return res.status(400).json({ error: "id and isActive (boolean) are required" });
     }
-    const info = await db.run("UPDATE passages SET is_active = $1 WHERE id = $2", [req.body.isActive ? 1 : 0, id]);
-    if (info.rowCount === 0) return res.status(404).json({ error: "not found" });
-    res.json({ ok: true });
+    const active = req.body.isActive ? 1 : 0;
+    let affectedQuestions = 0;
+    let found = false;
+    await db.transaction(async (client) => {
+      const info = await client.query(
+        "UPDATE passages SET is_active = $1 WHERE id = $2 AND deleted_at IS NULL",
+        [active, id]
+      );
+      if (info.rowCount === 0) return;
+      const qInfo = await client.query(
+        "UPDATE questions SET is_active = $1 WHERE passage_id = $2 AND deleted_at IS NULL",
+        [active, id]
+      );
+      affectedQuestions = qInfo.rowCount;
+      found = true;
+    });
+    if (!found) return res.status(404).json({ error: "not found" });
+    res.json({ ok: true, affectedQuestions });
   } catch (e) { next(e); }
 });
 
 // ── POST /api/admin/passages/bulk ──────────────────────────────────────────
 // Body: { ids: number[], action: 'activate' | 'deactivate' | 'delete' }
-// Deleting a passage also deletes its questions (questions.passage_id FKs to it).
-// A passage any student has actually run in Coach is NOT deletable - coach_sessions
-// FKs to it, and those rows are real user history we don't want to lose. Those ids
-// come back in `skipped` so the UI can say which ones were left alone and why.
+// activate/deactivate cascade to each passage's questions (see PATCH above).
+// 'delete' moves the passage AND its questions to the trash (deleted_at set);
+// they show in Admin → Deleted and are hard-purged after TRASH_TTL_DAYS, at
+// which point any passage with Coach history is skipped (server/lib/trash.js).
 router.post("/passages/bulk", async (req, res, next) => {
   try {
     const { ids: rawIds, action } = req.body || {};
@@ -601,35 +674,130 @@ router.post("/passages/bulk", async (req, res, next) => {
     if (ids.length === 0) return res.status(400).json({ error: "no valid ids" });
     if (ids.length > 500) return res.status(400).json({ error: "at most 500 ids per request" });
 
-    if (action !== "delete") {
-      const info = await db.run(
-        "UPDATE passages SET is_active = $1 WHERE id = ANY($2)",
-        [action === "activate" ? 1 : 0, ids]
-      );
-      return res.json({ ok: true, affected: info.rowCount, skipped: [] });
-    }
-
-    const used = await db.all(
-      "SELECT DISTINCT passage_id FROM coach_sessions WHERE passage_id = ANY($1)",
-      [ids]
-    );
-    const blocked = new Set(used.map((r) => r.passage_id));
-    const deletable = ids.filter((id) => !blocked.has(id));
-
     let affected = 0;
-    if (deletable.length > 0) {
-      await db.transaction(async (client) => {
-        await client.query("DELETE FROM questions WHERE passage_id = ANY($1)", [deletable]);
-        const info = await client.query("DELETE FROM passages WHERE id = ANY($1)", [deletable]);
+    await db.transaction(async (client) => {
+      if (action === "delete") {
+        await client.query(
+          "UPDATE questions SET is_active = 0, deleted_at = NOW() WHERE passage_id = ANY($1) AND deleted_at IS NULL",
+          [ids]
+        );
+        const info = await client.query(
+          "UPDATE passages SET is_active = 0, deleted_at = NOW() WHERE id = ANY($1) AND deleted_at IS NULL",
+          [ids]
+        );
         affected = info.rowCount;
-      });
-    }
-
-    res.json({
-      ok: true,
-      affected,
-      skipped: [...blocked].map((id) => ({ id, reason: "has Coach sessions" })),
+      } else {
+        const val = action === "activate" ? 1 : 0;
+        const info = await client.query(
+          "UPDATE passages SET is_active = $1 WHERE id = ANY($2) AND deleted_at IS NULL",
+          [val, ids]
+        );
+        await client.query(
+          "UPDATE questions SET is_active = $1 WHERE passage_id = ANY($2) AND deleted_at IS NULL",
+          [val, ids]
+        );
+        affected = info.rowCount;
+      }
     });
+
+    res.json({ ok: true, affected, skipped: [] });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/admin/trash ───────────────────────────────────────────────────
+// Everything currently in the trash - drill questions + passages - newest
+// deletion first, with days-left before the auto-purge.
+router.get("/trash", async (req, res, next) => {
+  try {
+    const { TRASH_TTL_DAYS } = require("../lib/trash");
+    const questions = await db.all(
+      `SELECT id, topic, type, difficulty, source, deleted_at, created_at,
+              passage_id AS "passageId",
+              substr(question, 1, 100) AS question_snippet
+       FROM questions
+       WHERE deleted_at IS NOT NULL AND passage_id IS NULL
+       ORDER BY deleted_at DESC`
+    );
+    const passages = await db.all(
+      `SELECT p.id, p.topic, p.title, p.source, p.deleted_at, p.created_at,
+              (SELECT COUNT(*) FROM questions WHERE passage_id = p.id) AS "questionCount",
+              EXISTS(SELECT 1 FROM coach_sessions WHERE passage_id = p.id) AS "hasCoachHistory"
+       FROM passages p
+       WHERE p.deleted_at IS NOT NULL
+       ORDER BY p.deleted_at DESC`
+    );
+    res.json({ questions, passages, ttlDays: TRASH_TTL_DAYS });
+  } catch (e) { next(e); }
+});
+
+// ── POST /api/admin/trash/:kind/:id/restore ────────────────────────────────
+// Pull an item back out of the trash. Restored INACTIVE (deleted_at cleared,
+// is_active stays 0) so it's re-reviewed before going live. Restoring a passage
+// also un-trashes its questions (but leaves them inactive too).
+router.post("/trash/:kind/:id/restore", async (req, res, next) => {
+  try {
+    const { kind } = req.params;
+    if (kind === "questions") {
+      const info = await db.run(
+        "UPDATE questions SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
+        [req.params.id]
+      );
+      if (info.rowCount === 0) return res.status(404).json({ error: "not in trash" });
+    } else if (kind === "passages") {
+      const id = parseInt(req.params.id, 10);
+      if (!id) return res.status(400).json({ error: "invalid passage id" });
+      let found = false;
+      await db.transaction(async (client) => {
+        const info = await client.query(
+          "UPDATE passages SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL",
+          [id]
+        );
+        if (info.rowCount === 0) return;
+        await client.query("UPDATE questions SET deleted_at = NULL WHERE passage_id = $1", [id]);
+        found = true;
+      });
+      if (!found) return res.status(404).json({ error: "not in trash" });
+    } else {
+      return res.status(400).json({ error: "kind must be 'questions' or 'passages'" });
+    }
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// ── DELETE /api/admin/trash/:kind/:id ──────────────────────────────────────
+// Purge one trashed item immediately (don't wait for the 10-day sweep). A
+// passage with Coach history is refused - that history must be kept.
+router.delete("/trash/:kind/:id", async (req, res, next) => {
+  try {
+    const { kind } = req.params;
+    if (kind === "questions") {
+      const info = await db.run(
+        "DELETE FROM questions WHERE id = $1 AND deleted_at IS NOT NULL",
+        [req.params.id]
+      );
+      if (info.rowCount === 0) return res.status(404).json({ error: "not in trash" });
+    } else if (kind === "passages") {
+      const id = parseInt(req.params.id, 10);
+      if (!id) return res.status(400).json({ error: "invalid passage id" });
+      const trashed = await db.get(
+        "SELECT 1 AS x FROM passages WHERE id = $1 AND deleted_at IS NOT NULL",
+        [id]
+      );
+      if (!trashed) return res.status(404).json({ error: "not in trash" });
+      const used = await db.get(
+        "SELECT 1 AS x FROM coach_sessions WHERE passage_id = $1 LIMIT 1",
+        [id]
+      );
+      if (used) return res.status(409).json({ error: "passage has Coach sessions and can't be purged" });
+      await db.transaction(async (client) => {
+        // Questions first — questions.passage_id FKs to passages.
+        await client.query("DELETE FROM questions WHERE passage_id = $1", [id]);
+        await client.query("DELETE FROM passages WHERE id = $1", [id]);
+      });
+    } else {
+      return res.status(400).json({ error: "kind must be 'questions' or 'passages'" });
+    }
+    res.json({ ok: true });
   } catch (e) { next(e); }
 });
 
