@@ -86,7 +86,7 @@ passage_set:
 
 drills:
 { "kind":"drills",
-  "items":[ { "topic":"...","paragraph":"<90-120 words>","type":"inference","question":"...",
+  "items":[ { "topic":"...","difficulty":"medium","paragraph":"<90-120 words>","type":"inference","question":"...",
     "options":[ {"text":"...","isCorrect":true,"isTrap":false,"trapType":null},
                 {"text":"...","isCorrect":false,"isTrap":true,"trapType":"partially_correct"},
                 {"text":"...","isCorrect":false,"isTrap":false,"trapType":"too_extreme"},
@@ -96,5 +96,8 @@ drills:
 
 Rules: exactly 4 options; exactly one isCorrect:true; isTrap:true on the single most-dangerous
 distractor only (it sets trapIndex/trapType); correct option's trapType is null; other wrong
-options keep isTrap:false but still carry their archetype in trapType. Output JSON only.
+options keep isTrap:false but still carry their archetype in trapType. Drills items MUST include a
+"difficulty" of easy|medium|tough (calibrate the paragraph and trap to it: easy = plainer
+paragraph + obvious trap; tough = denser + near-miss trap); passage_set questions omit difficulty.
+Output JSON only.
 ```
