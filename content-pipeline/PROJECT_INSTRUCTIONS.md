@@ -45,6 +45,8 @@ Imply the thesis, never announce it ("This essay argues…" is banned). Include 
 then a qualification that partially concedes. Measured authorial stance (e.g. skeptical-but-fair).
 Embed one in-context academic term and one non-linear move (aside/concession/reversal). Dense,
 grammatical, no lists/headings. Length: full passage 350–500 words; drill paragraph 90–120 words.
+(These difficulty-forcing devices are MANDATORY for full passage_sets. For DRILLS they scale with
+the item's difficulty — see DRILLS DIFFICULTY below; an easy drill deliberately drops most of them.)
 FULL PASSAGES MUST be 3–5 distinct paragraphs separated by a blank line (\n\n in the JSON string)
 — never one unbroken block of text. Each paragraph plays a DIFFERENT rhetorical role relative to
 the thesis (sets up / supports / complicates-qualifies / reverses-counters / synthesizes); no two
@@ -52,6 +54,21 @@ adjacent paragraphs share a role, and at least one paragraph must push AGAINST t
 the previous one (concession, counterexample, reversal). This paragraph-level positive/negative
 tracking — can the student tell when the author turns on their own claim? — is the actual CAT
 skill being tested, and it's what the reading-map grade (paragraph_functions) checks.
+
+── DRILLS DIFFICULTY (drills only; set each item's "difficulty" and calibrate BOTH the paragraph AND the question to it) ──
+The level governs the WHOLE item — an easy drill must READ easy AND TEST easy, never an easy
+question bolted onto a dense paragraph (or a hard question on a plain one).
+• easy: PLAIN paragraph — state the point fairly directly (the "imply the thesis, never announce"
+  rule is RELAXED here), short-to-medium sentences, no dense jargon (gloss any term you must use),
+  at most a mild qualification and NO reversal / aside / non-linear move. The question tests a
+  light inference or a clear paraphrase of a stated idea; the correct option closely restates the
+  text; the trap is clearly over-stated (absolute words) or off-topic — a careful reader rejects
+  it fast.
+• medium: true exam level — implied point, one genuine inferential step for the correct option;
+  the trap differs by scope or emphasis and tempts a ~90th-percentile student.
+• tough: denser paragraph WITH a non-linear move; the answer turns on a subtle distinction (scope,
+  degree, which claim is actually supported); the trap is a near-miss (real_but_unstated /
+  partially_correct) that would catch a ~95th-percentile student.
 
 ── READING KEY (full passages only; graded against the student's reading map later) ──
 thesis (the argument, one sentence) · tone (short phrase) · paragraph_functions (EXACTLY one
@@ -97,7 +114,6 @@ drills:
 Rules: exactly 4 options; exactly one isCorrect:true; isTrap:true on the single most-dangerous
 distractor only (it sets trapIndex/trapType); correct option's trapType is null; other wrong
 options keep isTrap:false but still carry their archetype in trapType. Drills items MUST include a
-"difficulty" of easy|medium|tough (calibrate the paragraph and trap to it: easy = plainer
-paragraph + obvious trap; tough = denser + near-miss trap); passage_set questions omit difficulty.
-Output JSON only.
+"difficulty" of easy|medium|tough — calibrate BOTH the paragraph AND the question to it (see DRILLS
+DIFFICULTY); passage_set questions omit difficulty. Output JSON only.
 ```

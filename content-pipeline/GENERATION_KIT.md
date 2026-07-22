@@ -155,9 +155,12 @@ option + THREE tagged distractors. Same archetype list and rules as CAT (at most
 distractor; distractors tempting, each with a nameable reason). Mark the most-dangerous distractor
 isTrap:true (sets trapIndex/trapType); other wrong options isTrap:false but still trapType-tagged.
 
-Calibrate every item to {DIFFICULTY} and set each item's "difficulty" field to it:
-- easy: plainer paragraph, the correct option paraphrases a stated idea with light inference; the
-  trap is clearly over-stated or off-topic (a careful reader rejects it fast).
+Calibrate every item to {DIFFICULTY} and set each item's "difficulty" field to it — the level
+governs BOTH the paragraph AND the question, never an easy question on a dense paragraph:
+- easy: PLAIN paragraph — state the point fairly directly (relax the "implied point" rule here),
+  short-to-medium sentences, no dense jargon, no reversal/aside. The question tests a light
+  inference or a clear paraphrase of a stated idea; the correct option closely restates the text;
+  the trap is clearly over-stated or off-topic (a careful reader rejects it fast).
 - medium: true exam level; the correct option needs a real inferential step; the trap differs from
   the answer by scope or emphasis and is tempting to a 90th-percentile student.
 - tough: denser paragraph; the answer turns on a subtle distinction (scope, degree, which claim is
