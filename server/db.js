@@ -480,6 +480,15 @@ async function schemaIsStale() {
     // (a one-time no-op once every row has a value).
     await ensureColumn("questions", "difficulty", "TEXT DEFAULT 'medium'");
     await db.exec("UPDATE questions SET difficulty = 'medium' WHERE difficulty IS NULL");
+    // Admin trash (Drills questions + Coach passages). A delete from the admin
+    // lists sets deleted_at (and is_active=0) instead of hard-deleting, so the
+    // row lands in the Deleted section, is restorable, and is hard-purged after
+    // TRASH_TTL_DAYS (see server/lib/trash.js). Every admin list filters on
+    // deleted_at IS NULL; runtime read paths already filter is_active=1.
+    await ensureColumn("questions", "deleted_at", "TIMESTAMPTZ");
+    await ensureColumn("passages", "deleted_at", "TIMESTAMPTZ");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_questions_deleted_at ON questions(deleted_at)");
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_passages_deleted_at ON passages(deleted_at)");
     // Monetization (Phase 6): one payment row per Razorpay order. Status flows
     // created → captured (webhook) → tier granted. Kept even after the tier
     // expires, as the billing history / audit trail.

@@ -292,13 +292,23 @@ export const admin = {
 
   listPassages: (active = "") =>
     request(`/api/admin/passages${active !== "" ? `?active=${active}` : ""}`),
+  getPassage: (id) => request(`/api/admin/passages/${id}`),
+  savePassage: (id, body) =>
+    request(`/api/admin/passages/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  // Activating/deactivating a passage cascades to its questions in both directions.
   setPassageActive: (id, isActive) =>
     request(`/api/admin/passages/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
 
-  // Deleting also removes each passage's questions; passages with Coach sessions
-  // are refused and returned in `skipped`.
+  // 'delete' moves each passage AND its questions to the trash (Admin → Deleted).
   bulkPassages: (ids, action) =>
     request("/api/admin/passages/bulk", { method: "POST", body: JSON.stringify({ ids, action }) }),
+
+  // ── Trash (Admin → Deleted) ──────────────────────────────────────────────
+  listTrash: () => request("/api/admin/trash"),
+  restoreTrash: (kind, id) =>
+    request(`/api/admin/trash/${kind}/${id}/restore`, { method: "POST" }),
+  purgeTrash: (kind, id) =>
+    request(`/api/admin/trash/${kind}/${id}`, { method: "DELETE" }),
 
   listBulletins: () => request("/api/admin/bulletins"),
   createBulletin: (title, body) =>

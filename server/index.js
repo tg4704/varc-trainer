@@ -421,4 +421,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   logger.info(`VARC Trainer server started`, { port: PORT, env: process.env.NODE_ENV || "development" });
+  // Sweep expired admin trash (Drills/Coach soft-deletes) now + daily.
+  require("./lib/trash").startTrashSweeper();
 });

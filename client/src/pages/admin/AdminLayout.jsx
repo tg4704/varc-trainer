@@ -10,20 +10,22 @@ import {
   Flag,
   MessageSquareText,
   Megaphone,
+  Trash2,
 } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 
 const NAV = [
   { to: "/admin",           label: "Overview",  icon: LayoutDashboard, end: true },
   { to: "/admin/users",     label: "Users",     icon: Users },
-  { to: "/admin/questions", label: "Questions", icon: FileText },
-  { to: "/admin/passages",  label: "Passages",  icon: BookOpen },
+  { to: "/admin/questions", label: "Drills",    icon: FileText },
+  { to: "/admin/passages",  label: "Coach",     icon: BookOpen },
   { to: "/admin/import",    label: "Import",    icon: Upload },
   { to: "/admin/costs",     label: "AI Costs",  icon: CircleDollarSign },
   { to: "/admin/logs",      label: "API Logs",  icon: ScrollText },
   { to: "/admin/flags",     label: "Flags",     icon: Flag },
   { to: "/admin/prompts",   label: "AI Prompts", icon: MessageSquareText },
   { to: "/admin/bulletins", label: "Bulletins", icon: Megaphone },
+  { to: "/admin/deleted",   label: "Deleted",   icon: Trash2 },
 ];
 
 export default function AdminLayout() {

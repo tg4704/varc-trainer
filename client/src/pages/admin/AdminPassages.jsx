@@ -1,27 +1,27 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { admin } from "../../api.js";
 import { Button } from "../../components/ui/button.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import BulkActionBar, { RowCheckbox } from "../../components/admin/BulkActionBar.jsx";
 
-// A passage row gates whether it appears in the Coach picker at all - separate
-// from activating its individual questions (Admin → Questions). Imported passages
-// land inactive; activate here once you've reviewed the passage + its questions.
+const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
+
+// Coach = full-RC passages. Activating a passage here activates its questions
+// alongside it (and deactivating deactivates them). Open a passage to edit it
+// and manage its questions. Imported passages land inactive for review.
 export default function AdminPassages() {
   const [active, setActive] = useState("");
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [selected, setSelected] = useState([]);
-  const [notice, setNotice] = useState(null);
 
   const reload = () => {
     admin.listPassages(active).then(setData).catch((e) => setError(e.message));
   };
 
-  // Changing the filter swaps the visible rows - drop any selection with it so a
-  // bulk action can never hit rows the admin can no longer see.
   useEffect(() => {
     setSelected([]);
     reload();
@@ -50,10 +50,10 @@ export default function AdminPassages() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Passages (② Coach)</h1>
+          <h1 className="text-2xl font-bold text-foreground">Coach</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data ? `${data.total} matching` : "-"}. Activating a passage here is what makes it
-            appear in the Coach picker, separate from activating its questions.
+            {data ? `${data.total} passage${data.total === 1 ? "" : "s"}` : "-"}. Activating a passage
+            activates its questions too; open one to edit the passage and its questions.
           </p>
         </div>
       </div>
@@ -70,28 +70,20 @@ export default function AdminPassages() {
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {notice && <p className="text-sm" style={{ color: "var(--amber, #d9a441)" }}>{notice}</p>}
 
       <BulkActionBar
         noun="passage"
         selected={selected}
         onClear={() => setSelected([])}
         onRun={async (action) => {
-          const res = await admin.bulkPassages(selected, action);
-          // Passages with Coach history are refused server-side - say so rather
-          // than silently reporting fewer rows changed than were selected.
-          setNotice(
-            res.skipped?.length
-              ? `${res.skipped.length} passage(s) kept: they have Coach sessions. Deactivate them instead.`
-              : null
-          );
+          await admin.bulkPassages(selected, action);
           setSelected([]);
           reload();
         }}
       />
 
       <Card className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[740px]">
+        <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="px-3 py-2 w-8">
@@ -107,16 +99,17 @@ export default function AdminPassages() {
               <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Topic</th>
               <th className="text-left font-medium px-3 py-2 hidden lg:table-cell">Source</th>
               <th className="text-right font-medium px-3 py-2">Questions</th>
+              <th className="text-left font-medium px-3 py-2 hidden lg:table-cell">Added</th>
               <th className="text-left font-medium px-3 py-2">Status</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="text-center text-muted-foreground py-6">No passages match</td></tr>
+              <tr><td colSpan={9} className="text-center text-muted-foreground py-6">No passages match</td></tr>
             )}
             {rows.map((p) => (
-              <tr key={p.id} className="border-t border-border">
+              <tr key={p.id} className="border-t border-border hover:bg-muted/30">
                 <td className="px-3 py-2">
                   <RowCheckbox
                     label={`Select passage ${p.id}`}
@@ -125,16 +118,24 @@ export default function AdminPassages() {
                   />
                 </td>
                 <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{p.id}</td>
-                <td className="px-3 py-2 max-w-sm truncate text-foreground">{p.title || "(untitled)"}</td>
+                <td className="px-3 py-2 max-w-sm truncate">
+                  <Link to={`/admin/passages/${p.id}`} className="text-foreground hover:underline font-medium">
+                    {p.title || "(untitled)"}
+                  </Link>
+                </td>
                 <td className="px-3 py-2 hidden md:table-cell capitalize text-muted-foreground">{p.topic}</td>
                 <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{p.source}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {p.activeQuestionCount} / {p.questionCount} active
                 </td>
+                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground whitespace-nowrap">{fmtDate(p.created_at)}</td>
                 <td className="px-3 py-2">
                   {p.is_active ? <Badge variant="success">active</Badge> : <Badge variant="secondary">off</Badge>}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={`/admin/passages/${p.id}`}>Open</Link>
+                  </Button>
                   <Button variant="outline" size="sm" disabled={busyId === p.id} onClick={() => toggle(p)}>
                     {p.is_active ? "Deactivate" : "Activate"}
                   </Button>
