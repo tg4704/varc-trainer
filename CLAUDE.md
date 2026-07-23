@@ -193,6 +193,18 @@ A session is an explicit, configured run created on the **Session Setup** page (
 
 **Client session storage**: the in-progress session is kept in `localStorage` under `varc_active_session` (`{ ...sessionConfig, startedAt }`); cleared on completion and on logout. (This replaced the old Phase-3 `varc_session` object.)
 
+**Question selection (2026-07-23)**: all N questions are picked **once, at session creation** (`POST /api/sessions`, `sessions.js`) and frozen into `sessions.question_ids`, so refresh/resume gives the same set and order. The pool is `questionsRepo.listForUser()` filtered by the chosen `difficulties` subset, then by `typeFilter` if set. Selection order:
+
+1. **Unseen first** — questions the user has never *answered*, in any past session, shuffled. `questionsRepo.attemptedByUser(userId)` returns a `Map(questionId → id of most recent attempt)`; the attempt id is a monotonic proxy for "how long ago".
+2. **Top up with longest-ago-seen** if unseen runs dry, then reshuffle the combined list so recycled questions aren't bunched at the end in a predictable order. This is a **soft preference, not a hard filter** — with a 24-question standalone bank, a user exhausts it in ~2–3 sessions (sooner under a difficulty filter), and refusing to build a session would be worse than repeating.
+3. **Repeat within the same filtered pool** as a last resort when the pool itself is smaller than `numQuestions` — never silently falls back to other types/difficulties.
+
+**Skips are not counted as seen** (`AND a.skipped = 0` in `attemptedByUser`) — a skipped question gave the user nothing, so it stays in the unseen pool and can come round again. The separate *within-session* guard in `/questions/next` still won't re-serve a question skipped earlier in the same run.
+
+**Use `server/lib/shuffle.js` (Fisher-Yates) for any new shuffling — never `sort(() => Math.random() - 0.5)`.** That idiom was used at all three selection sites until 2026-07-23 and is **not** a uniform shuffle: the comparator is inconsistent (it can claim a<b and b<a), so V8's TimSort leaves elements biased toward their original index. Measured over 200k trials on an 8-element array, the first element landed in slot 0 **22.1%** of the time against an ideal 12.5% — and since selection is shuffle-then-`slice(0, N)`, that bias went straight into which questions users saw. Fisher-Yates measures 12.6%.
+
+`GET /api/questions/next` still holds the old per-question random picker, but `Practice.jsx` prefetches from `question_ids` via `GET /api/sessions/:id/questions`, so that path is largely vestigial. Its "unseen" check is now cross-session too (it was per-session only), with a fallback that picks randomly from the oldest-seen third rather than uniformly from everything.
+
 ## Key Architecture Decisions
 
 **Question data is server-only**: `correctIndex`, `trapIndex`, and `sourceLines` must never be sent to the client. `GET /api/questions/next` strips them and adds `index`/`total` (or `{ done: true }` when the quota is hit).
