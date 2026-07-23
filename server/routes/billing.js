@@ -17,6 +17,7 @@ const crypto = require("crypto");
 const router = express.Router();
 const db = require("../db");
 const { authenticate } = require("../auth");
+const { billingLimiter } = require("../lib/rateLimiters");
 const { getTier, isValidPaidTier, publicTiers, ENABLE_TIERS } = require("../config/tiers");
 const { effectiveTierKey, countTodayDrills, countTodayCoach, countMonthDrills, countMonthCoach, canUseGuidedCoaching } = require("../lib/entitlements");
 const { currentSeason, catDate, seasonFor, availableSeasons, seasonPrice } = require("../lib/season");
@@ -25,14 +26,22 @@ const KEY_ID = process.env.RAZORPAY_KEY_ID;
 const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
 const IS_LIVE = Boolean(KEY_ID && KEY_SECRET);
-const IS_PROD = process.env.NODE_ENV === "production";
 
-// Dev-mode billing simulation (grant a tier without a real charge) is allowed
-// ONLY outside production. Without this, a production deploy that hasn't had
-// its Razorpay keys set yet - exactly the pre-KYC state - would fall into the
-// !IS_LIVE simulation branches and hand out real paid tiers for free to anyone
-// who clicked "Choose plan". /dev-activate already had this guard; the
-// create-order / create-subscription / cancel-subscription branches did not.
+// SECURITY: this is a money path, so the "is this production?" question is
+// answered with a POSITIVE allowlist, not `NODE_ENV === 'production'`.
+//
+// The old check failed OPEN: if NODE_ENV were ever unset, misspelled, or
+// dropped by a Railway config change, IS_PROD would be false and
+// /dev-activate would happily grant Topper for free to any logged-in user.
+// An env var going missing must never be the thing standing between a
+// stranger and a paid plan. Now only an explicit development/test NODE_ENV
+// unlocks the simulation branches; anything else (including undefined) is
+// treated as production.
+const IS_PROD = !["development", "test"].includes(process.env.NODE_ENV);
+
+// Dev-mode billing simulation (grant a tier without a real charge) additionally
+// requires that no real Razorpay keys are configured - if we can take real
+// money, we take real money.
 const DEV_BILLING = !IS_LIVE && !IS_PROD;
 
 // Production with no payment provider configured: refuse cleanly instead of
@@ -56,6 +65,84 @@ function razorpay() {
 
 const { grantTier, grantTierUntil, grantForPayment } = require("../lib/grants");
 const subs = require("../lib/subscriptions");
+
+// ── Capture + grant, exactly once ─────────────────────────────────────────────
+// Two independent paths report the same successful payment: the client's
+// /verify call and Razorpay's webhook. Both used to do
+//   SELECT status → if not 'captured' → UPDATE → grant
+// which is a read-modify-write race: fired concurrently (Razorpay's webhook is
+// fast, and Checkout's callback fires at the same moment), both reads see
+// 'created', both pass the guard, and the user gets TWO months of tier for one
+// payment. The fix is to let the database arbitrate: the UPDATE itself carries
+// the status precondition, so exactly one caller can ever see rowCount === 1,
+// and only that caller grants.
+//
+// `observed` is what the payment provider says actually happened - amount in
+// paise and currency. We refuse to grant if it doesn't cover what the order was
+// created for. Razorpay supports partial payments, and an under-payment on an
+// order must not buy a full plan.
+async function captureAndGrant(payment, paymentId, observed = {}) {
+  const expectedPaise = Number(payment.amount_inr) * 100;
+
+  // Only enforced when the provider actually told us an amount. "Absent" and
+  // "present but too low" are different situations: an event shape that carries
+  // no amount is no evidence either way, and refusing on it would block a
+  // paying customer over a payload quirk. A present-but-insufficient amount is
+  // real evidence and always refuses.
+  if (observed.amountPaise !== undefined && observed.amountPaise !== null) {
+    const paid = Number(observed.amountPaise);
+    if (!Number.isFinite(paid) || paid < expectedPaise) {
+      console.error(
+        `[billing] REFUSING grant: order ${payment.razorpay_order_id} paid ${observed.amountPaise} paise, expected >= ${expectedPaise}`
+      );
+      return { granted: false, reason: "amount_mismatch" };
+    }
+  }
+  if (observed.currency && observed.currency !== "INR") {
+    console.error(`[billing] REFUSING grant: order ${payment.razorpay_order_id} currency ${observed.currency}`);
+    return { granted: false, reason: "currency_mismatch" };
+  }
+
+  const upd = await db.run(
+    `UPDATE payments
+        SET status = 'captured', razorpay_payment_id = $1, captured_at = NOW()
+      WHERE id = $2 AND status <> 'captured'`,
+    [paymentId || null, payment.id]
+  );
+  if (upd.rowCount !== 1) return { granted: false, reason: "already_captured" };
+
+  await grantForPayment(payment);
+  return { granted: true };
+}
+
+// Ask Razorpay what really happened, rather than trusting the browser.
+//
+// The Checkout signature proves the response came from Razorpay, but it does
+// NOT prove the money settled: a merely *authorized* payment (auto-capture off,
+// or a capture that later fails) produces an equally valid signature. It also
+// carries no amount. So we fetch the authoritative payment object server-side
+// and check status, order linkage, amount and currency before granting.
+//
+// Returns null if the lookup fails - the caller then falls back to signature-only
+// trust rather than stranding a user who genuinely paid, and the webhook (which
+// carries its own amount) remains the backstop.
+async function fetchPaymentSafely(paymentId) {
+  try {
+    return await razorpay().payments.fetch(paymentId);
+  } catch (e) {
+    console.error(`[billing] could not fetch payment ${paymentId}:`, e?.message);
+    return null;
+  }
+}
+
+// HMAC compare that tolerates hostile input. A non-string signature (e.g. a
+// JSON object) used to reach Buffer.from() and throw, turning a bad request
+// into a 500. Length is compared first because timingSafeEqual throws on
+// mismatched buffers.
+function signatureMatches(expectedHex, provided) {
+  if (typeof provided !== "string" || provided.length !== expectedHex.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(provided));
+}
 
 // Resolves the season a "Till CAT" purchase targets. An explicit year is
 // honoured only if that season is actually on sale right now - otherwise we
@@ -269,7 +356,7 @@ router.get("/payments", authenticate, async (req, res, next) => {
 });
 
 // ── POST /api/billing/create-order - start a purchase ─────────────────────────
-router.post("/create-order", authenticate, async (req, res, next) => {
+router.post("/create-order", billingLimiter, authenticate, async (req, res, next) => {
   try {
     const tierKey = String(req.body?.tier || "");
     const period = req.body?.period === "cat" ? "cat" : "monthly";
@@ -328,7 +415,7 @@ router.post("/create-order", authenticate, async (req, res, next) => {
 // instantly for good UX, without waiting on the webhook. The webhook is still
 // the reliable backstop (e.g. if the user closes the tab before this fires).
 // Both paths are idempotent, so a double-grant can't happen.
-router.post("/verify", authenticate, async (req, res, next) => {
+router.post("/verify", billingLimiter, authenticate, async (req, res, next) => {
   try {
     if (!IS_LIVE) return res.status(400).json({ error: "Not in live mode" });
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
@@ -339,10 +426,9 @@ router.post("/verify", authenticate, async (req, res, next) => {
       .createHmac("sha256", KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
-    const ok =
-      expected.length === razorpay_signature.length &&
-      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpay_signature));
-    if (!ok) return res.status(400).json({ error: "Invalid payment signature" });
+    if (!signatureMatches(expected, razorpay_signature)) {
+      return res.status(400).json({ error: "Invalid payment signature" });
+    }
 
     // The order must be this user's (defense-in-depth beyond the signature).
     const payment = await db.get(
@@ -350,12 +436,36 @@ router.post("/verify", authenticate, async (req, res, next) => {
       [razorpay_order_id, req.userId]
     );
     if (!payment) return res.status(404).json({ error: "Order not found" });
+
     if (payment.status !== "captured") {
-      await db.run(
-        "UPDATE payments SET status = 'captured', razorpay_payment_id = $1, captured_at = NOW() WHERE id = $2",
-        [razorpay_payment_id, payment.id]
-      );
-      await grantForPayment(payment);
+      // Don't take the browser's word for it - ask Razorpay directly.
+      const rzpPayment = await fetchPaymentSafely(razorpay_payment_id);
+      let observed = {};
+      if (rzpPayment) {
+        // The signed payment must actually belong to the signed order. (The
+        // signature covers the pair, so this is belt-and-braces, but it's the
+        // check that would catch a leaked-secret forgery attempt.)
+        if (rzpPayment.order_id && rzpPayment.order_id !== razorpay_order_id) {
+          return res.status(400).json({ error: "Payment does not match this order" });
+        }
+        // 'authorized' means the bank approved but the money hasn't settled.
+        // Only 'captured' is money we actually have.
+        if (rzpPayment.status !== "captured") {
+          return res.status(409).json({
+            error: "Payment hasn't completed yet. It'll be applied automatically once it settles.",
+            reason: "not_captured",
+            status: rzpPayment.status,
+          });
+        }
+        observed = { amountPaise: Number(rzpPayment.amount), currency: rzpPayment.currency };
+      }
+      const result = await captureAndGrant(payment, razorpay_payment_id, observed);
+      if (!result.granted && result.reason !== "already_captured") {
+        return res.status(400).json({
+          error: "This payment didn't match the order it was made against. Please contact support.",
+          reason: result.reason,
+        });
+      }
     }
     const user = await db.get("SELECT tier, tier_expires_at FROM users WHERE id = $1", [req.userId]);
     res.json({ ok: true, tier: user.tier, expiresAt: user.tier_expires_at });
@@ -372,16 +482,16 @@ router.post("/webhook", async (req, res) => {
     if (!raw || !signature) return res.status(400).json({ error: "Missing signature" });
 
     const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(raw).digest("hex");
-    // Constant-time compare; lengths must match or timingSafeEqual throws.
-    const ok =
-      expected.length === signature.length &&
-      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-    if (!ok) return res.status(400).json({ error: "Invalid signature" });
+    if (!signatureMatches(expected, signature)) {
+      return res.status(400).json({ error: "Invalid signature" });
+    }
 
     const event = req.body?.event;
-    const entity = req.body?.payload?.payment?.entity || req.body?.payload?.order?.entity || {};
+    const paymentEntity = req.body?.payload?.payment?.entity || null;
+    const orderEntity = req.body?.payload?.order?.entity || null;
+    const entity = paymentEntity || orderEntity || {};
     const orderId = entity.order_id || entity.id;
-    const paymentId = entity.id;
+    const paymentId = paymentEntity?.id || null;
 
     if (event === "payment.captured" || event === "order.paid") {
       const payment = await db.get(
@@ -389,12 +499,25 @@ router.post("/webhook", async (req, res) => {
         [orderId]
       );
       if (payment && payment.status !== "captured") {
-        await db.run(
-          "UPDATE payments SET status = 'captured', razorpay_payment_id = $1, captured_at = NOW() WHERE id = $2",
-          [paymentId || null, payment.id]
-        );
-        await grantForPayment(payment);
-        console.log(`[billing] tier '${payment.tier}' granted to user ${payment.user_id} (${payment.period === "cat" ? payment.period + " " + payment.season_year : payment.months + "mo"})`);
+        // What Razorpay says was actually collected. For payment.captured this
+        // is the captured amount (which, with partial payments enabled, can be
+        // LESS than the order total); for order.paid it's the order's
+        // amount_paid. Either way captureAndGrant refuses to grant if it
+        // doesn't cover what we charged for.
+        // Left undefined (rather than NaN) when the payload carries no amount,
+        // so captureAndGrant can tell "no evidence" from "underpaid".
+        const rawAmount = paymentEntity
+          ? paymentEntity.amount
+          : orderEntity?.amount_paid ?? orderEntity?.amount;
+        const observed = { amountPaise: rawAmount, currency: entity.currency };
+        const result = await captureAndGrant(payment, paymentId, observed);
+        if (result.granted) {
+          console.log(`[billing] tier '${payment.tier}' granted to user ${payment.user_id} (${payment.period === "cat" ? payment.period + " " + payment.season_year : payment.months + "mo"})`);
+        } else if (result.reason !== "already_captured") {
+          // Underpaid / wrong currency. Leave the row uncaptured and shout - this
+          // needs a human, and silently granting would be the actual bug.
+          console.error(`[billing] webhook grant refused for order ${orderId}: ${result.reason}`);
+        }
       }
     }
 
@@ -430,7 +553,7 @@ router.post("/webhook", async (req, res) => {
 // ── POST /api/billing/dev-activate - grant a tier without paying (dev only) ───
 // Disabled in production. Lets you exercise tier gating + the pricing UI before
 // Razorpay KYC is live.
-router.post("/dev-activate", authenticate, async (req, res, next) => {
+router.post("/dev-activate", billingLimiter, authenticate, async (req, res, next) => {
   try {
     if (IS_PROD) return res.status(403).json({ error: "Not available in production" });
     const tierKey = String(req.body?.tier || "");
@@ -456,7 +579,7 @@ router.post("/dev-activate", authenticate, async (req, res, next) => {
 // ── POST /api/billing/create-subscription - start a monthly autopay plan ──────
 // Monthly = recurring. Returns a Razorpay subscription_id for Checkout to open a
 // mandate against (or a devMode flag when no keys are configured).
-router.post("/create-subscription", authenticate, async (req, res, next) => {
+router.post("/create-subscription", billingLimiter, authenticate, async (req, res, next) => {
   try {
     const tierKey = String(req.body?.tier || "");
     if (!isValidPaidTier(tierKey)) {
@@ -504,7 +627,7 @@ router.post("/create-subscription", authenticate, async (req, res, next) => {
 // Checkout's subscription success handler returns payment_id + subscription_id +
 // signature. Signature = HMAC(payment_id + '|' + subscription_id). We grant the
 // first month instantly; subscription.charged webhooks handle every cycle after.
-router.post("/verify-subscription", authenticate, async (req, res, next) => {
+router.post("/verify-subscription", billingLimiter, authenticate, async (req, res, next) => {
   try {
     if (!IS_LIVE) return res.status(400).json({ error: "Not in live mode" });
     const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body || {};
@@ -515,10 +638,9 @@ router.post("/verify-subscription", authenticate, async (req, res, next) => {
       .createHmac("sha256", KEY_SECRET)
       .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
       .digest("hex");
-    const ok =
-      expected.length === razorpay_signature.length &&
-      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpay_signature));
-    if (!ok) return res.status(400).json({ error: "Invalid payment signature" });
+    if (!signatureMatches(expected, razorpay_signature)) {
+      return res.status(400).json({ error: "Invalid payment signature" });
+    }
 
     const sub = await subs.getSubscriptionByRzpId(razorpay_subscription_id);
     if (!sub || sub.user_id !== req.userId) return res.status(404).json({ error: "Subscription not found" });
@@ -531,7 +653,7 @@ router.post("/verify-subscription", authenticate, async (req, res, next) => {
 
 // ── POST /api/billing/cancel-subscription - user cancels (at cycle end) ───────
 // No refund; access continues until the paid-through date, then stops renewing.
-router.post("/cancel-subscription", authenticate, async (req, res, next) => {
+router.post("/cancel-subscription", billingLimiter, authenticate, async (req, res, next) => {
   try {
     const sub = await subs.getActiveSubscription(req.userId);
     if (!sub) return res.status(404).json({ error: "No active subscription to cancel." });

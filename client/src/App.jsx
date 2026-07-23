@@ -72,6 +72,7 @@ const AdminPassageDetail  = lazyWithReload(() => import("./pages/admin/AdminPass
 const AdminTrash          = lazyWithReload(() => import("./pages/admin/AdminTrash.jsx"));
 const AdminImport         = lazyWithReload(() => import("./pages/admin/AdminImport.jsx"));
 const AdminCosts          = lazyWithReload(() => import("./pages/admin/AdminCosts.jsx"));
+const AdminPayments       = lazyWithReload(() => import("./pages/admin/AdminPayments.jsx"));
 const AdminPrompts        = lazyWithReload(() => import("./pages/admin/AdminPrompts.jsx"));
 const AdminBulletins      = lazyWithReload(() => import("./pages/admin/AdminBulletins.jsx"));
 const AdminLogs           = lazyWithReload(() => import("./pages/admin/AdminLogs.jsx"));
@@ -194,6 +195,7 @@ function AppShell() {
             <Route path="passages/:id"         element={<Suspense fallback={AdminLoading}><AdminPassageDetail /></Suspense>} />
             <Route path="deleted"              element={<Suspense fallback={AdminLoading}><AdminTrash /></Suspense>} />
             <Route path="import"               element={<Suspense fallback={AdminLoading}><AdminImport /></Suspense>} />
+            <Route path="payments"             element={<Suspense fallback={AdminLoading}><AdminPayments /></Suspense>} />
             <Route path="costs"                element={<Suspense fallback={AdminLoading}><AdminCosts /></Suspense>} />
             <Route path="prompts"              element={<Suspense fallback={AdminLoading}><AdminPrompts /></Suspense>} />
             <Route path="bulletins"            element={<Suspense fallback={AdminLoading}><AdminBulletins /></Suspense>} />

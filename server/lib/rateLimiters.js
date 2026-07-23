@@ -36,6 +36,13 @@ const apiLimiter = rateLimit({
   limit: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  // The Razorpay webhook is exempt. It's authenticated by HMAC over the raw
+  // body (so the limiter buys nothing), it arrives from a small pool of
+  // Razorpay IPs, and Razorpay retries a failed delivery a limited number of
+  // times. A 429 here means a user who genuinely paid never gets their plan -
+  // the worst possible failure mode for this app, traded against no real
+  // security gain.
+  skip: (req) => req.path === "/billing/webhook",
   message: { error: "Too many requests. Please slow down and try again shortly." },
 });
 
@@ -78,4 +85,22 @@ const aiLimiter = rateLimit({
   message: { error: "You're sending AI requests too quickly. Please wait a moment and try again." },
 });
 
-module.exports = { apiLimiter, authLimiter, aiLimiter, aiLimitForRequest };
+// Billing mutations - order/subscription creation and the signature-verify
+// callbacks. Tight on purpose:
+//   • order creation hits Razorpay's API and writes a `payments` row, so an
+//     unthrottled loop is both a cost and a junk-data problem;
+//   • the /verify endpoints compare an attacker-supplied HMAC, and while
+//     brute-forcing SHA-256 is not realistic, there is no legitimate reason to
+//     offer an unlimited oracle for it.
+// 10/min per authenticated user is far above any real checkout (a human buys
+// once, occasionally retries) and far below anything scripted.
+const billingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: userOrIpKey,
+  message: { error: "Too many billing requests. Please wait a minute and try again." },
+});
+
+module.exports = { apiLimiter, authLimiter, aiLimiter, billingLimiter, aiLimitForRequest };

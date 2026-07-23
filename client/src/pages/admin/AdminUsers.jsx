@@ -11,6 +11,30 @@ function fmtDate(s) {
   return new Date(s).toLocaleDateString();
 }
 
+const TIER_LABELS = {
+  free: "Skimmer",
+  inference: "Inference",
+  ninetyninth: "99th",
+  topper: "Topper",
+};
+
+// A tier whose expiry has passed is NOT the plan the user actually has - the
+// server collapses it to free at request time (effectiveTierKey). Showing the
+// stale users.tier value here would make an admin think someone still has
+// Topper when they were downgraded weeks ago, so we apply the same rule.
+function planFor(u) {
+  const key = u.tier || "free";
+  const expired = u.tierExpiresAt && new Date(u.tierExpiresAt) < new Date();
+  if (key === "free" || expired) {
+    return { label: TIER_LABELS.free, paid: false, note: expired ? `expired ${fmtDate(u.tierExpiresAt)}` : null };
+  }
+  return {
+    label: TIER_LABELS[key] || key,
+    paid: true,
+    note: u.tierExpiresAt ? `till ${fmtDate(u.tierExpiresAt)}` : null,
+  };
+}
+
 export default function AdminUsers() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -52,6 +76,7 @@ export default function AdminUsers() {
               <th className="text-left font-medium px-3 py-2">Username</th>
               <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Email</th>
               <th className="text-left font-medium px-3 py-2">Role</th>
+              <th className="text-left font-medium px-3 py-2">Plan</th>
               <th className="text-right font-medium px-3 py-2">Sessions</th>
               <th className="text-right font-medium px-3 py-2">Attempts</th>
               <th className="text-right font-medium px-3 py-2 hidden lg:table-cell">Correct</th>
@@ -62,7 +87,7 @@ export default function AdminUsers() {
           </thead>
           <tbody>
             {data?.users?.length === 0 && (
-              <tr><td colSpan={9} className="text-center text-muted-foreground py-6">No users</td></tr>
+              <tr><td colSpan={10} className="text-center text-muted-foreground py-6">No users</td></tr>
             )}
             {data?.users?.map((u) => (
               <tr key={u.id} className="border-t border-border">
@@ -72,6 +97,19 @@ export default function AdminUsers() {
                   {u.role === "admin"
                     ? <Badge variant="default">admin</Badge>
                     : <Badge variant="secondary">user</Badge>}
+                </td>
+                <td className="px-3 py-2">
+                  {(() => {
+                    const plan = planFor(u);
+                    return (
+                      <div className="flex flex-col leading-tight">
+                        <span className={plan.paid ? "font-medium text-foreground" : "text-muted-foreground"}>
+                          {plan.label}
+                        </span>
+                        {plan.note && <span className="text-[11px] text-muted-foreground">{plan.note}</span>}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{u.sessions}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{u.attempts}</td>

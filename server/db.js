@@ -511,6 +511,12 @@ async function schemaIsStale() {
     // 'monthly' (recurring 1-month) vs 'cat' (one-time, expires on the exam date).
     await ensureColumn("payments", "period", "TEXT NOT NULL DEFAULT 'monthly'");
     await ensureColumn("payments", "season_year", "INTEGER");
+    // Set only on provider='manual' rows: which admin granted the tier by hand.
+    // Makes every plan a user holds traceable to either a real payment or a
+    // named person, which is the whole point of the payments log.
+    await ensureColumn("payments", "granted_by", "INTEGER REFERENCES users(id)");
+    // The admin payments log sorts by recency across all users.
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at DESC)");
 
     // Razorpay recurring (autopay) - one Plan per (tier, mode, price); reused
     // across all subscribers. amount_inr is part of the key because Razorpay

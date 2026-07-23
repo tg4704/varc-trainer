@@ -11,6 +11,7 @@ import {
   MessageSquareText,
   Megaphone,
   Trash2,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 
@@ -20,6 +21,7 @@ const NAV = [
   { to: "/admin/questions", label: "Drills",    icon: FileText },
   { to: "/admin/passages",  label: "Coach",     icon: BookOpen },
   { to: "/admin/import",    label: "Import",    icon: Upload },
+  { to: "/admin/payments",  label: "Payments",  icon: CreditCard },
   { to: "/admin/costs",     label: "AI Costs",  icon: CircleDollarSign },
   { to: "/admin/logs",      label: "API Logs",  icon: ScrollText },
   { to: "/admin/flags",     label: "Flags",     icon: Flag },

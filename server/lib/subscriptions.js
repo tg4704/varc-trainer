@@ -90,10 +90,27 @@ async function createSubscription(userId, tierKey) {
   return sub;
 }
 
-// Apply one successful charge: extend the tier by a month (idempotent per
-// payment id) and mark the subscription active. Called by verify + webhook.
+// Apply one successful charge: extend the tier by a month and mark the
+// subscription active. Called by BOTH /verify-subscription (client callback) and
+// the subscription.charged webhook, which routinely fire at the same moment for
+// the first cycle.
+//
+// Idempotency is enforced by the database, not by an in-JS check. The old
+// `if (sub.last_charge_id === paymentId) return` read a row that was fetched
+// earlier in the request, so two concurrent callers both saw the pre-charge
+// value, both passed, and both granted a month for a single ₹299 charge. Now we
+// *claim* the charge id with a conditional UPDATE first; only the caller whose
+// UPDATE actually matched a row goes on to grant.
 async function applyCharge(sub, paymentId) {
-  if (paymentId && sub.last_charge_id === paymentId) return; // already applied
+  if (paymentId) {
+    const claim = await db.run(
+      `UPDATE subscriptions
+          SET status = 'active', last_charge_id = $1
+        WHERE id = $2 AND (last_charge_id IS DISTINCT FROM $1)`,
+      [paymentId, sub.id]
+    );
+    if (claim.rowCount !== 1) return; // another caller already applied this charge
+  }
   await grantTier(sub.user_id, sub.tier, 1);
   const user = await db.get("SELECT tier_expires_at FROM users WHERE id = $1", [sub.user_id]);
   await db.run(

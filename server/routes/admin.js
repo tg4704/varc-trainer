@@ -54,6 +54,7 @@ router.get("/users", async (req, res, next) => {
       params = [`%${q}%`, `%${q}%`];
       rowSql = `SELECT
          u.id, u.username, u.email, u.role, u.created_at,
+         u.tier, u.tier_expires_at AS "tierExpiresAt",
          (SELECT COUNT(*) FROM sessions WHERE user_id = u.id) AS sessions,
          (SELECT COUNT(*) FROM attempts a JOIN sessions s ON s.id = a.session_id
                                           WHERE s.user_id = u.id) AS attempts,
@@ -70,6 +71,7 @@ router.get("/users", async (req, res, next) => {
       params = [];
       rowSql = `SELECT
          u.id, u.username, u.email, u.role, u.created_at,
+         u.tier, u.tier_expires_at AS "tierExpiresAt",
          (SELECT COUNT(*) FROM sessions WHERE user_id = u.id) AS sessions,
          (SELECT COUNT(*) FROM attempts a JOIN sessions s ON s.id = a.session_id
                                           WHERE s.user_id = u.id) AS attempts,
@@ -253,6 +255,17 @@ router.patch("/users/:id/tier", async (req, res, next) => {
     } else {
       return res.status(400).json({ error: "unknown tier" });
     }
+
+    // Audit trail. A manually granted tier is a plan the user holds without a
+    // Razorpay payment behind it, so without this it would be invisible in the
+    // payments log - and "why does this account have Topper?" would have no
+    // answer. Recorded as a ₹0 'manual' row, attributed to the acting admin.
+    await db.run(
+      `INSERT INTO payments (user_id, tier, months, amount_inr, provider, razorpay_order_id, status, period, captured_at, granted_by)
+       VALUES ($1, $2, $3, 0, 'manual', $4, 'captured', 'manual', NOW(), $5)`,
+      [userId, tier, tier === "free" ? 0 : months, `manual_${userId}_${Date.now()}`, req.userId]
+    );
+
     const updated = await db.get("SELECT tier, tier_expires_at FROM users WHERE id = $1", [userId]);
     res.json({ ok: true, tier: updated.tier, tierName: getTier(updated.tier).name, expiresAt: updated.tier_expires_at });
   } catch (e) { next(e); }
@@ -1086,6 +1099,115 @@ router.get("/costs", async (req, res, next) => {
 
     res.json({ totals, byDay, byModel, byUser });
   } catch (e) { next(e); }
+});
+
+// ── GET /api/admin/payments ─────────────────────────────────────────────────
+// The money log: every payment row across all users, with revenue totals and
+// the plans currently held. Filters: ?q=<user/order/payment id>&status=&provider=
+// &tier=&page=&pageSize=
+//
+// Deliberately shows 'created' (abandoned-checkout) rows too, not just captured
+// ones like the user-facing /api/billing/payments does. A pile of created-never-
+// captured rows for one account is exactly the signal that someone is probing
+// the payment flow, and hiding it would hide the attack.
+router.get("/payments", async (req, res, next) => {
+  try {
+    const q = (req.query.q || "").trim();
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(200, Math.max(1, parseInt(req.query.pageSize, 10) || 50));
+    const offset = (page - 1) * pageSize;
+
+    // Build the filter clause with positional params (never string interpolation).
+    const where = [];
+    const params = [];
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(
+        `(u.username ILIKE $${params.length} OR u.email ILIKE $${params.length}
+          OR p.razorpay_order_id ILIKE $${params.length} OR p.razorpay_payment_id ILIKE $${params.length})`
+      );
+    }
+    for (const [col, val] of [["status", req.query.status], ["provider", req.query.provider], ["tier", req.query.tier]]) {
+      if (val) { params.push(String(val)); where.push(`p.${col} = $${params.length}`); }
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const countRow = await db.get(
+      `SELECT COUNT(*) AS total FROM payments p JOIN users u ON u.id = p.user_id ${whereSql}`,
+      params
+    );
+
+    const rows = await db.all(
+      `SELECT p.id, p.user_id AS "userId", u.username, u.email,
+              p.tier, p.months, p.amount_inr AS "amountInr", p.provider,
+              p.razorpay_order_id AS "orderId", p.razorpay_payment_id AS "paymentId",
+              p.status, p.period, p.season_year AS "seasonYear",
+              p.created_at AS "createdAt", p.captured_at AS "capturedAt",
+              p.granted_by AS "grantedBy", g.username AS "grantedByUsername"
+         FROM payments p
+         JOIN users u ON u.id = p.user_id
+         LEFT JOIN users g ON g.id = p.granted_by
+         ${whereSql}
+        ORDER BY p.created_at DESC
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, pageSize, offset]
+    );
+
+    // Revenue totals ignore the filters on purpose - they're the headline
+    // numbers for the whole business, not for the current search. Only real
+    // money counts, so ₹0 'manual' comp rows are excluded from revenue while
+    // still being counted separately.
+    const totals = await db.get(
+      `SELECT
+         COALESCE(SUM(CASE WHEN status = 'captured' AND provider <> 'manual' THEN amount_inr ELSE 0 END), 0)::int AS "revenueInr",
+         COALESCE(SUM(CASE WHEN status = 'captured' AND provider <> 'manual'
+                            AND captured_at >= date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata'
+                           THEN amount_inr ELSE 0 END), 0)::int AS "revenueThisMonthInr",
+         COUNT(*) FILTER (WHERE status = 'captured' AND provider <> 'manual')::int AS "capturedCount",
+         COUNT(*) FILTER (WHERE status = 'created')::int AS "abandonedCount",
+         COUNT(*) FILTER (WHERE provider = 'manual')::int AS "manualCount",
+         COUNT(DISTINCT user_id) FILTER (WHERE status = 'captured' AND provider <> 'manual')::int AS "payingUsers"
+       FROM payments`
+    );
+
+    // Who currently holds what. Counts live (unexpired) paid plans by tier.
+    const byTier = await db.all(
+      `SELECT tier, COUNT(*)::int AS users
+         FROM users
+        WHERE tier IS NOT NULL AND tier <> 'free'
+          AND (tier_expires_at IS NULL OR tier_expires_at > NOW())
+        GROUP BY tier
+        ORDER BY users DESC`
+    );
+
+    res.json({ payments: rows, total: parseInt(countRow.total, 10), page, pageSize, totals, byTier });
+  } catch (e) { next(e); }
+});
+
+// ── GET /api/admin/subscriptions ────────────────────────────────────────────
+// Recurring-mandate state, which the payments log alone doesn't show: a
+// subscription that has stopped charging ('halted') is a user quietly losing
+// access, and a 'cancel at cycle end' is churn you can still act on.
+router.get("/subscriptions", async (req, res, next) => {
+  try {
+    const rows = await db.all(
+      `SELECT s.id, s.user_id AS "userId", u.username, u.email,
+              s.tier, s.razorpay_subscription_id AS "subscriptionId", s.status,
+              s.last_charge_id AS "lastChargeId", s.current_end AS "currentEnd",
+              s.cancel_at_cycle_end AS "cancelAtCycleEnd",
+              s.cancelled_at AS "cancelledAt", s.created_at AS "createdAt"
+         FROM subscriptions s
+         JOIN users u ON u.id = s.user_id
+        ORDER BY s.created_at DESC
+        LIMIT 200`
+    );
+    res.json({ subscriptions: rows });
+  } catch (e) {
+    // Older DBs may predate the subscriptions table - an empty list is a better
+    // answer than a 500 that breaks the whole page.
+    if (/relation .* does not exist/i.test(e.message)) return res.json({ subscriptions: [] });
+    next(e);
+  }
 });
 
 // ── GET /api/admin/api-calls ────────────────────────────────────────────────

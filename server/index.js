@@ -46,6 +46,20 @@ app.use((req, res, next) => {
 // X-Content-Type-Options, etc.) are safe to turn on immediately.
 app.use(helmet({ contentSecurityPolicy: false }));
 
+// Trust exactly one proxy hop. In production the chain is
+// Cloudflare → Railway's edge → this process, and Railway sets a single
+// X-Forwarded-For that already ends with the real client IP.
+//
+// Without this, Express reports the proxy's address as req.ip for EVERY
+// request, which quietly defeats three security controls at once: the
+// per-IP auth limiter (10/min) becomes a 10/min ceiling for the entire
+// internet, the global limiter likewise, and login lockout keys every
+// attacker to the same bucket as every legitimate user. `1` rather than
+// `true` on purpose - `true` trusts the whole X-Forwarded-For chain, which
+// a client can prepend arbitrary addresses to in order to forge its own IP
+// and rotate around the rate limiter.
+app.set("trust proxy", 1);
+
 // gzip/brotli-negotiated compression on every response - API JSON payloads
 // (question lists, dashboard) and the static client build both benefit;
 // cuts bandwidth and Railway egress cost for close to zero CPU overhead.

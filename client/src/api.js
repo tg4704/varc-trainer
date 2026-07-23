@@ -275,6 +275,13 @@ export const admin = {
 
   costs: () => request("/api/admin/costs"),
 
+  payments: (filters = {}) => {
+    const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "" && v != null));
+    const qs = new URLSearchParams(clean).toString();
+    return request(`/api/admin/payments${qs ? `?${qs}` : ""}`);
+  },
+  subscriptions: () => request("/api/admin/subscriptions"),
+
   apiCalls: (filters = {}) => {
     const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "" && v != null));
     const qs = new URLSearchParams(clean).toString();
