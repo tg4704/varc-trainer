@@ -62,4 +62,26 @@ async function listAllActive() {
   return rows.map(hydrate);
 }
 
-module.exports = { findById, listForUser, listAllActive, hydrate };
+// Every question this user has ever ANSWERED, in any session, mapped to the id
+// of their most recent attempt at it (a monotonic proxy for "how long ago").
+// Used to keep a session from re-serving questions the user has already done -
+// soft, not hard: once the unseen pool is exhausted we fall back to the
+// longest-ago-seen ones rather than refusing to build a session.
+// Skips are deliberately NOT counted: a skipped question gave the user nothing,
+// so it stays in the unseen pool and can come round again.
+async function attemptedByUser(userId) {
+  const rows = await db.all(
+    `SELECT a.question_id, MAX(a.id) AS last_attempt_id
+     FROM attempts a
+     JOIN sessions s ON s.id = a.session_id
+     WHERE s.user_id = $1
+       AND a.skipped = 0
+     GROUP BY a.question_id`,
+    [userId]
+  );
+  const seen = new Map();
+  for (const r of rows) seen.set(r.question_id, Number(r.last_attempt_id));
+  return seen;
+}
+
+module.exports = { findById, listForUser, listAllActive, attemptedByUser, hydrate };

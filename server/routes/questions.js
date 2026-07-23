@@ -52,10 +52,21 @@ router.get("/next", authenticate, async (req, res, next) => {
     if (allQuestions.length === 0) {
       return res.status(500).json({ error: "No questions available" });
     }
-    const unseen = allQuestions.filter((q) => !attemptedSet.has(q.id));
+    // Unseen means unseen across ALL of this user's sessions, not just this one.
+    const everSeen = await questionsRepo.attemptedByUser(req.userId);
+    const unseen = allQuestions.filter((q) => !everSeen.has(q.id) && !attemptedSet.has(q.id));
 
     const repeating = unseen.length === 0;
-    const pool = repeating ? allQuestions : unseen;
+    // Falling back: never re-serve something already answered in THIS session
+    // if anything else is left, and prefer the longest-ago-seen.
+    let pool = unseen;
+    if (repeating) {
+      const notInThisSession = allQuestions.filter((q) => !attemptedSet.has(q.id));
+      const fallback = (notInThisSession.length ? notInThisSession : allQuestions)
+        .sort((a, b) => (everSeen.get(a.id) || 0) - (everSeen.get(b.id) || 0));
+      // Pick randomly from the oldest-seen third so it isn't fully deterministic.
+      pool = fallback.slice(0, Math.max(1, Math.ceil(fallback.length / 3)));
+    }
     const pick = pool[Math.floor(Math.random() * pool.length)];
 
     return res.json({

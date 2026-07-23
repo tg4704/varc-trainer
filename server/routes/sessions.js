@@ -9,6 +9,7 @@ const { requireEntitlement, attachTier } = require("../lib/entitlements");
 const { VALID_TYPES, VALID_DIFFICULTIES } = require("../lib/validateQuestion");
 const { aiLimiter } = require("../lib/rateLimiters");
 const { extractJSON } = require("../lib/extractJSON");
+const { shuffle } = require("../lib/shuffle");
 
 const VALID_MODES = ["untimed", "count_up", "countdown"];
 const VALID_SCOPES = ["per_question", "per_session"];
@@ -106,12 +107,29 @@ router.post("/", authenticate, async (req, res, next) => {
       const typeLabel = typeFilter ? `${typeFilter} ` : "";
       return res.status(400).json({ error: `No ${typeLabel}questions available yet${diffLabel}. Try a different selection or add more questions.` });
     }
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    let questionIds = shuffled.slice(0, numQuestions).map((q) => q.id);
-    // If the pool is smaller than requested, repeat within the SAME (filtered) pool
-    // to fill the session - never silently fall back to other question types.
+    // Prefer questions the user has never attempted, in any past session.
+    // Soft preference, not a hard filter: a user who has worked through the
+    // whole (filtered) bank must still be able to start a session, so once the
+    // unseen pool runs out we top up with the ones seen longest ago.
+    const seen = await questionsRepo.attemptedByUser(req.userId);
+    const unseen = shuffle(pool.filter((q) => !seen.has(q.id)));
+    const seenAgain = pool
+      .filter((q) => seen.has(q.id))
+      .sort((a, b) => seen.get(a.id) - seen.get(b.id)); // oldest attempt first
+
+    let questionIds = unseen.slice(0, numQuestions).map((q) => q.id);
     if (questionIds.length < numQuestions) {
-      const extra = [...pool].sort(() => Math.random() - 0.5);
+      const topUp = seenAgain.slice(0, numQuestions - questionIds.length);
+      questionIds = questionIds.concat(topUp.map((q) => q.id));
+      // Shuffle the combined list so the recycled questions aren't all bunched
+      // at the end of the session in a predictable order.
+      questionIds = shuffle(questionIds);
+    }
+    // If the pool itself is smaller than requested, repeat within the SAME
+    // (filtered) pool to fill the session - never silently fall back to other
+    // question types.
+    if (questionIds.length < numQuestions) {
+      const extra = shuffle(pool);
       while (questionIds.length < numQuestions) {
         questionIds.push(extra[questionIds.length % extra.length].id);
       }
@@ -489,7 +507,7 @@ router.get("/:id/questions", authenticate, async (req, res, next) => {
     if (!questionIds || questionIds.length === 0) {
       // Legacy session without pre-selected IDs - generate on the fly
       const allQuestions = await questionsRepo.listForUser(req.userId);
-      const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
+      const shuffled = shuffle(allQuestions);
       questionIds = shuffled.slice(0, s.num_questions).map((q) => q.id);
       while (questionIds.length < s.num_questions && allQuestions.length > 0) {
         questionIds.push(allQuestions[questionIds.length % allQuestions.length].id);
