@@ -5,6 +5,7 @@ import DashboardSkeleton from "./components/DashboardSkeleton.jsx";
 import TopNav from "./components/TopNav.jsx";
 import CookieConsent from "./components/CookieConsent.jsx";
 import UpgradePrompt from "./components/UpgradePrompt.jsx";
+import MobileNotice from "./components/MobileNotice.jsx";
 import { AuthProvider } from "./auth.jsx";
 import { NavGuardProvider } from "./navGuard.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
@@ -210,6 +211,7 @@ function AppShell() {
       </main>
       <CookieConsent />
       <UpgradePrompt />
+      <MobileNotice />
     </div>
     </NavGuardProvider>
   );
