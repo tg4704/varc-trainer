@@ -130,6 +130,10 @@
   html {
     font-family: var(--font-ui);
     color-scheme: dark;
+    /* Paired with the same rule on body below - the clip has to sit on BOTH
+       elements or a wide descendant can still pan the viewport. `clip`, never
+       `hidden`: hidden would kill position:sticky on descendants. */
+    overflow-x: clip;
   }
   body {
     margin: 0;
@@ -484,6 +488,147 @@
 .pr-bargrow { height: 0 !important; transition: height .8s cubic-bezier(.34,1.3,.5,1) .3s; }
 .pr-in .pr-bargrow { height: var(--h) !important; }
 
+/* ── Long Document (marketing home) ────────────────────────────────────────
+   Hallmark · pre-emit critique: P5 H4 E5 S4 R5 V5
+   · contrast: pass (40-41) · mobile: pass (34, 49, 50-57)
+   · honest: pass (46) · chrome: pass (47) · tokens: pass (48) · icons: pass (30)
+   Hallmark · genre: editorial · macrostructure: Long Document · theme: Graspr
+   dark (preserved) · enrichment: none · nav: n/a (shared TopNav, out of scope)
+   · footer: n/a (shared SiteFooter, out of scope)
+   H1 Marquee knobs: size=xl, alignment=left-bias, underlay=rule-below
+   F3 Tabular knobs: columns=2, rules=every row, numbers=tabular
+   F4 Step knobs: numbering=01/02/03, layout=vertical stack, connector=none
+
+   Scoped to the logged-out landing page. Three families only (Newsreader
+   display, Instrument Sans body, IBM Plex Mono outlier) - the Caveat `.hand`
+   script and the Source Serif reading face are deliberately absent here.
+   Every colour below resolves through an existing token; no inline hex. */
+:root {
+  --ld-measure:      63ch;
+  --ld-rule:         var(--border-subtle);
+  --ld-rule-strong:  rgba(255,255,255,0.16);
+  --ld-tint-teal:    rgba(93,202,165,0.10);
+  --ld-tint-amber:   rgba(240,168,104,0.10);
+  --ld-tint-peri:    rgba(139,157,255,0.10);
+  --ld-figure:       #0E1119;
+}
+
+.ld { --ld-pad: clamp(1.25rem, 5vw, 2rem); }
+.ld-col   { max-width: var(--ld-measure); }
+.ld-wrap  { max-width: 76rem; margin-inline: auto; padding-inline: var(--ld-pad); }
+
+/* Display type: roman always. Emphasis is carried by accent + a drawn rule,
+   never by an italic word - italic headers are the most reliable AI tell. */
+.ld-h1, .ld-h2, .ld-h3 { font-family: var(--font-display); font-style: normal; }
+.ld-h1 {
+  font-size: clamp(2.5rem, 6vw + 0.5rem, 4.6rem);
+  font-weight: 500; line-height: 1.04; letter-spacing: -0.025em;
+  overflow-wrap: anywhere; min-width: 0;
+}
+.ld-h2 {
+  font-size: clamp(1.9rem, 3.2vw + 0.6rem, 2.9rem);
+  font-weight: 500; line-height: 1.12; letter-spacing: -0.02em;
+  overflow-wrap: anywhere; min-width: 0;
+}
+.ld-h3 { font-size: clamp(1.25rem, 1.2vw + 0.9rem, 1.6rem); font-weight: 500; line-height: 1.25; }
+
+/* The one emphasis device: accent ink plus a hairline rule. Fixed 2px at a
+   6px offset - an em-relative rule would render ~7px thick at display size,
+   which stops reading as a rule and starts reading as a highlighter slab. */
+.ld-mark {
+  color: var(--teal);
+  text-decoration: underline;
+  text-decoration-color: var(--teal-dim);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+  text-decoration-skip-ink: none;
+}
+
+.ld-lede { font-size: clamp(1.05rem, 0.5vw + 0.95rem, 1.25rem); line-height: 1.6; color: var(--text-2); }
+.ld-body { font-size: 1.0625rem; line-height: 1.72; color: var(--text-2); }
+.ld-body + .ld-body { margin-top: 1.15em; }
+.ld-body strong { color: var(--text); font-weight: 600; }
+
+/* Outlier register (IBM Plex Mono): ordinals and figure labels only. */
+.ld-ord {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: 0.75rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ld-rule    { height: 1px; background: var(--ld-rule); border: 0; }
+.ld-rule-hi { height: 1px; background: var(--ld-rule-strong); border: 0; }
+
+/* Typographic link CTA - underline grows from the left on hover/focus. */
+.ld-link {
+  position: relative; display: inline-flex; align-items: baseline; gap: 0.4em;
+  color: var(--text); font-weight: 500; white-space: nowrap;
+}
+.ld-link::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 1.5px;
+  background: var(--teal); transform: scaleX(0); transform-origin: left;
+  transition: transform 220ms cubic-bezier(.16,1,.3,1);
+}
+.ld-link:hover::after, .ld-link:focus-visible::after { transform: scaleX(1); }
+.ld-link:active { color: var(--teal); }
+.ld-link .ld-arrow { transition: transform 220ms cubic-bezier(.16,1,.3,1); }
+.ld-link:hover .ld-arrow { transform: translateX(3px); }
+/* Below the typography breakpoint the link is a thumb target, not just text:
+   pad it to the 44 px WCAG floor without moving the underline off the baseline. */
+@media (max-width: 40rem) {
+  .ld-link { min-height: 44px; align-items: center; }
+  .ld-link::after { bottom: calc(50% - 0.85em); }
+}
+
+/* F3 - the five failures, as hairline rows rather than nested cards. */
+.ld-row {
+  display: grid; grid-template-columns: 1fr; gap: 0.75rem 2.5rem;
+  padding-block: clamp(1.75rem, 3vw, 2.5rem);
+  border-top: 1px solid var(--ld-rule);
+}
+.ld-row:last-child { border-bottom: 1px solid var(--ld-rule); }
+@media (min-width: 56rem) {
+  .ld-row { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+}
+.ld-quote { font-family: var(--font-display); font-style: normal; font-size: clamp(1.2rem, 1.4vw + 0.85rem, 1.55rem); line-height: 1.35; color: var(--text); }
+/* Body face, not mono: the outlier register is reserved for figure/plate
+   apparatus (the `.ld-ord` ordinals). A third mono context would turn the
+   outlier into a de-facto third body font. */
+.ld-surface {
+  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--teal);
+}
+/* Answer-option letters, also body face for the same reason. */
+.ld-optletter {
+  flex: none; font-size: 0.8125rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text-muted);
+}
+
+/* Figures - real screenshots, hairline frame, no re-drawn browser chrome. */
+.ld-fig { margin: 0; }
+.ld-fig img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--ld-rule); }
+.ld-figcap { margin-top: 0.75rem; font-size: 0.875rem; line-height: 1.55; color: var(--text-muted); }
+
+/* Demo block - paper, not glass. Editorial doesn't do frosted panels. */
+.ld-demo {
+  background: var(--ld-figure);
+  border: 1px solid var(--ld-rule);
+  border-radius: 14px;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+}
+
+/* F4 - the walkthrough. Screenshot leads, copy sits beneath at measure. */
+.ld-step { display: grid; gap: 1.5rem; }
+@media (min-width: 64rem) {
+  .ld-step { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 3rem; align-items: center; }
+  .ld-step--flip > .ld-fig { order: 2; }
+}
+
+/* One orchestrated entrance. Nothing else on this page animates on scroll. */
+.ld-enter { opacity: 0; transform: translateY(14px); transition: opacity .55s cubic-bezier(.16,1,.3,1), transform .55s cubic-bezier(.16,1,.3,1); }
+.ld-in .ld-enter { opacity: 1; transform: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  .ld-enter { opacity: 1; transform: none; }
 }
