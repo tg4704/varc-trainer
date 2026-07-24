@@ -291,6 +291,12 @@ export const admin = {
   importContent: (payload) =>
     request("/api/admin/import", { method: "POST", body: JSON.stringify(payload) }),
 
+  exportContent: (filters = {}) => {
+    const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== "" && v != null));
+    const qs = new URLSearchParams(clean).toString();
+    return request(`/api/admin/export${qs ? `?${qs}` : ""}`);
+  },
+
   listPrompts: () => request("/api/admin/prompts"),
   savePrompt: (key, content) =>
     request(`/api/admin/prompts/${key}`, { method: "PUT", body: JSON.stringify({ content }) }),

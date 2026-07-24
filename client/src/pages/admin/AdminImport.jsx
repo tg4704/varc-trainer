@@ -10,6 +10,37 @@ export default function AdminImport() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
+  // ── Export ──────────────────────────────────────────────────────────────
+  const [expSource, setExpSource] = useState("ai_generated,coach");
+  const [expActive, setExpActive] = useState(""); // "" = all, "1", "0"
+  const [expBusy, setExpBusy] = useState(false);
+  const [expError, setExpError] = useState("");
+  const [expInfo, setExpInfo] = useState(null);
+
+  async function handleExport() {
+    setExpError("");
+    setExpInfo(null);
+    setExpBusy(true);
+    try {
+      const data = await admin.exportContent({ source: expSource, active: expActive });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = data.exportedAt.slice(0, 10);
+      a.href = url;
+      a.download = `graspr-content-export-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setExpInfo(data.counts);
+    } catch (e) {
+      setExpError(e.message);
+    } finally {
+      setExpBusy(false);
+    }
+  }
+
   async function handleImport() {
     setError("");
     setResult(null);
@@ -117,6 +148,63 @@ export default function AdminImport() {
           )}
         </div>
       )}
+
+      {/* ── Export ─────────────────────────────────────────────────────── */}
+      <div className="border-t border-border pt-5 space-y-3">
+        <div>
+          <h2 className="font-display text-xl text-foreground">Export content</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Download passages and questions as a JSON file for offline review / quality auditing.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-muted-foreground">
+            Source
+            <select
+              value={expSource}
+              onChange={(e) => setExpSource(e.target.value)}
+              className="mt-1 block rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground"
+            >
+              <option value="">All sources</option>
+              <option value="ai_generated,coach">AI-generated + Coach</option>
+              <option value="ai_generated">AI-generated only</option>
+              <option value="coach">Coach only</option>
+              <option value="seed">Seed only</option>
+              <option value="user">User-authored only</option>
+            </select>
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Status
+            <select
+              value={expActive}
+              onChange={(e) => setExpActive(e.target.value)}
+              className="mt-1 block rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground"
+            >
+              <option value="">Active + inactive</option>
+              <option value="1">Active only</option>
+              <option value="0">Inactive only</option>
+            </select>
+          </label>
+          <button
+            onClick={handleExport}
+            disabled={expBusy}
+            className="rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {expBusy ? "Exporting…" : "Export JSON"}
+          </button>
+        </div>
+        {expError && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {expError}
+          </div>
+        )}
+        {expInfo && (
+          <div className="text-sm text-muted-foreground">
+            Downloaded {expInfo.passages} passage{expInfo.passages === 1 ? "" : "s"} and{" "}
+            {expInfo.questions} question{expInfo.questions === 1 ? "" : "s"}.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

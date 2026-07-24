@@ -1051,6 +1051,58 @@ router.post("/import", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── GET /api/admin/export ──────────────────────────────────────────────────
+// Dump the content bank (passages + their questions, and standalone drills) as
+// JSON for offline review / quality auditing. Query params:
+//   ?source=ai_generated,coach   (comma list; default: all sources)
+//   ?active=1|0                  (filter by is_active; default: all)
+// Returns { passages:[...], questions:[...], counts:{...} }.
+router.get("/export", async (req, res, next) => {
+  try {
+    const sources = (req.query.source || "")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    const active = req.query.active; // "1" | "0" | undefined
+
+    const qWhere = [], qParams = [];
+    if (sources.length) { qParams.push(sources); qWhere.push(`source = ANY($${qParams.length})`); }
+    if (active === "1" || active === "0") {
+      qParams.push(active === "1" ? 1 : 0); qWhere.push(`is_active = $${qParams.length}`);
+    }
+    const qClause = qWhere.length ? `WHERE ${qWhere.join(" AND ")}` : "";
+
+    const questions = await db.all(
+      `SELECT id, topic, type, difficulty, trap_type, question, options_json,
+              correct_index, trap_index, source_lines, passage_id, source, is_active, created_at
+         FROM questions ${qClause}
+         ORDER BY passage_id NULLS FIRST, id`,
+      qParams
+    );
+
+    // Passages: same source/active filter where the columns exist.
+    const pWhere = [], pParams = [];
+    if (sources.length) { pParams.push(sources); pWhere.push(`source = ANY($${pParams.length})`); }
+    if (active === "1" || active === "0") {
+      pParams.push(active === "1" ? 1 : 0); pWhere.push(`is_active = $${pParams.length}`);
+    }
+    const pClause = pWhere.length ? `WHERE ${pWhere.join(" AND ")}` : "";
+    const passages = await db.all(
+      `SELECT id, topic, genre, title, body, word_count, reading_key_json,
+              source, is_active, created_at
+         FROM passages ${pClause}
+         ORDER BY id`,
+      pParams
+    );
+
+    res.json({
+      exportedAt: new Date().toISOString(),
+      filters: { source: sources.length ? sources : "all", active: active || "all" },
+      counts: { passages: passages.length, questions: questions.length },
+      passages,
+      questions,
+    });
+  } catch (e) { next(e); }
+});
+
 // ── GET /api/admin/costs ───────────────────────────────────────────────────
 // Aggregates for the costs page: by day, by model, by user, with running total.
 router.get("/costs", async (req, res, next) => {
