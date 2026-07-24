@@ -11,6 +11,9 @@ const TYPE_LABELS = {
   concept_set: "Concept Set",
   vocab_in_context: "Vocabulary",
   weaken_strengthen: "Weaken / Strengthen",
+  except_set: "EXCEPT / Except-set",
+  hypothetical: "If True / If False",
+  assumption: "Assumption",
 };
 
 export default function TypeBadge({ type }) {

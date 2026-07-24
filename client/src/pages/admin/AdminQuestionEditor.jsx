@@ -7,10 +7,15 @@ import { Card, CardContent } from "../../components/ui/card.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { QUESTION } from "../../lib/limits.js";
 
-const TYPES = ["inference", "tone", "title", "detail", "application"];
+// Keep in sync with server/lib/validateQuestion.js VALID_TYPES / VALID_TRAPS.
+const TYPES = ["inference", "except_set", "hypothetical", "function", "assumption",
+  "application", "vocab_in_context", "main_idea", "concept_set", "weaken_strengthen",
+  "tone", "detail", "title"];
 const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
 const DIFFICULTIES = ["easy", "medium", "tough"];
-const TRAP_TYPES = ["too_extreme", "out_of_scope", "real_but_unstated", "partially_correct"];
+const TRAP_TYPES = ["too_extreme", "out_of_scope", "too_broad", "partially_correct",
+  "tone_mismatch", "real_but_unstated", "distortion", "wrong_question", "wrong_location",
+  "mislabelled", "wordplay"];
 const LETTERS = ["A", "B", "C", "D"];
 
 function blankQuestion() {

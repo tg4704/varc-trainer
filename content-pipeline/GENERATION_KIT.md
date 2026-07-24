@@ -19,8 +19,9 @@ everything it needs is embedded. Use **Opus 4.8**.
 4. Keep only items the validator marks `pass`. Regenerate or drop the rest.
 5. Paste the final JSON into `/admin/import`. Items land **inactive** for your review, then you
    activate them.
-6. Repeat for variety. **Target mix: inference ~50%**, then main_idea / application / function /
-   tone; minimal pure detail. Spread topics: economics, philosophy, science, humanities, social.
+6. Repeat for variety. **Target mix follows real CAT (2022–2025): except_set + hypothetical are the
+   two dominant shapes**, then function / inference / application / assumption / vocab; tone rare,
+   pure detail near-banned. Spread topics: economics, philosophy, science, humanities, social.
 
 Legal: never paste real CAT/GMAT/Aeon/news passage text into the prompt. Topics only. The output
 must be original expression.
@@ -58,7 +59,7 @@ TOPIC = philosophy   |   GENRE = aesthetics   |   QUESTIONS = 4
 You are a CAT VARC item-setter. Produce ONE reading passage and its questions in the exact
 register and difficulty of CAT Reading Comprehension. Output ONLY valid JSON (schema at the end).
 
-PASSAGE (350–500 words):
+PASSAGE (480–560 words — the real CAT band; shorter reads too thin for EXCEPT/hypothetical Qs):
 - On the TOPIC/GENRE above. Original text only — do not reproduce any real article.
 - Imply the thesis; do NOT announce it ("This essay argues…" is banned).
 - Include a counterposition, then a qualification that partially concedes.
@@ -88,18 +89,32 @@ importer rejects the set outright if any are missing, empty, or the wrong shape.
   This is what separates argument-mapping from information-gathering — be specific about
   WHERE it happens and what a reader who misses it would wrongly conclude.
 
-QUESTIONS (produce {QUESTIONS}, spread across types; bias toward inference):
-- Types allowed: inference, main_idea, function, tone, application, concept_set,
-  vocab_in_context, weaken_strengthen, detail. Include at least ONE `application` question
-  (transfer the argument to a novel concrete scenario) — CAT's signature hard type.
-- Stems must be inferential/structural, NOT fact-retrieval.
-- Each question: exactly ONE defensible correct option + THREE distractors.
-- Tag EACH distractor with exactly one archetype:
-  too_extreme | out_of_scope | too_broad | partially_correct | tone_mismatch |
-  real_but_unstated | distortion | wrong_question | wrong_location | mislabelled | wordplay
-- Distractors must be TEMPTING (defensible until the precise archetype is applied). At most ONE
-  distractor per question may use absolute words. Summary/main_idea distractors should be long
-  and multi-claim with exactly one buried error.
+QUESTIONS (produce {QUESTIONS}) — GENERATE TO THE REAL CAT DISTRIBUTION, not the easy four.
+CAT RC (measured 2022–2025) is dominated by EXCEPT-format and hypothetical-logic questions; bare
+tone/title questions are rare. Types: except_set, hypothetical, function, inference, assumption,
+application, vocab_in_context, main_idea, tone, detail.
+- TYPE QUOTA (hard): the set MUST contain ≥1 except_set, ≥1 hypothetical (if true/false →
+  weaken/strengthen/invalidate/contradict), ≥1 function, ≥1 inference. tone ≤1. Bare "which title
+  fits?" and pure detail/retrieval are BANNED. For {QUESTIONS}≥5 add application/assumption/vocab.
+  A set that is all inference/tone/title/detail is an automatic reject.
+- Stem shapes (reword, never copy): except → "All of the following … EXCEPT"; hypothetical →
+  "Which observation would most strengthen the claim that…?" / "…if true, would weaken … EXCEPT
+  that…" / "Which result would invalidate X's inference?"; function → "What does the author wish to
+  communicate by referring to X?" / "The author uses the example of X to illustrate that…";
+  inference → "The author is least likely to agree with…"; assumption → "Which assumption is most
+  necessary for that to hold?"; vocab → "best substitute for '<word>'" / "closest to the OPPOSITE
+  of '<term>'"; main_idea → "which set of terms is closest to the key arguments?" / "odd pair out".
+- Each question: exactly ONE defensible correct option + THREE distractors, each tagged with one
+  archetype: too_extreme | out_of_scope | too_broad | partially_correct | tone_mismatch |
+  real_but_unstated | distortion | wrong_question | wrong_location | mislabelled | wordplay.
+- OPTION CRAFT (where CAT difficulty lives — enforce ALL): (1) all four options within ±15% word
+  count; the correct one must NOT be the longest or the only hedged option. (2) parallel grammar/
+  register across all four. (3) distractors BUILT FROM THE PASSAGE's own words — a true claim from
+  the wrong paragraph (wrong_location), a real detail answering a different stem (wrong_question), a
+  stated relation reversed (distortion); generic outside-the-text absolutes are BANNED. (4) EXCEPT:
+  three options are genuinely passage-supported statements, the answer is the one that isn't. (5)
+  weaken/strengthen: four parallel hypothetical findings, only one bears on the specific claim; some
+  describe the OPPOSITE result. At most ONE distractor per question may use absolute words.
 - Mark the single most-dangerous distractor as the "primary trap" (isTrap:true); it sets
   trapIndex/trapType. Other wrong options have isTrap:false but still carry a trapType tag.
 - correctIndex points to the correct option; give sourceLines that justify it.
@@ -150,11 +165,22 @@ You are a CAT VARC item-setter. Produce {COUNT} standalone single-question RC dr
 SHORT paragraph (90–120 words) with ONE question, at {DIFFICULTY} difficulty. CAT register. Output
 ONLY valid JSON (schema at the end). Original text only — never reproduce real articles.
 
-Each paragraph: a self-contained argument with an implied point and a measured tone.
-Each question: inferential/structural (bias toward `inference`), exactly ONE defensible correct
-option + THREE tagged distractors. Same archetype list and rules as CAT (at most one absolute-word
-distractor; distractors tempting, each with a nameable reason). Mark the most-dangerous distractor
-isTrap:true (sets trapIndex/trapType); other wrong options isTrap:false but still trapType-tagged.
+Each paragraph: a self-contained argument with an implied point and a measured tone. Write it with
+3–4 distinct claims so it can carry EXCEPT / function / hypothetical questions, not just inference.
+Each question: exactly ONE defensible correct option + THREE tagged distractors.
+
+TYPE QUOTA across the {COUNT} items (hard — do NOT make them all inference): at least ⌈COUNT/4⌉
+must be except_set or hypothetical (the two dominant CAT shapes); include ≥1 function when COUNT≥4;
+spread the rest across inference/application/assumption/vocab_in_context/main_idea; tone ≤1; bare
+"which title fits?" and pure detail/retrieval are BANNED. Types: except_set, hypothetical, function,
+inference, assumption, application, vocab_in_context, main_idea, tone.
+
+OPTION CRAFT (enforce ALL — this is where difficulty lives): all four options within ±15% word
+count and the correct one NOT the longest/only-hedged; parallel grammar across all four; distractors
+BUILT FROM THE PARAGRAPH's own words (wrong_location / wrong_question / distortion), never generic
+outside-the-text absolutes; for EXCEPT, three options are genuinely paragraph-supported and the
+answer is the one that isn't. Same archetype list as CAT; at most one absolute-word distractor. Mark
+the most-dangerous distractor isTrap:true (sets trapIndex/trapType); others isTrap:false but tagged.
 
 Calibrate every item to {DIFFICULTY} and set each item's "difficulty" field to it — the level
 governs BOTH the paragraph AND the question, never an easy question on a dense paragraph:
@@ -211,7 +237,11 @@ produced against these gates. Be adversarial — assume it's wrong until proven 
    outside knowledge or an unsupported leap → FAIL.
 3. RETRIEVAL GATE: is it answerable by keyword-matching rather than inference/structure → FAIL.
 4. DISTRACTOR GATE: does every wrong option have a concrete reason matching its tag, AND is none
-   of them secretly also-correct? Over-reliance on absolute words → FAIL.
+   of them secretly also-correct? Over-reliance on absolute words (>1 per question) → FAIL.
+4b. OPTION-CRAFT GATE: all four options within ±15% length, parallel in form, correct one NOT the
+   longest/only-hedged, distractors built from passage material (not outside absolutes)? else FAIL.
+4c. TYPE-QUOTA GATE: does the set/batch carry ≥1 except_set and ≥1 hypothetical (plus ≥1 function
+   for a passage_set or COUNT≥4 batch), tone ≤1, and no bare-title/pure-detail item? else FAIL.
 5. READING-KEY GATE (passage_set only): do paragraph_functions describe FUNCTION (not topic),
    and does thesis capture the argument (not the subject)? Also COUNT them: there must be
    exactly one entry per body paragraph, in order. And confirm thesis / tone / key_turn are
@@ -242,7 +272,7 @@ I can use it directly. Then output the FULL corrected JSON of only the passing/f
 | `paragraph_functions.length` equals the body's paragraph count | a mismatch means the key doesn't describe this passage |
 | every question passes `validateQuestionPayload` | one bad question rejects the whole set (atomic) |
 
-Soft (imported anyway, reported in `errors[]`): body outside 350–500 words.
+Soft (imported anyway, reported in `errors[]`): body outside 480–560 words.
 
 > These mirror the rules above. If you change one, change both — the prompt and the importer are
 > two halves of the same contract, and the 2026-07-20 QA found the gap between them the hard way

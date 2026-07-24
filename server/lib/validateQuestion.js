@@ -5,6 +5,9 @@ const VALID_TOPICS = ["economics", "humanities", "philosophy", "science", "socia
 const VALID_TYPES  = [
   "inference", "tone", "title", "detail", "application",
   "main_idea", "function", "concept_set", "vocab_in_context", "weaken_strengthen",
+  // 2026-07 overhaul: the real dominant CAT shapes (see content-pipeline prompts).
+  // `hypothetical` is the umbrella for weaken/strengthen/invalidate/contradict "if true/false" Qs.
+  "except_set", "hypothetical", "assumption",
 ];
 const VALID_TRAPS  = [
   "too_extreme", "out_of_scope", "real_but_unstated", "partially_correct",

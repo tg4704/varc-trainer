@@ -903,8 +903,8 @@ async function insertImportQuestion(client, q, { topic, paragraph, passageId }) 
 // them anyway, since `{}` is a truthy object.
 const PASSAGE_MIN_PARAS = 3;   // GENERATION_KIT: "MUST be 3-5 distinct paragraphs"
 const PASSAGE_MAX_PARAS = 5;
-const PASSAGE_MIN_WORDS = 350; // GENERATION_KIT: "PASSAGE (350-500 words)"
-const PASSAGE_MAX_WORDS = 500;
+const PASSAGE_MIN_WORDS = 480; // GENERATION_KIT: "PASSAGE (480-560 words)" — real CAT band
+const PASSAGE_MAX_WORDS = 560;
 
 function nonEmptyString(v) {
   return typeof v === "string" && v.trim().length > 0;
