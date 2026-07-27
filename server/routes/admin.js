@@ -5,7 +5,10 @@ const router = express.Router();
 const db = require("../db");
 const questionsRepo = require("../questionsRepo");
 const { authenticate, requireAdmin } = require("../auth");
-const { validateQuestionPayload, normalizeOptions, VALID_DIFFICULTIES } = require("../lib/validateQuestion");
+const {
+  validateQuestionPayload, normalizeOptions, VALID_DIFFICULTIES,
+  VALID_TOPICS, VALID_TYPES, VALID_TRAPS,
+} = require("../lib/validateQuestion");
 const { DEFAULTS: PROMPT_DEFAULTS, invalidatePromptCache } = require("../ai/prompts");
 
 router.use(authenticate, requireAdmin);
@@ -873,15 +876,14 @@ router.delete("/trash/:kind/:id", async (req, res, next) => {
 // Bulk-import content generated in Claude chat (see content-pipeline/GENERATION_KIT.md).
 // Accepts { kind: "passage_set", passage, questions } OR { kind: "drills", items }.
 // Everything is inserted INACTIVE (is_active=0), source='ai_generated', for review.
-const IMPORT_TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
-const IMPORT_TYPES = [
-  "inference", "main_idea", "function", "tone", "detail", "application",
-  "concept_set", "vocab_in_context", "weaken_strengthen", "title",
-];
-const IMPORT_TRAPS = [
-  "too_extreme", "out_of_scope", "too_broad", "partially_correct", "real_but_unstated",
-  "distortion", "wrong_question", "wrong_location", "mislabelled", "wordplay", "tone_mismatch",
-];
+// These MUST track server/lib/validateQuestion.js — they used to be hand-copied
+// here and silently drifted: the 2026-07 prompt overhaul added except_set /
+// hypothetical / assumption to VALID_TYPES but not to this duplicate, so every
+// generated item carrying a new type was rejected at import with "type not
+// allowed". Aliasing the shared constants makes that class of drift impossible.
+const IMPORT_TOPICS = VALID_TOPICS;
+const IMPORT_TYPES = VALID_TYPES;
+const IMPORT_TRAPS = VALID_TRAPS;
 
 // Validate one question object; returns an error string or null.
 // requireDifficulty: true for ③ Drills items (difficulty is mandatory), false for

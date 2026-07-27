@@ -1,0 +1,182 @@
+{
+  "kind": "passage_set",
+  "passage": {
+    "topic": "history",
+    "genre": "archaeology",
+    "title": "Poured Conclusions",
+    "body": "Arthur Evans began digging at Knossos in 1900. Within a decade he had started to rebuild it. Not bracing a wall here and there — raising whole staircases in reinforced concrete. Tinting columns a red he had inferred from flecks of surviving pigment. Commissioning painters to finish frescoes from fragments no larger than a hand. He called the work reconstitution. His critics have called it other things. The complaint has by now hardened into a commonplace of the discipline. The Minoan palace that visitors photograph today, it runs, is substantially a monument to Edwardian imagination: Evans settled in advance what a Bronze Age civilisation ought to look like, and then went ahead and built it.\n\nThere is real force in the charge. The frescoes executed under his direction turned smudges into confident processions of slim-waisted youths; the celebrated \"Prince of the Lilies\" assembles fragments that may not belong to one figure, or even to one scene. Evans published the last volume of his palace study in 1935, and the plates travelled further than the argument did. Once such an image is in circulation it is very hard to withdraw. It enters the textbooks. It shapes what the next excavator half-expects to find, and expectation has never been a neutral instrument in the field. . . . For most of a century, scholarship on Minoan Crete grew up inside a picture that Evans had himself partly drawn, and a good deal of the work of the past thirty years has gone into getting back out of it.\n\nBut the alternative on offer is less innocent than it sounds. Conservation is usually described as the modest course: you stabilise what survives, and you refrain from guessing. Yet a ruin is not a natural object. It is one moment in a long process of collapse, and to arrest that process is to select the moment and quietly certify it as the real thing. The archaeologist who leaves a wall at the height she found it has also made a claim about what Knossos is. That height is not natural either (some earlier century stopped maintaining it there). And her claim carries no more evidence behind it than Evans's did. She has simply made it silently, and silence reads as restraint.\n\nStill, I would not push the symmetry too far. Choosing which ruin to keep and inventing a prince are not acts of the same order, though the difference lies somewhere other than where the textbooks put it. It is not that one interprets and the other does not. It is that Evans's interpretation cannot be lifted off. His concrete is now the site [of Crete's best-known excavation]; a visitor cannot get behind it to the evidence, and later scholars cannot test his reading against what he covered. That irreversibility, rather than the guessing, is what ought to trouble us. A reconstruction that admits to being one, and that can be taken down when the reading changes, is only a hypothesis given physical form. Evans did not build a hypothesis. He built a conclusion, and poured it.",
+    "reading_key": {
+      "thesis": "The standard objection to Evans's reconstruction is misplaced: conservation interprets too, and what actually condemns his work is that his interpretation is irreversible rather than that he guessed.",
+      "tone": "measured, revisionist, willing to concede",
+      "paragraph_functions": [
+        "¶1: sets up the received charge against Evans's rebuilding of Knossos",
+        "¶2: supports that charge with its strongest evidence and consequences",
+        "¶3: reverses direction — argues conservation is an interpretive act too",
+        "¶4: qualifies the reversal, relocating the real objection to irreversibility"
+      ],
+      "key_turn": "The 'But' opening ¶3 flips the passage from prosecuting Evans to defending him partway; a reader who misses it concludes the author simply endorses the standard charge, and then cannot explain why ¶4 refuses the symmetry it just built."
+    }
+  },
+  "questions": [
+    {
+      "type": "except_set",
+      "question": "All of the following are offered in the passage as consequences of Evans's reconstruction EXCEPT that it:",
+      "options": [
+        {
+          "text": "shaped what later excavators half-expected to find at the site",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "wrong_question"
+        },
+        {
+          "text": "entered the textbooks and proved very hard to withdraw afterwards",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "wrong_question"
+        },
+        {
+          "text": "assembled fragments that may not belong to a single figure",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "wrong_location"
+        },
+        {
+          "text": "delayed the excavation of other Bronze Age sites",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        }
+      ],
+      "correctIndex": 3,
+      "trapIndex": 2,
+      "trapType": "wrong_location",
+      "sourceLines": "It shapes what the next excavator half-expects to find... It enters the textbooks... the celebrated \"Prince of the Lilies\" assembles fragments that may not belong to one figure",
+      "rationaleCorrect": "The passage never mentions other Bronze Age sites or any delay to their excavation; this consequence is absent from the text.",
+      "rationaleEachWrong": [
+        "Directly stated: the reconstruction shapes what the next excavator half-expects to find.",
+        "Directly stated: the image enters the textbooks and is very hard to withdraw.",
+        "True and stated, but it describes the reconstruction itself rather than a downstream consequence — tempting because it is the most vivid line in the paragraph."
+      ]
+    },
+    {
+      "type": "hypothetical",
+      "question": "Which one of the following, if true, would most weaken the author's claim that conservation is \"less innocent than it sounds\"?",
+      "options": [
+        {
+          "text": "Excavated ruins settle into a stable state, so preserving one selects no particular moment.",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "Conservation teams routinely publish detailed public records of every intervention they carry out.",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "wrong_question"
+        },
+        {
+          "text": "Visitors to conserved sites report finding them harder to interpret than reconstructed ones.",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "out_of_scope"
+        },
+        {
+          "text": "Ruins stabilised a century ago have since needed repeated intervention to slow collapse.",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "distortion"
+        }
+      ],
+      "correctIndex": 0,
+      "trapIndex": 3,
+      "trapType": "distortion",
+      "sourceLines": "It is one moment in a long process of collapse, and to arrest that process is to select the moment and quietly certify it as the real thing.",
+      "rationaleCorrect": "The author's claim rests on conservation involving a choice among moments. If decay stops on its own, there is no moment to select and no silent claim being made.",
+      "rationaleEachWrong": [
+        "Transparency about interventions answers a different objection; the author's point is that a choice is made at all, not that it is hidden by policy.",
+        "Visitor experience is never at issue in the passage's argument about interpretation.",
+        "This strengthens the author instead: continuing collapse is exactly what makes arresting it a selection."
+      ]
+    },
+    {
+      "type": "function",
+      "question": "\"She has simply made it silently, and silence reads as restraint.\" What does the author communicate by this sentence?",
+      "options": [
+        {
+          "text": "That conservators deliberately conceal the decisions they make about a site",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "too_extreme"
+        },
+        {
+          "text": "That an unstated interpretive choice is mistaken for the absence of one",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "That conservators are more restrained in method than reconstructors are",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "mislabelled"
+        },
+        {
+          "text": "That the public rarely notices the height at which a wall has been left",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "partially_correct"
+        }
+      ],
+      "correctIndex": 1,
+      "trapIndex": 2,
+      "trapType": "mislabelled",
+      "sourceLines": "has also made a claim about what Knossos is — a claim with no more evidence behind it than Evans had. She has simply made it silently, and silence reads as restraint.",
+      "rationaleCorrect": "The sentence turns on 'reads as': the choice is real but invisible, so onlookers misread it as no choice having been made.",
+      "rationaleEachWrong": [
+        "'Deliberately conceal' imports an intent to deceive that the passage never alleges — the silence is a by-product, not a strategy.",
+        "This takes 'restraint' at face value, which is precisely the reading the sentence is warning against.",
+        "Public inattention is a plausible real-world fact but is not what the sentence claims."
+      ]
+    },
+    {
+      "type": "inference",
+      "question": "The goal of the author over the course of the passage is to:",
+      "options": [
+        {
+          "text": "catalogue the errors Evans made at Knossos in detail",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "too_broad"
+        },
+        {
+          "text": "defend reconstruction against the charge of falsification",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "partially_correct"
+        },
+        {
+          "text": "shift the objection from guessing to irreversibility",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "show that conservation and reconstruction are equivalent",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "distortion"
+        }
+      ],
+      "correctIndex": 2,
+      "trapIndex": 1,
+      "trapType": "partially_correct",
+      "sourceLines": "That irreversibility, rather than the guessing, is what ought to trouble us.",
+      "rationaleCorrect": "The passage builds the standard charge, complicates it, then relocates the real fault — stated almost verbatim in the final paragraph.",
+      "rationaleEachWrong": [
+        "The passage catalogues almost nothing; the Evans material is illustrative, not an inventory.",
+        "The author defends reconstruction only partway before turning against it — mistaking the middle of the argument for its goal.",
+        "The author explicitly refuses this: 'I would not push the symmetry too far.'"
+      ]
+    }
+  ]
+}

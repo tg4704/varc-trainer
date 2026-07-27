@@ -1,0 +1,220 @@
+{
+  "kind": "drills",
+  "items": [
+    {
+      "topic": "history",
+      "difficulty": "medium",
+      "paragraph": "Monastic forgery in the twelfth century was rarely a simple lie. Houses like Westminster produced charters in the names of long-dead kings, complete with plausible witnesses and archaic spelling. But the monks who made them usually believed the rights they were documenting were genuine — granted orally, or recorded on parchment since lost. The forgery supplied evidence for a claim they took to be true. . . . What had changed was the standard of proof: royal courts now wanted written title, and a house with an unwritten right was, under the new procedure, a house with no right at all.",
+      "type": "except_set",
+      "question": "All of the following are offered in the passage as features of twelfth-century monastic forgery EXCEPT that it:",
+      "options": [
+        {
+          "text": "used the names of kings who were already long dead",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "wrong_question"
+        },
+        {
+          "text": "was produced by monks who believed the underlying claim",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "partially_correct"
+        },
+        {
+          "text": "was condemned by the royal courts that received it",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "answered a shift in what counted as adequate proof",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "wrong_location"
+        }
+      ],
+      "correctIndex": 2,
+      "trapIndex": 3,
+      "trapType": "wrong_location",
+      "sourceLines": "Houses like Westminster produced charters in the names of long-dead kings... the monks who made them usually believed the rights they were documenting were genuine... What had changed was the standard of proof",
+      "rationaleCorrect": "The passage says the courts wanted written title; it never says they condemned or detected the forgeries.",
+      "rationaleEachWrong": [
+        "Stated directly — charters in the names of long-dead kings.",
+        "Stated directly — the monks believed the rights were genuine.",
+        "True and stated, but it describes the cause the forgery responded to rather than a feature of the forgery itself."
+      ]
+    },
+    {
+      "topic": "science",
+      "difficulty": "medium",
+      "paragraph": "Birds raised in isolation still sing, but they sing badly. A white-crowned sparrow that never hears an adult produces a rough, simplified version of its species' song. Play it recordings during its first summer and the song sharpens into the local dialect — the one sung in the valley where the recording was made. Researchers have taken this as evidence that the song is learned rather than inherited. Yet isolated birds do not sing randomly. Their botched song is recognisably a sparrow's, and never a finch's. Something is supplied before any learning begins.",
+      "type": "hypothetical",
+      "question": "Which one of the following, if true, would most strengthen the passage's closing claim that something is supplied before learning begins?",
+      "options": [
+        {
+          "text": "Isolated sparrows from widely separated valleys produce nearly identical rough songs.",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "Sparrows exposed to recordings sing a sharper song than isolated ones do.",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "wrong_question"
+        },
+        {
+          "text": "Finches raised in isolation also produce simplified versions of their song.",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "out_of_scope"
+        },
+        {
+          "text": "Sparrows can learn a second dialect if moved before their first winter.",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "distortion"
+        }
+      ],
+      "correctIndex": 0,
+      "trapIndex": 1,
+      "trapType": "wrong_question",
+      "sourceLines": "Their botched song is recognisably a sparrow's, and never a finch's. Something is supplied before any learning begins.",
+      "rationaleCorrect": "If birds with no shared input converge on the same song, that shared structure cannot have come from learning.",
+      "rationaleEachWrong": [
+        "This is the evidence for learning — it supports the claim the closing sentence is qualifying, not the closing claim itself.",
+        "The passage's contrast with finches is about recognisability, not about how finches develop.",
+        "Additional plasticity strengthens the learning account and weakens the innate one."
+      ]
+    },
+    {
+      "topic": "social",
+      "difficulty": "medium",
+      "paragraph": "City governments have spent two decades installing benches that cannot be slept on. The design vocabulary is polite: armrests at intervals, seats that slope a few degrees, surfaces that shed water. Each feature has a stated purpose unrelated to exclusion — the armrest helps older users stand, the slope drains rain. Taken one at a time, every claim is reasonable. But taken together, they describe a bench that a rough sleeper cannot use, which was the point. . . . The vocabulary matters because it makes the policy hard to argue with. You find yourself objecting to drainage.",
+      "type": "function",
+      "question": "The author mentions that the armrest \"helps older users stand\" in order to:",
+      "options": [
+        {
+          "text": "concede that the benches do genuinely serve some older residents well",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "partially_correct"
+        },
+        {
+          "text": "show how each feature is justified on other grounds",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "argue that accessibility and exclusion are incompatible design aims",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "distortion"
+        },
+        {
+          "text": "illustrate the range of users a city government must design for",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "wrong_question"
+        }
+      ],
+      "correctIndex": 1,
+      "trapIndex": 0,
+      "trapType": "partially_correct",
+      "sourceLines": "Each feature has a stated purpose unrelated to exclusion — the armrest helps older users stand... Taken one at a time, every claim is reasonable.",
+      "rationaleCorrect": "The armrest is offered as a specimen of the polite vocabulary: each element carries an innocent rationale that deflects the real objection.",
+      "rationaleEachWrong": [
+        "The author never grants that the benches serve older residents well — only that the justification sounds reasonable in isolation.",
+        "The passage suggests the two are combined in one object, not that they cannot coexist.",
+        "Design range is not at issue; the point is about how justifications are framed."
+      ]
+    },
+    {
+      "topic": "humanities",
+      "difficulty": "medium",
+      "paragraph": "Museums have begun printing the price beside the painting. A wall label at a recent exhibition gave the hammer figure from the work's last sale, in dollars, next to the artist's dates. The curators defended this as transparency: the market is part of the object's history, and pretending otherwise is its own kind of distortion. . . . But a number on a label does not sit quietly among the other facts. It organises them. Visitors who know what a canvas cost look at it differently — longer, often, and with a suspicion that their looking is being measured against the sum.",
+      "type": "inference",
+      "question": "\"It organises them.\" Which one of the following best expresses what the author means by this sentence?",
+      "options": [
+        {
+          "text": "Curators arrange wall labels so the sale figure appears last",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "out_of_scope"
+        },
+        {
+          "text": "Market history has become the most reliable record museums possess",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "too_extreme"
+        },
+        {
+          "text": "The price becomes the frame through which the other facts are read",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        },
+        {
+          "text": "The price is the only detail most visitors are able to recall afterwards",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "real_but_unstated"
+        }
+      ],
+      "correctIndex": 2,
+      "trapIndex": 3,
+      "trapType": "real_but_unstated",
+      "sourceLines": "But a number on a label does not sit quietly among the other facts. It organises them.",
+      "rationaleCorrect": "'Organises' is contrasted with 'sit quietly': the price does not join the facts as one more item, it arranges how the rest are taken.",
+      "rationaleEachWrong": [
+        "Physical label layout is never discussed; 'organises' is about interpretation, not typography.",
+        "Reliability of market records is not claimed anywhere in the passage.",
+        "Plausible in general and tempting, but the passage says visitors look differently, not that they remember only the price."
+      ]
+    },
+    {
+      "topic": "economics",
+      "difficulty": "medium",
+      "paragraph": "A city that caps rents on older buildings usually exempts new construction, on the theory that developers will keep building. The exemption is meant to protect supply. But developers do not read the statute as a permanent settlement. They read it as evidence about what the council is willing to do. A cap on old buildings today is information about caps on new buildings in ten years, which is roughly when a project begun now would start earning. . . . The exemption protects supply only if the promise behind it is believed.",
+      "type": "assumption",
+      "question": "The passage's closing claim depends on which one of the following assumptions?",
+      "options": [
+        {
+          "text": "New construction takes about ten years to become profitable",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "partially_correct"
+        },
+        {
+          "text": "Councils that cap rents intend eventually to extend those caps",
+          "isCorrect": false,
+          "isTrap": true,
+          "trapType": "real_but_unstated"
+        },
+        {
+          "text": "Rent caps on older buildings directly reduce total housing supply",
+          "isCorrect": false,
+          "isTrap": false,
+          "trapType": "wrong_question"
+        },
+        {
+          "text": "Developers infer future policy from present policy",
+          "isCorrect": true,
+          "isTrap": false,
+          "trapType": null
+        }
+      ],
+      "correctIndex": 3,
+      "trapIndex": 1,
+      "trapType": "real_but_unstated",
+      "sourceLines": "They read it as evidence about what the council is willing to do... The exemption protects supply only if the promise behind it is believed.",
+      "rationaleCorrect": "The argument only works if developers infer future intentions from current statutes; without that inference the exemption would simply be taken at face value.",
+      "rationaleEachWrong": [
+        "A supporting detail that sets the time horizon, but the argument would survive a different horizon.",
+        "The passage needs developers to *suspect* extension, not for councils to actually intend it — a stronger claim than the argument requires.",
+        "The passage never argues caps reduce supply directly; the mechanism runs through expectations."
+      ]
+    }
+  ]
+}
