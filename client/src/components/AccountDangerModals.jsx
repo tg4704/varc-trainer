@@ -28,7 +28,8 @@ export function ResetDataModal({ onClose, onDone, returnFocusTo }) {
       <div className="glass-floating w-full max-w-sm p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
         <h2 id="reset-data-title" className="text-lg font-bold text-foreground">Reset all practice data?</h2>
         <p className="mt-2 text-sm muted">
-          This will permanently delete all your sessions, attempts, and stats. Your account
+          This will permanently delete everything you've practised — Drills sessions and
+          attempts, Coach sessions, your review queue and all your stats. Your account
           will remain active. This cannot be undone.
         </p>
         {err && <p className="mt-2 text-sm text-destructive">{err}</p>}

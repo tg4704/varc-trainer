@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/button.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import BulkActionBar, { RowCheckbox } from "../../components/admin/BulkActionBar.jsx";
+import { Select } from "../../components/ui/select.jsx";
 
 const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
 
@@ -59,14 +60,10 @@ export default function AdminPassages() {
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">
-        <select
-          value={active} onChange={(e) => setActive(e.target.value)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="">All</option>
-          <option value="1">Active</option>
-          <option value="0">Inactive</option>
-        </select>
+        <Select
+          value={active} onChange={setActive} className="w-40"
+          options={[{ value: "", label: "All" }, { value: "1", label: "Active" }, { value: "0", label: "Inactive" }]}
+        />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

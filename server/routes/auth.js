@@ -59,7 +59,7 @@ function publicUser(u) {
 // Keep in sync with client/src/lib/avatars.js.
 const VALID_GRADIENT_IDS = ["teal", "periwinkle", "amber", "coral", "violet", "sky", "rose", "lime"];
 const VALID_ICON_NAMES = ["book", "target", "spark", "flame", "send", "link", "flag", "pencil"];
-const VALID_TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const VALID_TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
 
 // Validates the "kind:value[:bg]" encoded avatar string (or a bare legacy
 // gradient id with no colon). Icons/gradients are checked against the fixed
@@ -493,6 +493,15 @@ router.get("/me", authenticate, async (req, res, next) => {
     const user = await db.get("SELECT * FROM users WHERE id = $1", [req.userId]);
     if (!user) return res.status(404).json({ error: "User not found" });
     res.json({ user: publicUser(user) });
+    // Fire-and-forget after responding: this route runs on every app boot and
+    // token revalidation, so it's the cheapest honest signal of "last active"
+    // for the admin users table. Throttled to once an hour per user so a tab
+    // that remounts repeatedly doesn't turn into a write per request.
+    db.run(
+      `UPDATE users SET last_seen_at = NOW()
+       WHERE id = $1 AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL '1 hour')`,
+      [req.userId]
+    ).catch(() => {});
   } catch (e) { next(e); }
 });
 

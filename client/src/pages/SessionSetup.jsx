@@ -4,6 +4,7 @@ import { createSession } from "../api.js";
 import { saveActiveSession } from "../session.js";
 import { track } from "../analytics.js";
 import { Button } from "../components/ui/button.jsx";
+import { Select } from "../components/ui/select.jsx";
 import Modal from "../components/Modal.jsx";
 import SideDock from "../components/SideDock.jsx";
 
@@ -406,13 +407,7 @@ function Dropdown({ label, value, onChange, options }) {
   return (
     <label className="block">
       <span className="field-label">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="input">
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <Select value={value} onChange={onChange} options={options} />
     </label>
   );
 }

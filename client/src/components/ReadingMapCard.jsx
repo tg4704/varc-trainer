@@ -12,17 +12,27 @@
 // both already shown to them before the first question.
 import Icon from "./Icon.jsx";
 
+// Some authored passages have the paragraph marker baked into the text of
+// each paragraph_functions entry ("¶1 Establishes the scale…", "P2: …"),
+// which then renders directly under our own "¶1" label - the doubled
+// "¶1 / ¶1: …" users reported. Strip any leading marker so the label is the
+// single source of numbering, whatever the content happens to carry.
+const PARA_PREFIX = /^\s*(?:¶|para(?:graph)?\s*|p)\s*\d+\s*[:.\-–—)]?\s*/i;
+function stripParaPrefix(v) {
+  return typeof v === "string" ? v.replace(PARA_PREFIX, "") : v;
+}
+
 // The student's map arrives as { mode, crux[], mainPoint, tone, structure[], theTurn }.
 // "quick" mode fills crux[]; "full" mode fills the rest.
 function studentRows(map) {
   if (!map) return [];
   if (map.mode === "quick") {
-    return (map.crux || []).map((c, i) => ({ label: `¶${i + 1}`, value: c }));
+    return (map.crux || []).map((c, i) => ({ label: `¶${i + 1}`, value: stripParaPrefix(c) }));
   }
   return [
     { label: "Main point", value: map.mainPoint },
     { label: "Tone", value: map.tone },
-    ...(map.structure || []).map((s, i) => ({ label: `¶${i + 1}`, value: s })),
+    ...(map.structure || []).map((s, i) => ({ label: `¶${i + 1}`, value: stripParaPrefix(s) })),
     { label: "The turn", value: map.theTurn },
   ].filter((r) => r.value);
 }
@@ -32,7 +42,7 @@ function keyRows(key) {
   return [
     { label: "Thesis", value: key.thesis },
     { label: "Tone", value: key.tone },
-    ...(key.paragraph_functions || []).map((f, i) => ({ label: `¶${i + 1}`, value: f })),
+    ...(key.paragraph_functions || []).map((f, i) => ({ label: `¶${i + 1}`, value: stripParaPrefix(f) })),
     { label: "The turn", value: key.key_turn },
   ].filter((r) => r.value);
 }

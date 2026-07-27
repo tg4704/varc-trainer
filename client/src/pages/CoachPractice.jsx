@@ -24,6 +24,7 @@ import TypingLoader from "../components/TypingLoader.jsx";
 import CoachThinking from "../components/CoachThinking.jsx";
 import CoachMessage from "../components/CoachMessage.jsx";
 import { useVoiceInput } from "../hooks/useVoiceInput.js";
+import useBackGuard from "../hooks/useBackGuard.js";
 import { Button } from "../components/ui/button.jsx";
 import { cn } from "../lib/utils.js";
 import { coach, billing } from "../api.js";
@@ -192,6 +193,10 @@ export default function CoachPractice() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [reasoningText, discussInput]);
+
+  // Back / swipe-back is a history pop, not an unload, so beforeunload above
+  // never sees it. Send it to the same leave-confirmation the Exit button uses.
+  useBackGuard(!!coachSession && !leaving, () => setShowLeaveModal(true));
 
   useEffect(() => {
     if (sessionId) saveActiveCoachSession(sessionId);

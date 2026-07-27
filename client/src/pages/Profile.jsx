@@ -7,8 +7,8 @@ import Icon from "../components/Icon.jsx";
 import SideDock from "../components/SideDock.jsx";
 import { AUTH, PROFILE } from "../lib/limits.js";
 
-const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
-const TOPIC_LABELS = { economics: "Economics", humanities: "Humanities", philosophy: "Philosophy", science: "Science", social: "Social" };
+const TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
+const TOPIC_LABELS = { economics: "Economics", humanities: "Humanities", history: "History", philosophy: "Philosophy", science: "Science", social: "Social" };
 const BIO_WORD_LIMIT = PROFILE.BIO_WORD_LIMIT;
 
 function catCountdown(year) {

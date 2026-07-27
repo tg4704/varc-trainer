@@ -32,6 +32,7 @@ import {
 } from "../api.js";
 import { loadActiveSession, saveActiveSession, clearActiveSession } from "../session.js";
 import { useNavGuard } from "../navGuard.jsx";
+import useBackGuard from "../hooks/useBackGuard.js";
 import { trapLabel, trapDescription } from "../trapTypes.js";
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -423,6 +424,19 @@ export default function Practice() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
+
+  // …and beforeunload doesn't cover Back/swipe-back either (no document unload
+  // happens on a same-app history pop), which is why that path used to dump
+  // the user out of a live session with no warning at all. Route it into the
+  // same LeaveSessionModal an in-app Exit click gets.
+  // Armed as soon as questions are loaded; whether it actually blocks is
+  // decided per-press off inProgressRef (which tracks the ended flag), so a
+  // session that has already finished doesn't trap the user on the page.
+  useBackGuard(!!questions, () => {
+    if (!inProgressRef.current) { navigate("/dashboard"); return; }
+    leavePendingRef.current = "/dashboard";
+    setShowLeaveModal(true);
+  });
 
   function requestExit() {
     if (!attemptNav("/dashboard")) return; // guard intercepted - shows LeaveSessionModal

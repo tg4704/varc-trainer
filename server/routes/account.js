@@ -48,22 +48,39 @@ router.get("/export", authenticate, async (req, res, next) => {
 });
 
 // DELETE /api/account/reset
-// Deletes all attempts and sessions for the authenticated user.
+// Deletes ALL practice history for the authenticated user - Drills sessions
+// and attempts, Coach sessions and attempts, and the spaced-repetition queue.
 // The user account itself is preserved - they stay logged in.
+//
+// Coach + SR were originally missed here, which is why a "reset" user still
+// saw passages/questions marked as already attempted: coach_attempts rows
+// survived (Coach history and its per-passage "attempted" state read from
+// them), as did sr_cards. Keep this list in sync with the per-user tables
+// deleted in DELETE / below - anything the user thinks of as "my progress"
+// belongs in both.
 router.delete("/reset", authenticate, async (req, res, next) => {
   try {
     const userId = req.userId;
 
     await db.transaction(async (client) => {
-      // Delete attempts first (foreign key to sessions)
+      // Children first in every case (FK to the parent session row).
       await client.query(
         `DELETE FROM attempts WHERE session_id IN (
            SELECT id FROM sessions WHERE user_id = $1
          )`,
         [userId]
       );
-      // Delete sessions
       await client.query("DELETE FROM sessions WHERE user_id = $1", [userId]);
+
+      await client.query(
+        `DELETE FROM coach_attempts WHERE coach_session_id IN (
+           SELECT id FROM coach_sessions WHERE user_id = $1
+         )`,
+        [userId]
+      );
+      await client.query("DELETE FROM coach_sessions WHERE user_id = $1", [userId]);
+
+      await client.query("DELETE FROM sr_cards WHERE user_id = $1", [userId]);
     });
 
     res.json({ ok: true, message: "All practice data has been reset." });

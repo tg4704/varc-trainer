@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { admin } from "../../api.js";
 import { useAuth } from "../../auth.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { Input } from "../../components/ui/input.jsx";
 import { Card, CardContent } from "../../components/ui/card.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 
@@ -87,11 +88,25 @@ export default function AdminUserDetail() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // ?edit=1 lets the users-table "Edit" button land straight in the open form.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [editing, setEditing] = useState(searchParams.get("edit") === "1");
+  const [form, setForm] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   const reload = () => admin.getUser(id).then(setData).catch((e) => setError(e.message));
   // Wrap so the effect returns undefined, not reload()'s Promise (React would
   // call it as a cleanup fn on unmount → "n is not a function" crash).
   useEffect(() => { reload(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-linked ?edit=1 arrives before the fetch resolves, so seed the form as
+  // soon as the user row lands rather than in the click handler.
+  const loadedUser = data?.user;
+  useEffect(() => {
+    if (editing && loadedUser && !form) {
+      setForm({ username: loadedUser.username || "", email: loadedUser.email || "", name: loadedUser.name || "" });
+    }
+  }, [editing, loadedUser, form]);
 
   if (error) return <p className="text-destructive">{error}</p>;
   if (!data) return <p className="text-muted-foreground">Loading…</p>;
@@ -105,7 +120,7 @@ export default function AdminUserDetail() {
   }
 
   async function resetData() {
-    if (!confirm(`Wipe ALL sessions and attempts for ${user.username}? The account itself stays.`)) return;
+    if (!confirm(`Wipe ALL practice history for ${user.username} — Drills, Coach and spaced repetition? The account itself stays.`)) return;
     setBusy(true);
     try { await admin.resetUserData(user.id); await reload(); }
     catch (e) { setError(e.message); }
@@ -116,6 +131,34 @@ export default function AdminUserDetail() {
     setBusy(true);
     try { await admin.setUserTier(user.id, tier, months); await reload(); }
     catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+
+  function startEditing() {
+    setForm({ username: user.username || "", email: user.email || "", name: user.name || "" });
+    setSaveError(null);
+    setEditing(true);
+  }
+  function stopEditing() {
+    setEditing(false);
+    setForm(null);
+    setSaveError(null);
+    if (searchParams.get("edit")) setSearchParams({}, { replace: true });
+  }
+  async function saveDetails() {
+    setBusy(true);
+    setSaveError(null);
+    try {
+      // Send only what actually changed, so an untouched unique field can never
+      // collide with itself or clobber a concurrent edit.
+      const patch = {};
+      if (form.username.trim() !== (user.username || "")) patch.username = form.username.trim();
+      if (form.email.trim() !== (user.email || "")) patch.email = form.email.trim();
+      if (form.name.trim() !== (user.name || "")) patch.name = form.name.trim();
+      if (Object.keys(patch).length) await admin.patchUser(user.id, patch);
+      await reload();
+      stopEditing();
+    } catch (e) { setSaveError(e.message); }
     finally { setBusy(false); }
   }
 
@@ -140,7 +183,10 @@ export default function AdminUserDetail() {
         <div className="mt-2 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">{user.username}</h1>
-            <p className="text-sm text-muted-foreground">{user.email}, joined {fmtDate(user.created_at)}</p>
+            <p className="text-sm text-muted-foreground">
+              {user.email}, joined {fmtDate(user.created_at)}
+              {user.name ? ` · ${user.name}` : ""}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {user.tier && user.tier !== "free" && (
@@ -149,9 +195,42 @@ export default function AdminUserDetail() {
             {user.role === "admin"
               ? <Badge variant="default">admin</Badge>
               : <Badge variant="secondary">user</Badge>}
+            {!editing && (
+              <Button variant="outline" size="sm" onClick={startEditing}>Edit details</Button>
+            )}
           </div>
         </div>
       </div>
+
+      {editing && form && (
+        <Card><CardContent className="p-4">
+          <div className="text-sm font-semibold mb-3">Edit details</div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block">
+              <span className="text-xs text-muted-foreground">Username</span>
+              <Input className="mt-1" value={form.username}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="text-xs text-muted-foreground">Email</span>
+              <Input className="mt-1" value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="text-xs text-muted-foreground">Display name</span>
+              <Input className="mt-1" value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </label>
+          </div>
+          {saveError && <p className="mt-3 text-sm text-destructive">{saveError}</p>}
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" disabled={busy} onClick={saveDetails}>
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={stopEditing}>Cancel</Button>
+          </div>
+        </CardContent></Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -5,9 +5,10 @@ import { Textarea } from "../components/ui/input.jsx";
 import { Badge } from "../components/ui/badge.jsx";
 import { Sparkles } from "lucide-react";
 import { AI, QUESTION } from "../lib/limits.js";
+import { Select } from "../components/ui/select.jsx";
 
 const TYPES = ["inference", "tone", "title", "detail", "application"];
-const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
 const TRAP_TYPES = ["too_extreme", "out_of_scope", "real_but_unstated", "partially_correct"];
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -89,15 +90,11 @@ function DraftEntry({ onDraft }) {
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="field-label">Question type</span>
-          <select value={type} onChange={(e) => setType(e.target.value)} className="input">
-            {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <Select value={type} onChange={setType} options={TYPES} />
         </label>
         <label className="block">
           <span className="field-label">Topic</span>
-          <select value={topic} onChange={(e) => setTopic(e.target.value)} className="input">
-            {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <Select value={topic} onChange={setTopic} options={TOPICS} />
         </label>
       </div>
 
@@ -159,15 +156,11 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="field-label">Topic</span>
-          <select value={form.topic} onChange={e => setField("topic", e.target.value)} className="input">
-            {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <Select value={form.topic} onChange={(v) => setField("topic", v)} options={TOPICS} />
         </label>
         <label className="block">
           <span className="field-label">Question type</span>
-          <select value={form.type} onChange={e => setField("type", e.target.value)} className="input">
-            {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <Select value={form.type} onChange={(v) => setField("type", v)} options={TYPES} />
         </label>
       </div>
 
@@ -252,9 +245,7 @@ function QuestionForm({ initial, onSave, onDelete, isNew }) {
       {showAnswer && form.trapIndex != null && (
         <label className="block">
           <span className="field-label">Trap type</span>
-          <select value={form.trapType || ""} onChange={e => setField("trapType", e.target.value)} className="input">
-            {TRAP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <Select value={form.trapType || ""} onChange={(v) => setField("trapType", v)} options={TRAP_TYPES} />
         </label>
       )}
 

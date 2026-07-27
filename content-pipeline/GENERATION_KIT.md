@@ -21,7 +21,8 @@ everything it needs is embedded. Use **Opus 4.8**.
    activate them.
 6. Repeat for variety. **Target mix follows real CAT (2022–2025): except_set + hypothetical are the
    two dominant shapes**, then function / inference / application / assumption / vocab; tone rare,
-   pure detail near-banned. Spread topics: economics, philosophy, science, humanities, social.
+   pure detail near-banned. Topic mix follows real CAT: history/archaeology 30%, science 19%,
+   society 16%, art/literature 11%, economics 8%, technology 7%, language 6%, philosophy 2%.
 
 Legal: never paste real CAT/GMAT/Aeon/news passage text into the prompt. Topics only. The output
 must be original expression.
@@ -54,12 +55,12 @@ regenerate it. At most ONE distractor per question may use absolute words.
 ## PROMPT A — Full passage for ② Coach (paste, edit the top line)
 
 ```
-TOPIC = philosophy   |   GENRE = aesthetics   |   QUESTIONS = 4
+TOPIC = history   |   GENRE = archaeology   |   QUESTIONS = 4
 
 You are a CAT VARC item-setter. Produce ONE reading passage and its questions in the exact
 register and difficulty of CAT Reading Comprehension. Output ONLY valid JSON (schema at the end).
 
-PASSAGE (480–560 words — the real CAT band; shorter reads too thin for EXCEPT/hypothetical Qs):
+PASSAGE (500–540 words — real CAT: median 518, IQR 506–525):
 - On the TOPIC/GENRE above. Original text only — do not reproduce any real article.
 - Imply the thesis; do NOT announce it ("This essay argues…" is banned).
 - Include a counterposition, then a qualification that partially concedes.
@@ -107,8 +108,10 @@ application, vocab_in_context, main_idea, tone, detail.
 - Each question: exactly ONE defensible correct option + THREE distractors, each tagged with one
   archetype: too_extreme | out_of_scope | too_broad | partially_correct | tone_mismatch |
   real_but_unstated | distortion | wrong_question | wrong_location | mislabelled | wordplay.
-- OPTION CRAFT (where CAT difficulty lives — enforce ALL): (1) all four options within ±15% word
-  count; the correct one must NOT be the longest or the only hedged option. (2) parallel grammar/
+- OPTION CRAFT (where CAT difficulty lives — enforce ALL): (1) DECORRELATE LENGTH FROM TRUTH —
+  real CAT options vary ~32% in length, but the answer is the longest only 20% of the time (below
+  random). Across a set the correct option may be longest at most once and must be shortest at
+  least once. Keep options short (median 9–16 words). The answer must not be the only hedged option. (2) parallel grammar/
   register across all four. (3) distractors BUILT FROM THE PASSAGE's own words — a true claim from
   the wrong paragraph (wrong_location), a real detail answering a different stem (wrong_question), a
   stated relation reversed (distortion); generic outside-the-text absolutes are BANNED. (4) EXCEPT:
@@ -123,7 +126,7 @@ OUTPUT JSON (exactly this shape):
 {
   "kind": "passage_set",
   "passage": {
-    "topic": "<economics|philosophy|science|humanities|social>",
+    "topic": "<economics|history|humanities|philosophy|science|social>",
     "genre": "<free text>",
     "title": "<short>",
     "body": "<the passage>",
@@ -159,7 +162,7 @@ OUTPUT JSON (exactly this shape):
 ## PROMPT B — Short drills for ③ Drills (paste, edit the top line)
 
 ```
-TOPIC = economics   |   COUNT = 5   |   DIFFICULTY = medium
+TOPIC = history   |   COUNT = 5   |   DIFFICULTY = medium
 
 You are a CAT VARC item-setter. Produce {COUNT} standalone single-question RC drills, each a
 SHORT paragraph (90–120 words) with ONE question, at {DIFFICULTY} difficulty. CAT register. Output
@@ -175,8 +178,9 @@ spread the rest across inference/application/assumption/vocab_in_context/main_id
 "which title fits?" and pure detail/retrieval are BANNED. Types: except_set, hypothetical, function,
 inference, assumption, application, vocab_in_context, main_idea, tone.
 
-OPTION CRAFT (enforce ALL — this is where difficulty lives): all four options within ±15% word
-count and the correct one NOT the longest/only-hedged; parallel grammar across all four; distractors
+OPTION CRAFT (enforce ALL — this is where difficulty lives): DECORRELATE length from correctness
+(real CAT: answer is longest only 20% of the time, below random; median option 12 words). Across the
+batch the answer must be longest in <=25% of items and shortest in some; never the only hedged one; parallel grammar across all four; distractors
 BUILT FROM THE PARAGRAPH's own words (wrong_location / wrong_question / distortion), never generic
 outside-the-text absolutes; for EXCEPT, three options are genuinely paragraph-supported and the
 answer is the one that isn't. Same archetype list as CAT; at most one absolute-word distractor. Mark
@@ -201,7 +205,7 @@ OUTPUT JSON (every item MUST include "difficulty"):
   "kind": "drills",
   "items": [
     {
-      "topic": "<economics|philosophy|science|humanities|social>",
+      "topic": "<economics|history|humanities|philosophy|science|social>",
       "difficulty": "<easy|medium|tough>",
       "paragraph": "<90–120 words>",
       "type": "inference",
@@ -272,7 +276,8 @@ I can use it directly. Then output the FULL corrected JSON of only the passing/f
 | `paragraph_functions.length` equals the body's paragraph count | a mismatch means the key doesn't describe this passage |
 | every question passes `validateQuestionPayload` | one bad question rejects the whole set (atomic) |
 
-Soft (imported anyway, reported in `errors[]`): body outside 480–560 words.
+Soft (imported anyway, reported in `errors[]`): body outside 480–560 words (the importer keeps the
+wider 480–560 gate; the prompts aim tighter at 500–540, real CAT's IQR).
 
 > These mirror the rules above. If you change one, change both — the prompt and the importer are
 > two halves of the same contract, and the 2026-07-20 QA found the gap between them the hard way

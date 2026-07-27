@@ -5,6 +5,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { admin } from "../../api.js";
 import { Card, CardContent } from "../../components/ui/card.jsx";
+import { Select } from "../../components/ui/select.jsx";
 
 function fmtUsd(n) {
   n = Number(n);
@@ -129,29 +130,17 @@ export default function AdminLogs() {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Surface</span>
-            <select
-              value={filters.surface}
-              onChange={(e) => updateFilter("surface", e.target.value)}
-              className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
-            >
-              <option value="">All</option>
-              <option value="drills">Drills</option>
-              <option value="coach">Coach</option>
-              <option value="my_questions">My Questions</option>
-              <option value="other">Other</option>
-            </select>
+            <Select
+              value={filters.surface} onChange={(v) => updateFilter("surface", v)} className="w-44"
+              options={[{ value: "", label: "All" }, { value: "drills", label: "Drills" }, { value: "coach", label: "Coach" }, { value: "my_questions", label: "My Questions" }, { value: "other", label: "Other" }]}
+            />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Status</span>
-            <select
-              value={filters.status}
-              onChange={(e) => updateFilter("status", e.target.value)}
-              className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
-            >
-              <option value="">All</option>
-              <option value="ok">OK</option>
-              <option value="error">Error</option>
-            </select>
+            <Select
+              value={filters.status} onChange={(v) => updateFilter("status", v)} className="w-36"
+              options={[{ value: "", label: "All" }, { value: "ok", label: "OK" }, { value: "error", label: "Error" }]}
+            />
           </label>
           {JSON.stringify(filters) !== JSON.stringify(emptyFilters) && (
             <button

@@ -61,7 +61,14 @@ router.get("/users", async (req, res, next) => {
          (SELECT COALESCE(SUM(a.is_correct), 0)
             FROM attempts a JOIN sessions s ON s.id = a.session_id
             WHERE s.user_id = u.id AND a.skipped = 0) AS correct,
-         (SELECT MAX(created_at) FROM sessions WHERE user_id = u.id) AS "lastActivity"
+         -- Widest honest signal of activity: last app open (users.last_seen_at,
+         -- stamped by GET /auth/me) OR the newest Drills / Coach session. The
+         -- old version was sessions-only, so Coach-only users read as blank.
+         GREATEST(
+           u.last_seen_at,
+           (SELECT MAX(created_at) FROM sessions WHERE user_id = u.id),
+           (SELECT MAX(created_at) FROM coach_sessions WHERE user_id = u.id)
+         ) AS "lastActivity"
        FROM users u
        WHERE u.username ILIKE $1 OR u.email ILIKE $2
        ORDER BY u.created_at DESC
@@ -78,7 +85,14 @@ router.get("/users", async (req, res, next) => {
          (SELECT COALESCE(SUM(a.is_correct), 0)
             FROM attempts a JOIN sessions s ON s.id = a.session_id
             WHERE s.user_id = u.id AND a.skipped = 0) AS correct,
-         (SELECT MAX(created_at) FROM sessions WHERE user_id = u.id) AS "lastActivity"
+         -- Widest honest signal of activity: last app open (users.last_seen_at,
+         -- stamped by GET /auth/me) OR the newest Drills / Coach session. The
+         -- old version was sessions-only, so Coach-only users read as blank.
+         GREATEST(
+           u.last_seen_at,
+           (SELECT MAX(created_at) FROM sessions WHERE user_id = u.id),
+           (SELECT MAX(created_at) FROM coach_sessions WHERE user_id = u.id)
+         ) AS "lastActivity"
        FROM users u
        ORDER BY u.created_at DESC
        LIMIT $1 OFFSET $2`;
@@ -100,7 +114,7 @@ router.get("/users/:id", async (req, res, next) => {
     if (!userId) return res.status(400).json({ error: "invalid user id" });
 
     const user = await db.get(
-      "SELECT id, username, email, role, tier, tier_expires_at, created_at FROM users WHERE id = $1",
+      "SELECT id, username, email, name, role, tier, tier_expires_at, created_at, last_seen_at FROM users WHERE id = $1",
       [userId]
     );
     if (!user) return res.status(404).json({ error: "user not found" });
@@ -211,8 +225,40 @@ router.get("/users/:id", async (req, res, next) => {
 router.patch("/users/:id", async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id, 10);
-    const { role } = req.body || {};
+    const { role, username, email, name } = req.body || {};
     if (!userId) return res.status(400).json({ error: "invalid user id" });
+
+    // Editable identity fields. Support work needs these (a user mistypes their
+    // email at signup and can't receive the OTP to fix it themselves), but both
+    // username and email are UNIQUE, so collisions are checked explicitly here
+    // rather than surfacing as a raw Postgres constraint error.
+    if (username !== undefined) {
+      const u = String(username).trim();
+      if (!/^[a-z0-9_]{3,30}$/i.test(u)) {
+        return res.status(400).json({ error: "username must be 3–30 chars (letters, numbers, underscores)" });
+      }
+      const clash = await db.get("SELECT 1 FROM users WHERE username = $1 AND id <> $2", [u, userId]);
+      if (clash) return res.status(409).json({ error: "username already taken" });
+      const info = await db.run("UPDATE users SET username = $1 WHERE id = $2", [u, userId]);
+      if (info.rowCount === 0) return res.status(404).json({ error: "user not found" });
+    }
+
+    if (email !== undefined) {
+      const e = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
+        return res.status(400).json({ error: "invalid email" });
+      }
+      const clash = await db.get("SELECT 1 FROM users WHERE LOWER(email) = $1 AND id <> $2", [e, userId]);
+      if (clash) return res.status(409).json({ error: "email already in use" });
+      const info = await db.run("UPDATE users SET email = $1 WHERE id = $2", [e, userId]);
+      if (info.rowCount === 0) return res.status(404).json({ error: "user not found" });
+    }
+
+    if (name !== undefined) {
+      const n = String(name).trim().slice(0, 60);
+      const info = await db.run("UPDATE users SET name = $1 WHERE id = $2", [n || null, userId]);
+      if (info.rowCount === 0) return res.status(404).json({ error: "user not found" });
+    }
 
     if (role !== undefined) {
       if (!["user", "admin"].includes(role)) {
@@ -292,7 +338,10 @@ router.post("/users/:id/force-cancel", async (req, res, next) => {
 });
 
 // ── DELETE /api/admin/users/:id/data ───────────────────────────────────────
-// Wipe a user's attempts and sessions (keeps the account). Useful for support.
+// Wipe a user's practice history (keeps the account). Useful for support.
+// Must stay in step with DELETE /api/account/reset - it covers Drills, Coach
+// AND spaced repetition, since leaving Coach rows behind is what made "reset"
+// users still see questions marked as attempted.
 router.delete("/users/:id/data", async (req, res, next) => {
   try {
     const userId = parseInt(req.params.id, 10);
@@ -303,6 +352,12 @@ router.delete("/users/:id/data", async (req, res, next) => {
         [userId]
       );
       await client.query("DELETE FROM sessions WHERE user_id = $1", [userId]);
+      await client.query(
+        "DELETE FROM coach_attempts WHERE coach_session_id IN (SELECT id FROM coach_sessions WHERE user_id = $1)",
+        [userId]
+      );
+      await client.query("DELETE FROM coach_sessions WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM sr_cards WHERE user_id = $1", [userId]);
     });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -818,7 +873,7 @@ router.delete("/trash/:kind/:id", async (req, res, next) => {
 // Bulk-import content generated in Claude chat (see content-pipeline/GENERATION_KIT.md).
 // Accepts { kind: "passage_set", passage, questions } OR { kind: "drills", items }.
 // Everything is inserted INACTIVE (is_active=0), source='ai_generated', for review.
-const IMPORT_TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const IMPORT_TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
 const IMPORT_TYPES = [
   "inference", "main_idea", "function", "tone", "detail", "application",
   "concept_set", "vocab_in_context", "weaken_strengthen", "title",

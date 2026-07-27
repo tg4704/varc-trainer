@@ -6,9 +6,12 @@ import { Input } from "../../components/ui/input.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
 
+// Compact and unambiguous ("19 Jul 26"). The locale default (19/07/2026) cost
+// ~25px per date column, and with two date columns plus a pinned action cell
+// this table was overflowing its card.
 function fmtDate(s) {
   if (!s) return "-";
-  return new Date(s).toLocaleDateString();
+  return new Date(s).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
 const TIER_LABELS = {
@@ -69,7 +72,12 @@ export default function AdminUsers() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
+      {/* The card used to clip (overflow-hidden) a table wider than it: at
+          10 columns the right-hand action cell was simply cut off the page
+          with no way to scroll to it. Same overflow-x-auto treatment the
+          other wide admin tables (/admin/logs, /admin/costs) already use. */}
       <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
@@ -77,12 +85,15 @@ export default function AdminUsers() {
               <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Email</th>
               <th className="text-left font-medium px-3 py-2">Role</th>
               <th className="text-left font-medium px-3 py-2">Plan</th>
-              <th className="text-right font-medium px-3 py-2">Sessions</th>
-              <th className="text-right font-medium px-3 py-2">Attempts</th>
-              <th className="text-right font-medium px-3 py-2 hidden lg:table-cell">Correct</th>
-              <th className="text-left font-medium px-3 py-2 hidden md:table-cell">Joined</th>
-              <th className="text-left font-medium px-3 py-2 hidden lg:table-cell">Last active</th>
-              <th className="px-3 py-2" />
+              <th className="text-right font-medium px-2 py-2" title="Sessions">Sess.</th>
+              <th className="text-right font-medium px-2 py-2" title="Attempts">Att.</th>
+              <th className="text-right font-medium px-2 py-2 hidden xl:table-cell" title="Correct answers">Corr.</th>
+              <th className="text-left font-medium px-3 py-2 hidden md:table-cell whitespace-nowrap">Joined</th>
+              <th className="text-left font-medium px-3 py-2 hidden lg:table-cell whitespace-nowrap">Last active</th>
+              {/* Pinned to the right edge: the actions are the point of the
+                  row, so they must not depend on the user discovering that
+                  the table scrolls sideways. */}
+              <th className="sticky right-0 bg-muted px-3 py-2" />
             </tr>
           </thead>
           <tbody>
@@ -92,7 +103,9 @@ export default function AdminUsers() {
             {data?.users?.map((u) => (
               <tr key={u.id} className="border-t border-border">
                 <td className="px-3 py-2 font-medium text-foreground">{u.username}</td>
-                <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">{u.email}</td>
+                <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">
+                  <span className="block max-w-[190px] truncate" title={u.email}>{u.email}</span>
+                </td>
                 <td className="px-3 py-2">
                   {u.role === "admin"
                     ? <Badge variant="default">admin</Badge>
@@ -111,20 +124,26 @@ export default function AdminUsers() {
                     );
                   })()}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">{u.sessions}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{u.attempts}</td>
-                <td className="px-3 py-2 text-right tabular-nums hidden lg:table-cell">{u.correct}</td>
-                <td className="px-3 py-2 hidden md:table-cell text-muted-foreground">{fmtDate(u.created_at)}</td>
-                <td className="px-3 py-2 hidden lg:table-cell text-muted-foreground">{fmtDate(u.lastActivity)}</td>
-                <td className="px-3 py-2 text-right">
-                  <Button asChild variant="outline" size="sm">
-                    <Link to={`/admin/users/${u.id}`}>View</Link>
-                  </Button>
+                <td className="px-2 py-2 text-right tabular-nums">{u.sessions}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{u.attempts}</td>
+                <td className="px-2 py-2 text-right tabular-nums hidden xl:table-cell">{u.correct}</td>
+                <td className="px-3 py-2 hidden md:table-cell whitespace-nowrap text-muted-foreground">{fmtDate(u.created_at)}</td>
+                <td className="px-3 py-2 hidden lg:table-cell whitespace-nowrap text-muted-foreground">{fmtDate(u.lastActivity)}</td>
+                <td className="sticky right-0 bg-card px-3 py-2 text-right">
+                  <div className="flex justify-end gap-2 whitespace-nowrap">
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/admin/users/${u.id}`}>View</Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to={`/admin/users/${u.id}?edit=1`}>Edit</Link>
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
 
       {data && totalPages > 1 && (

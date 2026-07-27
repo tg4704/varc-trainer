@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { admin } from "../../api.js";
 import { MISC } from "../../lib/limits.js";
+import { Select } from "../../components/ui/select.jsx";
 
 // Paste JSON produced in Claude chat (see content-pipeline/GENERATION_KIT.md) and import it.
 // Everything lands inactive (is_active=0) for review under Admin → Questions (active=0 filter).
@@ -160,30 +161,17 @@ export default function AdminImport() {
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs text-muted-foreground">
             Source
-            <select
-              value={expSource}
-              onChange={(e) => setExpSource(e.target.value)}
-              className="mt-1 block rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground"
-            >
-              <option value="">All sources</option>
-              <option value="ai_generated,coach">AI-generated + Coach</option>
-              <option value="ai_generated">AI-generated only</option>
-              <option value="coach">Coach only</option>
-              <option value="seed">Seed only</option>
-              <option value="user">User-authored only</option>
-            </select>
+            <Select
+              value={expSource} onChange={setExpSource} className="mt-1 w-56"
+              options={[{ value: "", label: "All sources" }, { value: "ai_generated,coach", label: "AI-generated + Coach" }, { value: "ai_generated", label: "AI-generated only" }, { value: "coach", label: "Coach only" }, { value: "seed", label: "Seed only" }, { value: "user", label: "User-authored only" }]}
+            />
           </label>
           <label className="text-xs text-muted-foreground">
             Status
-            <select
-              value={expActive}
-              onChange={(e) => setExpActive(e.target.value)}
-              className="mt-1 block rounded-md border border-border bg-card px-2 py-1.5 text-sm text-foreground"
-            >
-              <option value="">Active + inactive</option>
-              <option value="1">Active only</option>
-              <option value="0">Inactive only</option>
-            </select>
+            <Select
+              value={expActive} onChange={setExpActive} className="mt-1 w-48"
+              options={[{ value: "", label: "Active + inactive" }, { value: "1", label: "Active only" }, { value: "0", label: "Inactive only" }]}
+            />
           </label>
           <button
             onClick={handleExport}

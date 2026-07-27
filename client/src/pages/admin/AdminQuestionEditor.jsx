@@ -6,12 +6,13 @@ import { Input, Textarea } from "../../components/ui/input.jsx";
 import { Card, CardContent } from "../../components/ui/card.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { QUESTION } from "../../lib/limits.js";
+import { Select } from "../../components/ui/select.jsx";
 
 // Keep in sync with server/lib/validateQuestion.js VALID_TYPES / VALID_TRAPS.
 const TYPES = ["inference", "except_set", "hypothetical", "function", "assumption",
   "application", "vocab_in_context", "main_idea", "concept_set", "weaken_strengthen",
   "tone", "detail", "title"];
-const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
 const DIFFICULTIES = ["easy", "medium", "tough"];
 const TRAP_TYPES = ["too_extreme", "out_of_scope", "too_broad", "partially_correct",
   "tone_mismatch", "real_but_unstated", "distortion", "wrong_question", "wrong_location",
@@ -147,22 +148,13 @@ export default function AdminQuestionEditor() {
       <Card><CardContent className="p-5 space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Topic">
-            <select value={q.topic} onChange={e => setQ(p => ({...p, topic: e.target.value}))}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {TOPICS.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <Select value={q.topic} onChange={v => setQ(p => ({...p, topic: v}))} options={TOPICS} />
           </Field>
           <Field label="Type">
-            <select value={q.type} onChange={e => setQ(p => ({...p, type: e.target.value}))}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <Select value={q.type} onChange={v => setQ(p => ({...p, type: v}))} options={TYPES} />
           </Field>
           <Field label="Difficulty">
-            <select value={q.difficulty || "medium"} onChange={e => setQ(p => ({...p, difficulty: e.target.value}))}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+            <Select value={q.difficulty || "medium"} onChange={v => setQ(p => ({...p, difficulty: v}))} options={DIFFICULTIES} />
           </Field>
         </div>
 
@@ -214,11 +206,7 @@ export default function AdminQuestionEditor() {
 
         {q.trapIndex != null && (
           <Field label="Trap type">
-            <select value={q.trapType || ""}
-              onChange={e => setQ(p => ({...p, trapType: e.target.value}))}
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-              {TRAP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <Select value={q.trapType || ""} onChange={v => setQ(p => ({...p, trapType: v}))} options={TRAP_TYPES} />
           </Field>
         )}
 

@@ -325,7 +325,9 @@ async function ensureColumn(table, column, definition) {
   );
   if (!row) {
     await db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    return true; // caller may want to backfill the new column exactly once
   }
+  return false;
 }
 
 // ── Seed questions on first run ───────────────────────────────────────────────
@@ -428,6 +430,16 @@ async function schemaIsStale() {
     // tier, or a manually-granted plan). Resolved by lib/entitlements.js -
     // an expired paid tier is treated as 'free'. users.tier already exists.
     await ensureColumn("users", "tier_expires_at", "TIMESTAMPTZ");
+    // Admin "Last active" used to be MAX(sessions.created_at), which only ever
+    // saw Drills - a Coach-only user, or one who just logs in and reads, looked
+    // permanently inactive. Stamped on every GET /auth/me (i.e. app open) and
+    // on login. Backfilled to created_at so existing rows aren't blank.
+    await ensureColumn("users", "last_seen_at", "TIMESTAMPTZ");
+    // Unconditional rather than gated on "column was just added": if the ADD
+    // COLUMN lands but the backfill fails, the gated version never retries and
+    // those rows stay blank forever. The WHERE makes it a no-op once seeded,
+    // and NULL is never a state we want here.
+    await db.exec("UPDATE users SET last_seen_at = created_at WHERE last_seen_at IS NULL");
     // Terms/18+ consent timestamp. Email signup captures this at account creation
     // (the required Register checkbox); Google OAuth users start NULL and affirm it
     // on the post-sign-in ChooseUsername screen. When the column is first added,

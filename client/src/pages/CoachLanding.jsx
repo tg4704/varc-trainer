@@ -9,7 +9,7 @@ import { Badge } from "../components/ui/badge.jsx";
 import { cn } from "../lib/utils.js";
 import SideDock from "../components/SideDock.jsx";
 
-const TOPICS = ["", "economics", "humanities", "philosophy", "science", "social"];
+const TOPICS = ["", "economics", "history", "humanities", "philosophy", "science", "social"];
 
 export default function CoachLanding() {
   const navigate = useNavigate();

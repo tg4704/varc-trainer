@@ -1,7 +1,7 @@
 // Shared question payload validation + option normalization.
 // Used by both admin (routes/admin.js) and user (routes/myQuestions.js).
 
-const VALID_TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const VALID_TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
 const VALID_TYPES  = [
   "inference", "tone", "title", "detail", "application",
   "main_idea", "function", "concept_set", "vocab_in_context", "weaken_strengthen",

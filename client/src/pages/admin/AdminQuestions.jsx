@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { admin } from "../../api.js";
 import { Button } from "../../components/ui/button.jsx";
+import { Select } from "../../components/ui/select.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
@@ -11,7 +12,7 @@ const TYPES = [
   "", "inference", "main_idea", "function", "tone", "detail", "application",
   "concept_set", "vocab_in_context", "weaken_strengthen", "title",
 ];
-const TOPICS = ["", "economics", "humanities", "philosophy", "science", "social"];
+const TOPICS = ["", "economics", "history", "humanities", "philosophy", "science", "social"];
 const DIFFICULTIES = ["", "easy", "medium", "tough"];
 
 const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
@@ -74,32 +75,22 @@ export default function AdminQuestions() {
           onChange={(e) => setQ(e.target.value)}
           className="w-64"
         />
-        <select
-          value={type} onChange={(e) => setType(e.target.value)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {TYPES.map(t => <option key={t} value={t}>{t || "All types"}</option>)}
-        </select>
-        <select
-          value={topic} onChange={(e) => setTopic(e.target.value)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {TOPICS.map(t => <option key={t} value={t}>{t || "All topics"}</option>)}
-        </select>
-        <select
-          value={difficulty} onChange={(e) => setDifficulty(e.target.value)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {DIFFICULTIES.map(d => <option key={d} value={d}>{d ? d[0].toUpperCase() + d.slice(1) : "All difficulty"}</option>)}
-        </select>
-        <select
-          value={active} onChange={(e) => setActive(e.target.value)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="1">Active</option>
-          <option value="0">Inactive</option>
-          <option value="">All</option>
-        </select>
+        <Select
+          value={type} onChange={setType} className="w-40"
+          options={TYPES.map(t => ({ value: t, label: t || "All types" }))}
+        />
+        <Select
+          value={topic} onChange={setTopic} className="w-40"
+          options={TOPICS.map(t => ({ value: t, label: t || "All topics" }))}
+        />
+        <Select
+          value={difficulty} onChange={setDifficulty} className="w-40"
+          options={DIFFICULTIES.map(d => ({ value: d, label: d ? d[0].toUpperCase() + d.slice(1) : "All difficulty" }))}
+        />
+        <Select
+          value={active} onChange={setActive} className="w-32"
+          options={[{ value: "1", label: "Active" }, { value: "0", label: "Inactive" }, { value: "", label: "All" }]}
+        />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

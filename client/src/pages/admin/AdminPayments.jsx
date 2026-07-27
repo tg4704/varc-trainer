@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { admin } from "../../api.js";
 import { Card, CardContent } from "../../components/ui/card.jsx";
+import { Select } from "../../components/ui/select.jsx";
 
 function fmtInr(n) {
   const v = Number(n);
@@ -181,41 +182,24 @@ export default function AdminPayments() {
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Status</span>
-                <select
-                  value={filters.status}
-                  onChange={(e) => updateFilter("status", e.target.value)}
-                  className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
-                >
-                  <option value="">All</option>
-                  <option value="captured">Captured</option>
-                  <option value="created">Abandoned</option>
-                </select>
+                <Select
+                  value={filters.status} onChange={(v) => updateFilter("status", v)} className="w-40"
+                  options={[{ value: "", label: "All" }, { value: "captured", label: "Captured" }, { value: "created", label: "Abandoned" }]}
+                />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Source</span>
-                <select
-                  value={filters.provider}
-                  onChange={(e) => updateFilter("provider", e.target.value)}
-                  className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
-                >
-                  <option value="">All</option>
-                  <option value="razorpay">Razorpay</option>
-                  <option value="manual">Manual grant</option>
-                  <option value="dev">Dev</option>
-                </select>
+                <Select
+                  value={filters.provider} onChange={(v) => updateFilter("provider", v)} className="w-40"
+                  options={[{ value: "", label: "All" }, { value: "razorpay", label: "Razorpay" }, { value: "manual", label: "Manual grant" }, { value: "dev", label: "Dev" }]}
+                />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Plan</span>
-                <select
-                  value={filters.tier}
-                  onChange={(e) => updateFilter("tier", e.target.value)}
-                  className="border border-border rounded-md px-2 py-1.5 text-sm bg-background"
-                >
-                  <option value="">All</option>
-                  {Object.entries(TIER_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
+                <Select
+                  value={filters.tier} onChange={(v) => updateFilter("tier", v)} className="w-44"
+                  options={[{ value: "", label: "All" }, ...Object.entries(TIER_LABELS).map(([k, v]) => ({ value: k, label: v }))]}
+                />
               </label>
               {JSON.stringify(filters) !== JSON.stringify(emptyFilters) && (
                 <button

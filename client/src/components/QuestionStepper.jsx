@@ -72,19 +72,61 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [triggerRect, setTriggerRect] = useState(null);
   const [pos, setPos] = useState(_cachedPos);
+  // Non-null only while the handle is being dragged: the edge the pointer is
+  // currently nearest to. Rendering from it gives live snap feedback instead of
+  // the panel sitting still until you let go.
+  const [dragPos, setDragPos] = useState(null);
   const triggerRef = useRef(null);
   const closeTimerRef = useRef(null);
+  const dragMovedRef = useRef(false);
 
-  const { className: dockClass, row } = dockAnchor(pos);
+  const shownPos = dragPos || pos;
+  const { className: dockClass, row } = dockAnchor(shownPos);
+
+  function commitPos(next) {
+    _cachedPos = next;
+    try { localStorage.setItem(POS_KEY, next); } catch {}
+    setPos(next);
+  }
+
+  // Whichever viewport edge the pointer is closest to.
+  function nearestEdge(x, y) {
+    const d = { left: x, right: window.innerWidth - x, top: y, bottom: window.innerHeight - y };
+    return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
+  }
+
+  // The handle is drag-first (that's what the four-way arrow promises) but a
+  // plain click still cycles edges, so it stays usable by keyboard and by
+  // anyone who just taps it.
+  function onHandlePointerDown(e) {
+    if (e.button != null && e.button !== 0) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragMovedRef.current = false;
+    setPopoverOpen(false);
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const move = (ev) => {
+      if (!dragMovedRef.current && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+      dragMovedRef.current = true;
+      setDragPos(nearestEdge(ev.clientX, ev.clientY));
+    };
+    const up = (ev) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      setDragPos(null);
+      if (dragMovedRef.current) commitPos(nearestEdge(ev.clientX, ev.clientY));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  }
 
   function cyclePos() {
-    setPos((p) => {
-      const next = POSITIONS[(POSITIONS.indexOf(p) + 1) % POSITIONS.length];
-      _cachedPos = next;
-      try { localStorage.setItem(POS_KEY, next); } catch {}
-      setPopoverOpen(false);
-      return next;
-    });
+    if (dragMovedRef.current) return; // the pointerup already committed a drop
+    setPopoverOpen(false);
+    commitPos(POSITIONS[(POSITIONS.indexOf(pos) + 1) % POSITIONS.length]);
   }
 
   function openPopover() {
@@ -102,7 +144,7 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
 
   // Popover opens toward the viewport centre from whichever edge we're docked.
   function popoverStyle(rect) {
-    switch (pos) {
+    switch (shownPos) {
       case "right":  return { position: "fixed", right: window.innerWidth - rect.left + 12, top: rect.top + rect.height / 2, transform: "translateY(-50%)", zIndex: 80 };
       case "top":    return { position: "fixed", left: rect.left + rect.width / 2, top: rect.bottom + 12, transform: "translateX(-50%)", zIndex: 80 };
       case "bottom": return { position: "fixed", left: rect.left + rect.width / 2, bottom: window.innerHeight - rect.top + 12, transform: "translateX(-50%)", zIndex: 80 };
@@ -112,7 +154,7 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
   }
 
   const nextPos = POSITIONS[(POSITIONS.indexOf(pos) + 1) % POSITIONS.length];
-  const moveTitle = `Move panel (now: ${pos}). Click to dock ${nextPos}.`;
+  const moveTitle = `Drag to any edge, or click to dock ${nextPos} (now: ${pos}).`;
 
   return (
     <div className={dockClass}>
@@ -156,7 +198,11 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
               }}
             >
               <div className="mono mb-2.5 text-center text-[9.5px] uppercase tracking-[0.12em] dim">All questions</div>
-              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(4, 32px)" }}>
+              {/* Columns stretch instead of being pinned to 32px: the legend
+                  row below is wider than 4×32px, so a fixed grid left a dead
+                  gutter on the right of the panel. minmax keeps the buttons
+                  from ever shrinking below tap size. */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(4, minmax(32px, 1fr))" }}>
                 {Array.from({ length: total }, (_, i) => (
                   <StepBtn
                     key={i}
@@ -164,6 +210,7 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
                     style={styleFor(stateFor(questionStates[i] || {}), i === currentIdx)}
                     onClick={i === currentIdx ? undefined : () => onJump(i)}
                     current={i === currentIdx}
+                    fill
                   />
                 ))}
               </div>
@@ -190,10 +237,15 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
         <button
           type="button"
           onClick={cyclePos}
+          onPointerDown={onHandlePointerDown}
           title={moveTitle}
           aria-label={moveTitle}
           className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] transition-colors hover:bg-[rgba(255,255,255,0.08)]"
-          style={{ color: "var(--text-2)" }}
+          style={{
+            color: dragPos ? "var(--teal)" : "var(--text-2)",
+            cursor: dragPos ? "grabbing" : "grab",
+            touchAction: "none", // let us own the gesture instead of the browser scrolling
+          }}
         >
           <Icon name="move" size={15} />
         </button>
@@ -202,14 +254,14 @@ export default function QuestionStepper({ total, currentIdx, questionStates, onJ
   );
 }
 
-function StepBtn({ n, style, onClick, current = false }) {
+function StepBtn({ n, style, onClick, current = false, fill = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={current}
-      className="mono flex flex-none items-center justify-center rounded-[9px] text-[12.5px] font-semibold transition-transform hover:scale-[1.08]"
-      style={{ width: 32, height: 32, cursor: current ? "default" : "pointer", ...style }}
+      className={`mono flex items-center justify-center rounded-[9px] text-[12.5px] font-semibold transition-transform hover:scale-[1.08] ${fill ? "w-full" : "flex-none"}`}
+      style={{ width: fill ? undefined : 32, height: 32, cursor: current ? "default" : "pointer", ...style }}
     >
       {n}
     </button>

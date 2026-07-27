@@ -5,8 +5,9 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input, Textarea } from "../../components/ui/input.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Card } from "../../components/ui/card.jsx";
+import { Select } from "../../components/ui/select.jsx";
 
-const TOPICS = ["economics", "humanities", "philosophy", "science", "social"];
+const TOPICS = ["economics", "history", "humanities", "philosophy", "science", "social"];
 const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
 
 export default function AdminPassageDetail() {
@@ -102,12 +103,7 @@ export default function AdminPassageDetail() {
         <div className="flex flex-wrap gap-3">
           <label className="text-sm">
             <span className="block text-muted-foreground mb-1">Topic</span>
-            <select
-              value={form.topic} onChange={(e) => set("topic", e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              {TOPICS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <Select value={form.topic} onChange={(v) => set("topic", v)} options={TOPICS} className="w-48" />
           </label>
           <label className="text-sm">
             <span className="block text-muted-foreground mb-1">Genre</span>
