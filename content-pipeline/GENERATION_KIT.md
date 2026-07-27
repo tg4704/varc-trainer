@@ -17,6 +17,15 @@ everything it needs is embedded. Use **Opus 4.8**.
    filling in the `TOPIC`/`GENRE`/`COUNT` at the top.
 3. It returns JSON. In the **same chat**, paste **Prompt C (validator)**.
 4. Keep only items the validator marks `pass`. Regenerate or drop the rest.
+4b. **Run the repo validator** on the JSON before importing — it checks the batch against the
+   measured corpus (option-length tell, answer position, type quota, passage rhythm/texture):
+
+   ```bash
+   node content-pipeline/validate-content.js batch.json
+   ```
+
+   It exits non-zero on any FAIL. It also accepts an **admin export**
+   (`{passages, questions}`) so you can audit content already in the bank.
 5. Paste the final JSON into `/admin/import`. Items land **inactive** for your review, then you
    activate them.
 6. Repeat for variety. **Target mix follows real CAT (2022–2025): except_set + hypothetical are the
