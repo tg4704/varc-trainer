@@ -24,7 +24,7 @@ const T = {
   drillWords:       [90, 120],
   paragraphs:       [3, 5],
   minTurns:         3,           // 0 of 102 passages had none; median 4
-  minTurnsDrill:    1,
+  minDrillTurnShare: 0.40,      // real CAT: 56% of 100-word windows carry a marker
   maxOver40Pct:     0.10,        // real CAT 4%; allow some slack on small samples
   minUnder12Pct:    0.25,        // real CAT 43%
   maxLongestShare:  0.25,        // real CAT: answer is longest 20% of the time
@@ -117,14 +117,24 @@ function checkProse(text, { isPassage, label }) {
   }
 
   const turns = (text.match(TURNS) || []).length;
-  const minT = isPassage ? T.minTurns : T.minTurnsDrill;
-  check(turns >= minT,
-    `${turns} turn marker(s) (CAT median 4; 0 of 102 passages had none)`,
-    `only ${turns} turn marker(s) — need ≥${minT}; a CAT passage always turns on itself`);
-
+  if (isPassage) {
+    // Justified for a full ~518-word passage: 0 of 102 corpus passages had none, median 4.
+    check(turns >= T.minTurns,
+      `${turns} turn marker(s) (CAT median 4; 0 of 102 passages had none)`,
+      `only ${turns} turn marker(s) — need ≥${T.minTurns}; a CAT passage always turns on itself`);
+  } else {
+    // NOT a per-drill requirement. Sliced into 100-word windows, 44% of real CAT
+    // prose contains zero turn markers (median 1). A drill can turn structurally
+    // ("It counted almost nothing that a census counts") without a marker word,
+    // so demanding one per drill would reject half the real corpus. Monotony is
+    // checked at batch level instead — see checkDrillBatchTurns().
+    console.log(`  ${C.d}·${C.x} ${turns} turn marker(s) ${C.d}(CAT median 1 per 100 words; 44% have none)${C.x}`);
+  }
   const bad = text.match(BANNED);
   check(!bad, "no banned AI-prose connectives",
     `banned connective(s): ${bad ? [...new Set(bad.map((s) => s.toLowerCase()))].join(", ") : ""}`);
+
+  return turns;
 }
 
 // ── passage-specific ────────────────────────────────────────────────────────
@@ -295,11 +305,23 @@ function validatePayload(payload, srcLabel) {
       checkQuestionSet(it.questions || [], { context: "passage set", isDrills: false });
     } else if (it.kind === "drills") {
       console.log(`\n${C.b}══ ${lbl} — drills (${(it.items || []).length} items) ══${C.x}`);
+      const turnCounts = [];
       (it.items || []).forEach((d, j) => {
         head(`DRILL ${j + 1} [${d.topic} · ${d.difficulty || "?"}]`);
         if (!d.difficulty) fail("missing required `difficulty` (easy|medium|tough)");
-        checkProse(d.paragraph || "", { isPassage: false, label: "paragraph" });
+        turnCounts.push(checkProse(d.paragraph || "", { isPassage: false, label: "paragraph" }));
       });
+      // Batch-level, not per-drill: real CAT prose has a marker in 56% of its
+      // 100-word windows, so a batch where almost nothing turns lexically reads
+      // flat even if each drill is individually defensible.
+      if (turnCounts.length >= 4) {
+        const withTurn = turnCounts.filter((n) => n >= 1).length;
+        const share = withTurn / turnCounts.length;
+        head("BATCH prose");
+        check(share >= T.minDrillTurnShare,
+          `${withTurn}/${turnCounts.length} drills carry a turn marker (${pct(share)}; real CAT 56%)`,
+          `only ${withTurn}/${turnCounts.length} drills carry a turn marker (${pct(share)}) — real CAT is 56%; the batch reads flat`);
+      }
       checkQuestionSet(it.items || [], { context: "drills batch", isDrills: true });
     } else {
       fail(`${lbl}: unrecognised payload — need kind "passage_set" or "drills", or an admin export`);
